@@ -17,10 +17,12 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
 
     address[] private _minters;
     mapping(address account => bool allowed) public isMinter;
+    // 0 = not in the registry; n = stored at array index n - 1
     mapping(address account => uint256 indexPlusOne) private _minterIndexPlusOne;
 
     address[] private _burners;
     mapping(address account => bool allowed) public isBurner;
+    // 0 = not in the registry; n = stored at array index n - 1
     mapping(address account => uint256 indexPlusOne) private _burnerIndexPlusOne;
 
     address private _ccipAdmin;

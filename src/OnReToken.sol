@@ -42,11 +42,20 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         _grantRole(DEFAULT_ADMIN_ROLE, params.admin);
         _grantRole(UPGRADER_ROLE, params.admin);
 
-        for (uint256 i = 0; i < params.initialMinters.length; ++i) {
+        uint256 initialMintersLength = params.initialMinters.length;
+        for (uint256 i = 0; i < initialMintersLength;) {
             _addMinter(params.initialMinters[i]);
+            unchecked {
+                ++i;
+            }
         }
-        for (uint256 i = 0; i < params.initialBurners.length; ++i) {
+
+        uint256 initialBurnersLength = params.initialBurners.length;
+        for (uint256 i = 0; i < initialBurnersLength;) {
             _addBurner(params.initialBurners[i]);
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -119,7 +128,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     function burn(uint256 amount) public onlyBurner {
-        _burn(_msgSender(), amount);
+        _burn(msg.sender, amount);
     }
 
     function burn(address account, uint256 amount) public {
@@ -127,7 +136,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     function burnFrom(address account, uint256 amount) public onlyBurner {
-        _spendAllowance(account, _msgSender(), amount);
+        _spendAllowance(account, msg.sender, amount);
         _burn(account, amount);
     }
 
@@ -137,7 +146,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     modifier onlyMinter() {
-        address sender = _msgSender();
+        address sender = msg.sender;
         if (!isMinter[sender]) {
             revert SenderNotMinterError(sender);
         }
@@ -145,7 +154,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     modifier onlyBurner() {
-        address sender = _msgSender();
+        address sender = msg.sender;
         if (!isBurner[sender]) {
             revert SenderNotBurnerError(sender);
         }

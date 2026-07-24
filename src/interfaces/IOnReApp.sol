@@ -20,7 +20,6 @@ interface IOnReApp is IOnReAppEvents, IOnReAppErrors, IOnReAccessControl {
     function createPricer(address onReToken, OnReTypes.PricingDenomination denomination)
         external
         returns (bytes32 pricerId);
-    function setMainPricer(address onReToken, bytes32 pricerId) external;
     function addPricingVector(bytes32 pricerId, OnReTypes.PricingVector calldata vector) external;
     function deletePricingVector(bytes32 pricerId, uint64 startTime) external;
     function deleteAllPricingVectors(bytes32 pricerId) external;
@@ -44,7 +43,6 @@ interface IOnReApp is IOnReAppEvents, IOnReAppErrors, IOnReAccessControl {
     function makeOfferConfig(OnReTypes.MakeOfferConfigParams calldata params) external returns (bytes32 offerConfigId);
     function updateOfferConfigReferences(
         bytes32 offerConfigId,
-        bytes32 pricerId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,

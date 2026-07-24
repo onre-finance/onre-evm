@@ -6,6 +6,7 @@ import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {OnReTypes} from "../types/OnReTypes.sol";
 import {LibOnRePricer} from "./LibOnRePricer.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
+import {OnReIds} from "./OnReIds.sol";
 import {OnReMath} from "./OnReMath.sol";
 
 /// @notice Read-only market reporting derived from the canonical USD Pricer.
@@ -15,30 +16,19 @@ library LibOnReMarketStats {
         if (config.decimals == 0) revert IOnReAppErrors.TokenNotRegisteredError(onReToken);
 
         uint256 circulatingSupply = LibOnRePricer.circulatingSupply(onReToken);
-        bytes32 pricerId = config.mainPricerId;
-        uint256 apy = 0;
-        uint256 nav = 0;
-        int256 navAdjustment = 0;
-
-        if (pricerId != bytes32(0)) {
-            OnReTypes.Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
-            if (pricer.onReToken != onReToken) revert IOnReAppErrors.InvalidTokenError();
-            uint8 activeVectorIndex = LibOnRePricer.activePricingVectorIndex(pricerId, pricer);
-            OnReTypes.PricingVector storage activeVector = pricer.vectors[activeVectorIndex];
-            // forge-lint: disable-next-line(block-timestamp)
-            if (activeVector.baseTime > block.timestamp) {
-                revert IOnReAppErrors.NoActiveVectorError(pricerId);
-            }
-
-            apy = OnReMath.calculateApyFromApr(activeVector.apr);
-            nav = LibOnRePricer.calculatePricingVectorPriceAt(activeVector, block.timestamp);
-            navAdjustment = _calculateNavAdjustment(pricer, activeVector, activeVectorIndex);
+        bytes32 pricerId = OnReIds.usdPricerId(onReToken);
+        OnReTypes.Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
+        uint8 activeVectorIndex = LibOnRePricer.activePricingVectorIndex(pricerId, pricer);
+        OnReTypes.PricingVector storage activeVector = pricer.vectors[activeVectorIndex];
+        // forge-lint: disable-next-line(block-timestamp)
+        if (activeVector.baseTime > block.timestamp) {
+            revert IOnReAppErrors.NoActiveVectorError(pricerId);
         }
 
-        uint256 tvl = 0;
-        if (nav > 0) {
-            tvl = OnReMath.calculateTvl(circulatingSupply, nav, LibOnRePricer.PRICE_SCALE);
-        }
+        uint256 apy = OnReMath.calculateApyFromApr(activeVector.apr);
+        uint256 nav = LibOnRePricer.calculatePricingVectorPriceAt(activeVector, block.timestamp);
+        int256 navAdjustment = _calculateNavAdjustment(pricer, activeVector, activeVectorIndex);
+        uint256 tvl = OnReMath.calculateTvl(circulatingSupply, nav, LibOnRePricer.PRICE_SCALE);
 
         return OnReTypes.MarketStats({
             apy: apy,

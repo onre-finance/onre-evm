@@ -6,6 +6,7 @@ import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
 import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {OnReTypes} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
+import {OnReIds} from "./OnReIds.sol";
 
 /// @notice Shared authorization and storage validation used by domain libraries.
 library LibOnReValidation {
@@ -97,7 +98,9 @@ library LibOnReValidation {
         if (LibOnReStorage.appStorage().isKilled) revert IOnReAppErrors.KilledError();
         offerConfig = requireOfferConfig(offerConfigId);
         if (offerConfig.disabled) revert IOnReAppErrors.OfferConfigDisabledError(offerConfigId);
-        requireExecutablePricer(offerConfig.pricerId);
+        address onReToken =
+            offerConfig.direction == OnReTypes.OfferDirection.AssetToOnRe ? offerConfig.tokenOut : offerConfig.tokenIn;
+        requireExecutablePricer(OnReIds.usdPricerId(onReToken));
         requireExecutableQuoter(offerConfig.quoterId);
         requireExecutableFeeConfig(offerConfig.feeConfigId);
     }

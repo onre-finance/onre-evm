@@ -28,14 +28,13 @@ contract OnReOfferFacet {
 
     function updateOfferConfigReferences(
         bytes32 offerConfigId,
-        bytes32 pricerId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) external {
         LibOnReOffer.updateOfferConfigReferences(
-            offerConfigId, pricerId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId
+            offerConfigId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
     }
 

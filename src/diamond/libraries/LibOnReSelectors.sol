@@ -65,14 +65,13 @@ library LibOnReSelectors {
     }
 
     function pricer() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](7);
+        selectors = new bytes4[](6);
         selectors[0] = IOnReApp.createPricer.selector;
-        selectors[1] = IOnReApp.setMainPricer.selector;
-        selectors[2] = IOnReApp.addPricingVector.selector;
-        selectors[3] = IOnReApp.deletePricingVector.selector;
-        selectors[4] = IOnReApp.deleteAllPricingVectors.selector;
-        selectors[5] = IOnReApp.setPricerDisabled.selector;
-        selectors[6] = IOnReApp.currentPrice.selector;
+        selectors[1] = IOnReApp.addPricingVector.selector;
+        selectors[2] = IOnReApp.deletePricingVector.selector;
+        selectors[3] = IOnReApp.deleteAllPricingVectors.selector;
+        selectors[4] = IOnReApp.setPricerDisabled.selector;
+        selectors[5] = IOnReApp.currentPrice.selector;
     }
 
     function quoter() internal pure returns (bytes4[] memory selectors) {

@@ -30,6 +30,10 @@ Facets are thin external ABI adapters. Domain behavior lives in internal
 libraries so Solidity inlines reachable logic without an `address(this)`
 cross-facet call.
 
+Each registered OnRe token has exactly one deterministic USD Pricer. Offers and
+MarketStats derive that Pricer from the OnRe token address; there is no mutable
+main-Pricer pointer or per-offer Pricer reference.
+
 ## Storage and upgrades
 
 Diamond selector tables, OnRe application state, and application roles use

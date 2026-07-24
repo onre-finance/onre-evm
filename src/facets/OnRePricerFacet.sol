@@ -12,10 +12,6 @@ contract OnRePricerFacet {
         return LibOnRePricer.createPricer(onReToken, denomination);
     }
 
-    function setMainPricer(address onReToken, bytes32 pricerId) external {
-        LibOnRePricer.setMainPricer(onReToken, pricerId);
-    }
-
     function addPricingVector(bytes32 pricerId, OnReTypes.PricingVector calldata vector) external {
         LibOnRePricer.addPricingVector(pricerId, vector);
     }

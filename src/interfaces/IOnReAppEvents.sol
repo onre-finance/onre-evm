@@ -9,7 +9,6 @@ interface IOnReAppEvents {
     event OnReTokenLimitsUpdated(address indexed onReToken, uint256 maxSupply, uint256 maxMintAmount);
     event ExcludedSupplyAddressAdded(address indexed onReToken, address indexed account);
     event ExcludedSupplyAddressRemoved(address indexed onReToken, address indexed account);
-    event MainPricerUpdated(address indexed onReToken, bytes32 indexed oldPricerId, bytes32 indexed newPricerId);
 
     event PricerCreated(
         bytes32 indexed pricerId, address indexed onReToken, OnReTypes.PricingDenomination denomination
@@ -46,7 +45,6 @@ interface IOnReAppEvents {
         address indexed tokenOut,
         OnReTypes.OfferFlow flow,
         OnReTypes.OfferDirection direction,
-        bytes32 pricerId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,
@@ -54,7 +52,6 @@ interface IOnReAppEvents {
     );
     event OfferConfigReferencesUpdated(
         bytes32 indexed offerConfigId,
-        bytes32 pricerId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,

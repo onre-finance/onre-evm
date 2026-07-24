@@ -15,6 +15,10 @@ library OnReIds {
         return keccak256(abi.encode(PRICER_SEED, onReToken, denomination));
     }
 
+    function usdPricerId(address onReToken) internal pure returns (bytes32) {
+        return pricerId(onReToken, OnReTypes.PricingDenomination.Usd);
+    }
+
     function quoterId(OnReTypes.QuoterKind kind, uint64 quoterId_) internal pure returns (bytes32) {
         return keccak256(abi.encode(QUOTER_SEED, kind, quoterId_));
     }

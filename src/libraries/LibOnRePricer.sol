@@ -34,19 +34,6 @@ library LibOnRePricer {
         emit IOnReAppEvents.PricerCreated(pricerId, onReToken, denomination);
     }
 
-    function setMainPricer(address onReToken, bytes32 pricerId) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
-        LibOnReValidation.requireRegisteredOnReToken(onReToken);
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
-        if (pricer.onReToken != onReToken) revert IOnReAppErrors.InvalidTokenError();
-
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
-        bytes32 oldPricerId = config.mainPricerId;
-        if (oldPricerId == pricerId) revert IOnReAppErrors.NoChangeError();
-        config.mainPricerId = pricerId;
-        emit IOnReAppEvents.MainPricerUpdated(onReToken, oldPricerId, pricerId);
-    }
-
     function addPricingVector(bytes32 pricerId, OnReTypes.PricingVector calldata vector) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
         OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
@@ -174,11 +161,8 @@ library LibOnRePricer {
         return excludedSupply >= supply ? 0 : supply - excludedSupply;
     }
 
-    function currentTvl(address onReToken, bytes32 fallbackPricerId) internal view returns (uint256) {
-        bytes32 pricerId = LibOnReStorage.appStorage().onReTokenConfigs[onReToken].mainPricerId;
-        if (pricerId == bytes32(0)) pricerId = fallbackPricerId;
-        if (pricerId == bytes32(0)) return 0;
-        uint256 nav = currentPrice(pricerId);
+    function currentTvl(address onReToken) internal view returns (uint256) {
+        uint256 nav = currentPrice(OnReIds.usdPricerId(onReToken));
         return OnReMath.calculateTvl(circulatingSupply(onReToken), nav, PRICE_SCALE);
     }
 

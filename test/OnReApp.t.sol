@@ -60,7 +60,6 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             pricerId,
             OnReTypes.PricingVector({startTime: 1, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})
         );
-        app.setMainPricer(address(onReToken), pricerId);
 
         navQuoterId = app.createQuoter(OnReTypes.QuoterKind.Nav, 0);
         navPermissionlessQuoterId = app.createQuoter(OnReTypes.QuoterKind.NavPermissionless, 0);
@@ -103,9 +102,9 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         OnReTypes.OnReTokenConfig memory tokenConfig = app.getOnReTokenConfig(address(onReToken));
         assertTrue(tokenConfig.enabled);
         assertEq(tokenConfig.decimals, 9);
-        assertEq(tokenConfig.mainPricerId, pricerId);
 
         OnReTypes.Pricer memory pricer = app.getPricer(pricerId);
+        assertEq(pricerId, OnReIds.pricerId(address(onReToken), OnReTypes.PricingDenomination.Usd));
         assertEq(pricer.onReToken, address(onReToken));
         assertEq(uint8(pricer.denomination), uint8(OnReTypes.PricingDenomination.Usd));
         assertEq(pricer.vectorCount, 1);
@@ -113,7 +112,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         OnReTypes.Quoter memory nav = app.getQuoter(navQuoterId);
         assertEq(uint8(nav.kind), uint8(OnReTypes.QuoterKind.Nav));
-        assertEq(nav.quoterId, 0);
+        assertEq(nav.instanceId, 0);
 
         OnReTypes.FeeConfig memory fee = app.getFeeConfig(feeConfigId);
         assertEq(fee.basisPoints, 100);
@@ -122,6 +121,18 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         OnReTypes.ConfigurableVault memory liquidity = app.getConfigurableVault(liquidityVaultId);
         assertEq(uint8(liquidity.kind), uint8(OnReTypes.ConfigurableVaultKind.Liquidity));
+    }
+
+    function test_QuoterIdentitySupportsIndependentInstancesOfTheSameKind() public {
+        bytes32 secondNavQuoterId = app.createQuoter(OnReTypes.QuoterKind.Nav, 1);
+
+        assertEq(secondNavQuoterId, OnReIds.quoterId(OnReTypes.QuoterKind.Nav, 1));
+        assertNotEq(secondNavQuoterId, navQuoterId);
+        assertEq(app.getQuoter(secondNavQuoterId).instanceId, 1);
+
+        app.setQuoterDisabled(secondNavQuoterId, true);
+        assertTrue(app.getQuoter(secondNavQuoterId).disabled);
+        assertFalse(app.getQuoter(navQuoterId).disabled);
     }
 
     function test_OfferIdentityIncludesDirectedPairAndFlow() public view {
@@ -140,7 +151,6 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         OnReTypes.OfferConfig memory workerConfig = app.getOfferConfig(workerOfferId);
         assertEq(uint8(permissioned.direction), uint8(OnReTypes.OfferDirection.AssetToOnRe));
         assertEq(uint8(workerConfig.direction), uint8(OnReTypes.OfferDirection.OnReToAsset));
-        assertEq(permissioned.pricerId, workerConfig.pricerId);
         assertEq(permissioned.tokenInDecimals, 6);
         assertEq(permissioned.tokenOutDecimals, 9);
         assertEq(workerConfig.tokenInDecimals, 9);
@@ -426,7 +436,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Liquidity, 1, vaultDestination, 1_000);
         bytes32 zeroFee = app.createFeeConfig(2, 0, 0, feeVaultId);
         app.updateOfferConfigReferences(
-            permissionlessOfferId, pricerId, navPermissionlessQuoterId, zeroFee, proceedsVaultId, refillVault
+            permissionlessOfferId, navPermissionlessQuoterId, zeroFee, proceedsVaultId, refillVault
         );
 
         _fundAndApproveUsd(user, 150e6);
@@ -513,7 +523,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
         app.updateOfferConfigReferences(
-            permissionedOfferId, pricerId, navQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
+            permissionedOfferId, navQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
 
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
@@ -653,7 +663,6 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
                 flow: flow,
-                pricerId: pricerId,
                 quoterId: quoter,
                 feeConfigId: feeConfig,
                 proceedsVaultId: proceedsVaultId,

@@ -84,8 +84,7 @@ library LibOnReOffer {
         }
         if (params.tokenIn == params.tokenOut) revert IOnReAppErrors.InvalidTokenError();
 
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(params.pricerId);
-        OnReTypes.OfferDirection direction = _deriveDirection(params.tokenIn, params.tokenOut, pricer.onReToken);
+        OnReTypes.OfferDirection direction = _deriveDirection(params.tokenIn, params.tokenOut);
         uint8 tokenInDecimals = IERC20Metadata(params.tokenIn).decimals();
         uint8 tokenOutDecimals = IERC20Metadata(params.tokenOut).decimals();
         if (tokenInDecimals > OnReMath.MAX_TOKEN_DECIMALS || tokenOutDecimals > OnReMath.MAX_TOKEN_DECIMALS) {
@@ -104,13 +103,7 @@ library LibOnReOffer {
         offer.tokenOutDecimals = tokenOutDecimals;
         offer.exists = true;
         _setOfferReferences(
-            offerConfigId,
-            offer,
-            params.pricerId,
-            params.quoterId,
-            params.feeConfigId,
-            params.proceedsVaultId,
-            params.liquidityVaultId
+            offerConfigId, offer, params.quoterId, params.feeConfigId, params.proceedsVaultId, params.liquidityVaultId
         );
 
         emit IOnReAppEvents.OfferConfigCreated(
@@ -119,7 +112,6 @@ library LibOnReOffer {
             params.tokenOut,
             params.flow,
             direction,
-            params.pricerId,
             params.quoterId,
             params.feeConfigId,
             params.proceedsVaultId,
@@ -129,7 +121,6 @@ library LibOnReOffer {
 
     function updateOfferConfigReferences(
         bytes32 offerConfigId,
-        bytes32 pricerId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,
@@ -138,14 +129,14 @@ library LibOnReOffer {
         LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
         OnReTypes.OfferConfig storage offer = LibOnReValidation.requireOfferConfig(offerConfigId);
         if (
-            offer.pricerId == pricerId && offer.quoterId == quoterId && offer.feeConfigId == feeConfigId
-                && offer.proceedsVaultId == proceedsVaultId && offer.liquidityVaultId == liquidityVaultId
+            offer.quoterId == quoterId && offer.feeConfigId == feeConfigId && offer.proceedsVaultId == proceedsVaultId
+                && offer.liquidityVaultId == liquidityVaultId
         ) {
             revert IOnReAppErrors.NoChangeError();
         }
-        _setOfferReferences(offerConfigId, offer, pricerId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId);
+        _setOfferReferences(offerConfigId, offer, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId);
         emit IOnReAppEvents.OfferConfigReferencesUpdated(
-            offerConfigId, pricerId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId
+            offerConfigId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
     }
 
@@ -303,14 +294,14 @@ library LibOnReOffer {
             LibOnReValidation.requireVaultKind(offer.liquidityVaultId, OnReTypes.ConfigurableVaultKind.Liquidity);
         if (liquidityVault.refillTargetBps == 0) return 0;
 
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(offer.pricerId);
-        uint256 tvl = LibOnRePricer.currentTvl(pricer.onReToken, offer.pricerId);
+        address onReToken = _onReToken(offer);
+        uint256 tvl = LibOnRePricer.currentTvl(onReToken);
         return OnReMath.calculateRedemptionVaultRefillAmount(
             tvl,
             liquidityVault.refillTargetBps,
             MAX_BASIS_POINTS,
             offer.tokenInDecimals,
-            LibOnReStorage.appStorage().onReTokenConfigs[pricer.onReToken].decimals,
+            LibOnReStorage.appStorage().onReTokenConfigs[onReToken].decimals,
             LibOnReVault.balance(offer.liquidityVaultId, offer.tokenIn),
             netInputAmount
         );
@@ -319,15 +310,12 @@ library LibOnReOffer {
     function _setOfferReferences(
         bytes32 offerConfigId,
         OnReTypes.OfferConfig storage offer,
-        bytes32 pricerId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) private {
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
-        if (pricer.onReToken != _onReToken(offer)) revert IOnReAppErrors.InvalidTokenError();
-
+        LibOnReValidation.requirePricer(OnReIds.usdPricerId(_onReToken(offer)));
         LibOnReValidation.requireQuoter(quoterId);
         OnReTypes.FeeConfig storage feeConfig = LibOnReValidation.requireFeeConfig(feeConfigId);
         LibOnReValidation.requireVaultKind(feeConfig.feeVaultId, OnReTypes.ConfigurableVaultKind.Fee);
@@ -339,7 +327,6 @@ library LibOnReOffer {
             revert IOnReAppErrors.LiquidityVaultRequiredError(offerConfigId);
         }
 
-        offer.pricerId = pricerId;
         offer.quoterId = quoterId;
         offer.feeConfigId = feeConfigId;
         offer.proceedsVaultId = proceedsVaultId;
@@ -362,14 +349,11 @@ library LibOnReOffer {
         if (feeAmount > grossInputAmount) revert IOnReAppErrors.InvalidFeeError();
     }
 
-    function _deriveDirection(address tokenIn, address tokenOut, address onReToken)
-        private
-        view
-        returns (OnReTypes.OfferDirection)
-    {
-        bool inputIsOnRe = tokenIn == onReToken;
-        bool outputIsOnRe = tokenOut == onReToken;
+    function _deriveDirection(address tokenIn, address tokenOut) private view returns (OnReTypes.OfferDirection) {
+        bool inputIsOnRe = LibOnReStorage.appStorage().onReTokenConfigs[tokenIn].decimals != 0;
+        bool outputIsOnRe = LibOnReStorage.appStorage().onReTokenConfigs[tokenOut].decimals != 0;
         if (inputIsOnRe == outputIsOnRe) revert IOnReAppErrors.InvalidOfferDirectionError();
+        address onReToken = inputIsOnRe ? tokenIn : tokenOut;
         LibOnReValidation.requireEnabledOnReToken(onReToken);
         return inputIsOnRe ? OnReTypes.OfferDirection.OnReToAsset : OnReTypes.OfferDirection.AssetToOnRe;
     }

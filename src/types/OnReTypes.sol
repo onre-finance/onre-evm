@@ -41,7 +41,6 @@ library OnReTypes {
         uint8 decimals;
         uint256 maxSupply;
         uint256 maxMintAmount;
-        bytes32 mainPricerId;
     }
 
     struct PricingVector {
@@ -63,7 +62,7 @@ library OnReTypes {
 
     struct Quoter {
         QuoterKind kind;
-        uint64 quoterId;
+        uint64 instanceId;
         bool disabled;
         bool exists;
     }
@@ -90,7 +89,6 @@ library OnReTypes {
         address tokenOut;
         OfferFlow flow;
         OfferDirection direction;
-        bytes32 pricerId;
         bytes32 quoterId;
         bytes32 feeConfigId;
         bytes32 proceedsVaultId;
@@ -105,7 +103,6 @@ library OnReTypes {
         address tokenIn;
         address tokenOut;
         OfferFlow flow;
-        bytes32 pricerId;
         bytes32 quoterId;
         bytes32 feeConfigId;
         bytes32 proceedsVaultId;

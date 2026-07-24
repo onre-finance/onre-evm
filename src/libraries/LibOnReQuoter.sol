@@ -21,7 +21,7 @@ library LibOnReQuoter {
         if (quoter.exists) revert IOnReAppErrors.QuoterAlreadyExistsError(quoterId);
 
         quoter.kind = kind;
-        quoter.quoterId = quoterInstanceId;
+        quoter.instanceId = quoterInstanceId;
         quoter.exists = true;
         emit IOnReAppEvents.QuoterCreated(quoterId, kind, quoterInstanceId);
     }
@@ -52,7 +52,8 @@ library LibOnReQuoter {
         OnReTypes.Quoter storage quoter = LibOnReValidation.requireExecutableQuoter(offer.quoterId);
         _validateFlowQuoter(offerConfigId, offer, quoter.kind);
 
-        uint256 price = LibOnRePricer.currentPrice(offer.pricerId);
+        address onReToken = offer.direction == OnReTypes.OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
+        uint256 price = LibOnRePricer.currentPrice(OnReIds.usdPricerId(onReToken));
         uint256 amountOut;
         if (quoter.kind == OnReTypes.QuoterKind.Nav) {
             amountOut = _quoteNav(offer, netInputAmount, price);

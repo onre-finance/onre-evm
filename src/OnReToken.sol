@@ -70,6 +70,10 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     function setCCIPAdmin(address newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAdmin == address(0)) {
+            revert ZeroAddressError();
+        }
+
         address previousAdmin = _ccipAdmin;
         _ccipAdmin = newAdmin;
         emit CCIPAdminTransferredEvent(previousAdmin, newAdmin);

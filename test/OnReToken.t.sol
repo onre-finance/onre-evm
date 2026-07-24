@@ -215,6 +215,10 @@ contract OnReTokenTest is Test {
     function test_AdminCanUpdateCCIPAdmin() public {
         address nextAdmin = makeAddr("nextAdmin");
 
+        vm.expectRevert(IOnReToken.ZeroAddressError.selector);
+        vm.prank(admin);
+        token.setCCIPAdmin(address(0));
+
         vm.prank(admin);
         token.setCCIPAdmin(nextAdmin);
 

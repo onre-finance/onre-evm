@@ -22,4 +22,6 @@ interface IOnReToken is IGetCCIPAdmin {
     error ZeroAddressError();
     error SenderNotMinterError(address sender);
     error SenderNotBurnerError(address sender);
+
+    function burn(uint256 amount) external;
 }

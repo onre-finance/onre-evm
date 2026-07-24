@@ -40,6 +40,9 @@ library LibOnRePricer {
         if (vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0) {
             revert IOnReAppErrors.InvalidAmountError();
         }
+        if (vector.baseTime > vector.startTime) {
+            revert IOnReAppErrors.VectorBaseTimeAfterStartTimeError(vector.baseTime, vector.startTime);
+        }
 
         uint64 currentTime = uint64(block.timestamp);
         if (vector.startTime < currentTime) {
@@ -149,11 +152,15 @@ library LibOnRePricer {
 
     function circulatingSupply(address onReToken) internal view returns (uint256) {
         uint256 supply = IERC20Metadata(onReToken).totalSupply();
-        uint256 excludedSupply = 0;
+        address inventorySource = LibOnReStorage.appStorage().onReTokenConfigs[onReToken].inventorySource;
+        uint256 excludedSupply = IERC20Metadata(onReToken).balanceOf(inventorySource);
         address[] storage excludedAccounts = LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
         uint256 excludedAccountsLength = excludedAccounts.length;
         for (uint256 i; i < excludedAccountsLength;) {
-            excludedSupply += IERC20Metadata(onReToken).balanceOf(excludedAccounts[i]);
+            address account = excludedAccounts[i];
+            if (account != inventorySource) {
+                excludedSupply += IERC20Metadata(onReToken).balanceOf(account);
+            }
             unchecked {
                 ++i;
             }

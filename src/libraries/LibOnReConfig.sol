@@ -15,9 +15,9 @@ library LibOnReConfig {
     uint8 internal constant ONRE_TOKEN_DECIMALS = 9;
     uint8 internal constant MAX_EXCLUDED_SUPPLY_ADDRESSES = 20;
 
-    function registerOnReToken(address onReToken, uint256 maxSupply, uint256 maxMintAmount) internal {
+    function registerOnReToken(address onReToken, address inventorySource) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
-        if (onReToken == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (onReToken == address(0) || inventorySource == address(0)) revert IOnReAppErrors.ZeroAddressError();
 
         OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
         if (config.enabled || config.decimals != 0) {
@@ -27,11 +27,10 @@ library LibOnReConfig {
         uint8 decimals = IERC20Metadata(onReToken).decimals();
         if (decimals != ONRE_TOKEN_DECIMALS) revert IOnReAppErrors.InvalidTokenError();
 
+        config.inventorySource = inventorySource;
         config.enabled = true;
         config.decimals = decimals;
-        config.maxSupply = maxSupply;
-        config.maxMintAmount = maxMintAmount;
-        emit IOnReAppEvents.OnReTokenRegistered(onReToken, decimals, maxSupply, maxMintAmount);
+        emit IOnReAppEvents.OnReTokenRegistered(onReToken, inventorySource, decimals);
     }
 
     function setOnReTokenEnabled(address onReToken, bool enabled) internal {
@@ -44,17 +43,16 @@ library LibOnReConfig {
         emit IOnReAppEvents.OnReTokenEnabledSet(onReToken, enabled);
     }
 
-    function setOnReTokenLimits(address onReToken, uint256 maxSupply, uint256 maxMintAmount) internal {
+    function setOnReTokenInventorySource(address onReToken, address inventorySource) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
+        if (inventorySource == address(0)) revert IOnReAppErrors.ZeroAddressError();
 
         OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
-        if (config.maxSupply == maxSupply && config.maxMintAmount == maxMintAmount) {
-            revert IOnReAppErrors.NoChangeError();
-        }
-        config.maxSupply = maxSupply;
-        config.maxMintAmount = maxMintAmount;
-        emit IOnReAppEvents.OnReTokenLimitsUpdated(onReToken, maxSupply, maxMintAmount);
+        address oldInventorySource = config.inventorySource;
+        if (oldInventorySource == inventorySource) revert IOnReAppErrors.NoChangeError();
+        config.inventorySource = inventorySource;
+        emit IOnReAppEvents.OnReTokenInventorySourceUpdated(onReToken, oldInventorySource, inventorySource);
     }
 
     function addExcludedSupplyAddress(address onReToken, address account) internal {
@@ -95,16 +93,6 @@ library LibOnReConfig {
         accounts.pop();
         delete LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account];
         emit IOnReAppEvents.ExcludedSupplyAddressRemoved(onReToken, account);
-    }
-
-    function setMintGateway(address newMintGateway) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
-        if (newMintGateway == address(0)) revert IOnReAppErrors.ZeroAddressError();
-
-        address oldMintGateway = LibOnReStorage.appStorage().mintGateway;
-        if (oldMintGateway == newMintGateway) revert IOnReAppErrors.NoChangeError();
-        LibOnReStorage.appStorage().mintGateway = newMintGateway;
-        emit IOnReAppEvents.MintGatewayUpdated(oldMintGateway, newMintGateway);
     }
 
     function addApprover(address approver) internal {

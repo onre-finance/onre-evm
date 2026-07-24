@@ -55,12 +55,8 @@ library LibOnReView {
         return LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
     }
 
-    function appConfig()
-        internal
-        view
-        returns (bool isKilled, address approver1, address approver2, address mintGateway)
-    {
+    function appConfig() internal view returns (bool isKilled, address approver1, address approver2) {
         LibOnReStorage.AppStorage storage s = LibOnReStorage.appStorage();
-        return (s.isKilled, s.approver1, s.approver2, s.mintGateway);
+        return (s.isKilled, s.approver1, s.approver2);
     }
 }

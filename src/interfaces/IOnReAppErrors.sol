@@ -15,10 +15,7 @@ interface IOnReAppErrors {
     error MinimumAmountOutNotMetError(uint256 minimumAmountOut, uint256 actualAmountOut);
     error WorkerOfferRequiresFulfillmentRequestError(bytes32 offerConfigId);
     error KilledError();
-    error MintGatewayNotSetError();
     error ExactAssetTransferRequiredError(address asset, uint256 expectedAmount, uint256 receivedAmount);
-    error MaxMintAmountExceededError(address onReToken, uint256 amount, uint256 maxMintAmount);
-    error MaxSupplyExceededError(address onReToken, uint256 newSupply, uint256 maxSupply);
     error ExcludedSupplyAddressAlreadyExistsError(address onReToken, address account);
     error ExcludedSupplyAddressNotFoundError(address onReToken, address account);
     error TooManyExcludedSupplyAddressesError(address onReToken);
@@ -55,6 +52,7 @@ interface IOnReAppErrors {
     error TooManyVectorsError();
     error DuplicateVectorStartTimeError(uint64 startTime);
     error InvalidVectorOrderError();
+    error VectorBaseTimeAfterStartTimeError(uint64 baseTime, uint64 startTime);
     error VectorStartTimeInPastError(uint64 startTime, uint64 currentTime);
     error VectorNotFoundError(uint64 startTime);
     error VectorIndexOutOfBoundsError(uint8 vectorIndex, uint8 vectorCount);

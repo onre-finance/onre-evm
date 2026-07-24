@@ -8,7 +8,6 @@ import {Test} from "forge-std/Test.sol";
 import {IOnReApp} from "../src/interfaces/IOnReApp.sol";
 import {IOnReAppErrors} from "../src/interfaces/IOnReAppErrors.sol";
 import {IOnReToken} from "../src/interfaces/IOnReToken.sol";
-import {OnReMintGateway} from "../src/OnReMintGateway.sol";
 import {OnReToken} from "../src/OnReToken.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import {OnReTypes} from "../src/types/OnReTypes.sol";
@@ -17,15 +16,16 @@ import {OnReDiamondTestHelper} from "./helpers/OnReDiamondTestHelper.sol";
 contract OnReAppTest is Test, OnReDiamondTestHelper {
     bytes32 private constant APPROVAL_TYPEHASH = keccak256("ApprovalMessage(address user,uint64 expiry)");
     uint256 private constant APPROVER_KEY = 0xA11CE;
+    uint256 private constant INVENTORY_AMOUNT = 1_000_000_000e9;
 
     IOnReApp private app;
-    OnReMintGateway private mintGateway;
     OnReToken private onReToken;
     MockUsd private usd;
 
     address private worker = makeAddr("worker");
     address private user = makeAddr("user");
     address private vaultDestination = makeAddr("vaultDestination");
+    address private inventorySource = makeAddr("inventorySource");
     address private approver;
 
     bytes32 private pricerId;
@@ -48,12 +48,13 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app =
             _deployDiamondApp(OnReTypes.InitializeParams({admin: address(this), worker: worker, approvers: approvers}));
 
-        mintGateway = new OnReMintGateway(address(app));
-        onReToken = _deployToken(address(mintGateway), address(app));
+        onReToken = _deployToken(address(app));
         usd = new MockUsd();
 
-        app.setMintGateway(address(mintGateway));
-        app.registerOnReToken(address(onReToken), 18_000_000_000e9, 1_000_000e9);
+        onReToken.mint(inventorySource, INVENTORY_AMOUNT);
+        vm.prank(inventorySource);
+        onReToken.approve(address(app), type(uint256).max);
+        app.registerOnReToken(address(onReToken), inventorySource);
 
         pricerId = app.createPricer(address(onReToken), OnReTypes.PricingDenomination.Usd);
         app.addPricingVector(
@@ -102,6 +103,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         OnReTypes.OnReTokenConfig memory tokenConfig = app.getOnReTokenConfig(address(onReToken));
         assertTrue(tokenConfig.enabled);
         assertEq(tokenConfig.decimals, 9);
+        assertEq(tokenConfig.inventorySource, inventorySource);
 
         OnReTypes.Pricer memory pricer = app.getPricer(pricerId);
         assertEq(pricerId, OnReIds.pricerId(address(onReToken), OnReTypes.PricingDenomination.Usd));
@@ -211,6 +213,14 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             OnReTypes.PricingVector({startTime: 2, baseTime: 1, basePrice: 0, apr: 0, priceFixDuration: 1 days})
         );
 
+        vm.expectRevert(
+            abi.encodeWithSelector(IOnReAppErrors.VectorBaseTimeAfterStartTimeError.selector, uint64(3), uint64(2))
+        );
+        app.addPricingVector(
+            pricerId,
+            OnReTypes.PricingVector({startTime: 2, baseTime: 3, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})
+        );
+
         OnReTypes.PricingVector memory futureVector =
             OnReTypes.PricingVector({startTime: 5, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days});
         app.addPricingVector(pricerId, futureVector);
@@ -269,6 +279,8 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 1e6);
         assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 99e6);
         assertEq(usd.balanceOf(address(app)), inputAmount);
+        assertEq(onReToken.balanceOf(inventorySource), INVENTORY_AMOUNT - amountOut);
+        assertEq(onReToken.allowance(inventorySource, address(app)), type(uint256).max);
 
         _fundAndApproveUsd(user, inputAmount);
         OnReTypes.TakeOfferParams memory missingSignature =
@@ -343,7 +355,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         assertEq(amountOut, 99e6);
         assertEq(usd.balanceOf(user), 99e6);
-        assertEq(onReToken.totalSupply(), 1e9);
+        assertEq(onReToken.totalSupply(), INVENTORY_AMOUNT + 1e9);
         assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
         assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 101e6);
     }
@@ -375,7 +387,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         assertEq(secondAmountOut, 118_800_000);
         assertEq(usd.balanceOf(user), 158_400_000);
-        assertEq(onReToken.totalSupply(), 1e9);
+        assertEq(onReToken.totalSupply(), INVENTORY_AMOUNT + 1e9);
         assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
         assertFalse(app.getFulfillmentRequest(requestKey).exists);
     }
@@ -595,9 +607,11 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.NotApproverError.selector, secondApprover));
         app.removeApprover(secondApprover);
 
-        app.setOnReTokenLimits(address(onReToken), 100e9, 10e9);
+        address newInventorySource = makeAddr("newInventorySource");
+        app.setOnReTokenInventorySource(address(onReToken), newInventorySource);
+        assertEq(app.getOnReTokenConfig(address(onReToken)).inventorySource, newInventorySource);
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
-        app.setOnReTokenLimits(address(onReToken), 100e9, 10e9);
+        app.setOnReTokenInventorySource(address(onReToken), newInventorySource);
         app.setOnReTokenEnabled(address(onReToken), false);
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
         app.setOnReTokenEnabled(address(onReToken), false);
@@ -718,11 +732,10 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         return keccak256(abi.encodePacked(hex"1901", domainSeparator, structHash));
     }
 
-    function _deployToken(address gateway, address burner) private returns (OnReToken token) {
+    function _deployToken(address burner) private returns (OnReToken token) {
         OnReToken implementation = new OnReToken();
-        address[] memory initialMinters = new address[](2);
-        initialMinters[0] = gateway;
-        initialMinters[1] = address(this);
+        address[] memory initialMinters = new address[](1);
+        initialMinters[0] = address(this);
         address[] memory initialBurners = new address[](1);
         initialBurners[0] = burner;
         IOnReToken.InitializeParams memory params = IOnReToken.InitializeParams({

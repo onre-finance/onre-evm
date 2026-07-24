@@ -88,10 +88,14 @@ library LibOnReVault {
     }
 
     function pullExactTokenAmount(address token, address from, uint256 amount) internal {
+        transferExactTokenAmountFrom(token, from, address(this), amount);
+    }
+
+    function transferExactTokenAmountFrom(address token, address from, address recipient, uint256 amount) internal {
         IERC20 tokenContract = IERC20(token);
-        uint256 balanceBefore = tokenContract.balanceOf(address(this));
-        tokenContract.safeTransferFrom(from, address(this), amount);
-        uint256 receivedAmount = tokenContract.balanceOf(address(this)) - balanceBefore;
+        uint256 balanceBefore = tokenContract.balanceOf(recipient);
+        tokenContract.safeTransferFrom(from, recipient, amount);
+        uint256 receivedAmount = tokenContract.balanceOf(recipient) - balanceBefore;
         if (receivedAmount != amount) {
             revert IOnReAppErrors.ExactAssetTransferRequiredError(token, amount, receivedAmount);
         }

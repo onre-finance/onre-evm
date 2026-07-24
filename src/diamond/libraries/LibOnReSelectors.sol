@@ -52,16 +52,15 @@ library LibOnReSelectors {
     }
 
     function config() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](9);
+        selectors = new bytes4[](8);
         selectors[0] = IOnReApp.registerOnReToken.selector;
         selectors[1] = IOnReApp.setOnReTokenEnabled.selector;
-        selectors[2] = IOnReApp.setOnReTokenLimits.selector;
+        selectors[2] = IOnReApp.setOnReTokenInventorySource.selector;
         selectors[3] = IOnReApp.addExcludedSupplyAddress.selector;
         selectors[4] = IOnReApp.removeExcludedSupplyAddress.selector;
-        selectors[5] = IOnReApp.setMintGateway.selector;
-        selectors[6] = IOnReApp.addApprover.selector;
-        selectors[7] = IOnReApp.removeApprover.selector;
-        selectors[8] = IOnReApp.setKillSwitch.selector;
+        selectors[5] = IOnReApp.addApprover.selector;
+        selectors[6] = IOnReApp.removeApprover.selector;
+        selectors[7] = IOnReApp.setKillSwitch.selector;
     }
 
     function pricer() internal pure returns (bytes4[] memory selectors) {

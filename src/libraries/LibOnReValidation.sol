@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
 import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {OnReTypes} from "../types/OnReTypes.sol";
@@ -113,20 +112,6 @@ library LibOnReValidation {
         request = LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
         if (!request.exists) {
             revert IOnReAppErrors.FulfillmentRequestNotFoundError(fulfillmentRequestId);
-        }
-    }
-
-    function validateMintLimits(address onReToken, uint256 amount) internal view {
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
-        if (config.maxMintAmount > 0 && amount > config.maxMintAmount) {
-            revert IOnReAppErrors.MaxMintAmountExceededError(onReToken, amount, config.maxMintAmount);
-        }
-
-        if (config.maxSupply > 0) {
-            uint256 newSupply = IERC20(onReToken).totalSupply() + amount;
-            if (newSupply > config.maxSupply) {
-                revert IOnReAppErrors.MaxSupplyExceededError(onReToken, newSupply, config.maxSupply);
-            }
         }
     }
 }

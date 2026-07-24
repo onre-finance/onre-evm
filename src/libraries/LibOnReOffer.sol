@@ -7,7 +7,6 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
 import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
-import {IOnReMintGateway} from "../interfaces/IOnReMintGateway.sol";
 import {IOnReToken} from "../interfaces/IOnReToken.sol";
 import {OnReTypes} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
@@ -260,15 +259,12 @@ library LibOnReOffer {
         address recipient,
         OnReTypes.ExecutionAccounting memory accounting
     ) private {
-        LibOnReValidation.validateMintLimits(offer.tokenOut, accounting.amountOut);
-        address configuredMintGateway = LibOnReStorage.appStorage().mintGateway;
-        if (configuredMintGateway == address(0)) revert IOnReAppErrors.MintGatewayNotSetError();
-
         accounting.liquidityRefillAmount = _calculateLiquidityRefill(offer, accounting.netInputAmount);
         accounting.proceedsAmount = accounting.netInputAmount - accounting.liquidityRefillAmount;
         LibOnReVault.accrue(offer.liquidityVaultId, offer.tokenIn, accounting.liquidityRefillAmount);
         LibOnReVault.accrue(offer.proceedsVaultId, offer.tokenIn, accounting.proceedsAmount);
-        IOnReMintGateway(configuredMintGateway).mint(offer.tokenOut, recipient, accounting.amountOut);
+        address inventorySource = LibOnReStorage.appStorage().onReTokenConfigs[offer.tokenOut].inventorySource;
+        LibOnReVault.transferExactTokenAmountFrom(offer.tokenOut, inventorySource, recipient, accounting.amountOut);
     }
 
     function _settleOnReToAsset(

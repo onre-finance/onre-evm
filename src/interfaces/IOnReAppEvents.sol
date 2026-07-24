@@ -4,9 +4,11 @@ pragma solidity 0.8.35;
 import {OnReTypes} from "../types/OnReTypes.sol";
 
 interface IOnReAppEvents {
-    event OnReTokenRegistered(address indexed onReToken, uint8 decimals, uint256 maxSupply, uint256 maxMintAmount);
+    event OnReTokenRegistered(address indexed onReToken, address indexed inventorySource, uint8 decimals);
     event OnReTokenEnabledSet(address indexed onReToken, bool enabled);
-    event OnReTokenLimitsUpdated(address indexed onReToken, uint256 maxSupply, uint256 maxMintAmount);
+    event OnReTokenInventorySourceUpdated(
+        address indexed onReToken, address indexed oldInventorySource, address indexed newInventorySource
+    );
     event ExcludedSupplyAddressAdded(address indexed onReToken, address indexed account);
     event ExcludedSupplyAddressRemoved(address indexed onReToken, address indexed account);
 
@@ -110,7 +112,6 @@ interface IOnReAppEvents {
         bytes32 indexed vaultId, address indexed token, address indexed destination, uint256 amount
     );
 
-    event MintGatewayUpdated(address indexed oldMintGateway, address indexed newMintGateway);
     event ApproverAdded(address indexed approver);
     event ApproverRemoved(address indexed approver);
     event KillSwitchSet(bool isKilled);

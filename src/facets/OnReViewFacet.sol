@@ -49,11 +49,7 @@ contract OnReViewFacet {
         return LibOnReView.getExcludedSupplyAccounts(onReToken);
     }
 
-    function appConfig()
-        external
-        view
-        returns (bool isKilled, address approver1, address approver2, address mintGateway)
-    {
+    function appConfig() external view returns (bool isKilled, address approver1, address approver2) {
         return LibOnReView.appConfig();
     }
 }

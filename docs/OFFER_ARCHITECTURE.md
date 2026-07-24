@@ -3,8 +3,8 @@
 Status: Implemented for fresh Diamond deployments.
 
 This is the EVM form of the Solana account model. A `bytes32` deterministic ID
-replaces a PDA address, ERC-20 balances remain in Diamond custody, and facets are
-thin adapters over namespaced Diamond storage.
+replaces a PDA address, operational vault balances remain in Diamond custody,
+and facets are thin adapters over namespaced Diamond storage.
 
 The implemented scope intentionally contains:
 
@@ -25,8 +25,8 @@ config:
 ---
 flowchart TB
     subgraph Control["Global control and reporting"]
-        AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers<br/>mint gateway"]
-        TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals<br/>maxSupply<br/>maxMintAmount"]
+        AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers"]
+        TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals<br/>inventorySource"]
         MarketStats["<b>MarketStats</b><br/>derived view - not stored<br/>APY<br/>circulating supply<br/>USD NAV<br/>NAV adjustment<br/>TVL"]
         Roles["<b>Application roles</b><br/>CONFIG_ADMIN_ROLE<br/>WORKER_ROLE<br/>VAULT_ADMIN_ROLE<br/>PAUSER_ROLE"]
     end
@@ -44,6 +44,7 @@ flowchart TB
     end
 
     subgraph Custody["Diamond custody and logical vault accounting"]
+        Inventory["<b>OnRe inventory multisig</b><br/>holds pre-minted OnRe tokens<br/>approves Diamond for uint256 max"]
         FeeVault["<b>Fee vault</b><br/>ConfigurableVault kind = Fee<br/>per-token logical balance"]
         ProceedsVault["<b>Proceeds vault</b><br/>ConfigurableVault kind = Proceeds<br/>per-token logical balance"]
         LiquidityVault["<b>Liquidity vault</b><br/>ConfigurableVault kind = Liquidity<br/>refill target<br/>per-token logical balance"]
@@ -58,7 +59,7 @@ flowchart TB
     Pricer -->|"embeds up to 10"| PricingVector
     TokenConfig -.->|"derives USD Pricer ID"| Pricer
     MarketStats -.->|"derives the same USD Pricer ID"| Pricer
-    MarketStats -.->|"supply limits and token identity"| TokenConfig
+    MarketStats -.->|"token identity; excludes inventory balance"| TokenConfig
 
     OfferConfig -.->|"OnRe token from pair derives USD Pricer"| Pricer
     OfferConfig -->|"quoterId"| Nav
@@ -69,7 +70,9 @@ flowchart TB
     FeeConfig -->|"feeVaultId"| FeeVault
 
     TakeOffer -->|"loads direct-flow configuration"| OfferConfig
-    AppConfig -.->|"kill switch, approval, mint gateway"| TakeOffer
+    AppConfig -.->|"kill switch and approval"| TakeOffer
+    TokenConfig -->|"inventorySource"| Inventory
+    Inventory -.->|"transferFrom to user"| TakeOffer
     Request -->|"flow = Worker; direction = OnReToAsset"| OfferConfig
     Fulfill -->|"settles escrowed input"| Request
 
@@ -78,6 +81,7 @@ flowchart TB
     Roles -.->|"CONFIG_ADMIN_ROLE"| NavPermissionless
     Roles -.->|"CONFIG_ADMIN_ROLE"| FeeConfig
     Roles -.->|"CONFIG_ADMIN_ROLE"| OfferConfig
+    Roles -.->|"CONFIG_ADMIN_ROLE"| TokenConfig
     Roles -.->|"VAULT_ADMIN_ROLE"| FeeVault
     Roles -.->|"VAULT_ADMIN_ROLE"| ProceedsVault
     Roles -.->|"VAULT_ADMIN_ROLE"| LiquidityVault
@@ -163,8 +167,15 @@ netInput      = grossInput - fee
 
 For `AssetToOnRe`, the Diamond pulls the input asset, accounts the fee in the
 Fee vault, refills the configured Liquidity vault up to its TVL target, accounts
-the remainder in the Proceeds vault, and mints the OnRe output through the mint
-gateway.
+the remainder in the Proceeds vault, and transfers the OnRe output directly from
+the token's configured inventory multisig to the user. The multisig holds
+pre-minted inventory and grants the Diamond a `type(uint256).max` allowance.
+The transfer must increase the user's balance by the exact quoted amount.
+
+The inventory-source balance is excluded from circulating supply. A source
+change therefore changes which balance is treated as undistributed inventory;
+governance should move the remaining inventory and grant the new allowance in
+the same operational change.
 
 For `OnReToAsset`, the Diamond pulls or has already escrowed the OnRe input,
 accounts the input fee, burns the net input, debits the configured Liquidity

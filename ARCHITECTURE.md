@@ -1,7 +1,7 @@
 # EVM application architecture
 
 The EVM application is an EIP-2535 Diamond. `OnReDiamond` is the permanent
-address used by tokens, the mint gateway, users, and integrations. Its fallback
+address used by token inventory multisigs, users, and integrations. Its fallback
 delegates each function selector to an installed facet.
 
 The offer domain is documented in
@@ -53,8 +53,8 @@ The upgrade owner is separate from application roles. Production ownership
 should be a timelocked multisig. Application roles are:
 
 - `DEFAULT_ADMIN_ROLE`: grants and revokes application roles.
-- `CONFIG_ADMIN_ROLE`: token, Pricer, Quoter, FeeConfig, OfferConfig, approver,
-  and mint-gateway configuration.
+- `CONFIG_ADMIN_ROLE`: token inventory, Pricer, Quoter, FeeConfig, OfferConfig,
+  and approver configuration.
 - `WORKER_ROLE`: partial fulfillment and worker-authorized cancellation.
 - `VAULT_ADMIN_ROLE`: ConfigurableVault creation and configuration.
 - `PAUSER_ROLE`: kill-switch changes.
@@ -75,6 +75,17 @@ fee-on-transfer assets are rejected by exact balance accounting.
 
 Buffer and Prop AMM are out of scope. They have no facets, storage, enum
 variants, or deployment configuration in this implementation.
+
+## OnRe token inventory
+
+Each registered OnRe token has a configured inventory-source address. Production
+uses a multisig holding pre-minted inventory. The multisig grants the Diamond a
+maximum ERC-20 allowance, and successful `AssetToOnRe` settlement transfers the
+quoted output directly from that multisig to the user. The Diamond never receives
+mint authority and there is no mint-gateway contract.
+
+Inventory held by the configured source is excluded from circulating supply.
+Operational vault assets remain physically held by the Diamond.
 
 ## Deployment
 

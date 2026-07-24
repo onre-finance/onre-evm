@@ -4,16 +4,16 @@ pragma solidity 0.8.35;
 import {LibOnReConfig} from "../libraries/LibOnReConfig.sol";
 
 contract OnReConfigFacet {
-    function registerOnReToken(address onReToken, uint256 maxSupply, uint256 maxMintAmount) external {
-        LibOnReConfig.registerOnReToken(onReToken, maxSupply, maxMintAmount);
+    function registerOnReToken(address onReToken, address inventorySource) external {
+        LibOnReConfig.registerOnReToken(onReToken, inventorySource);
     }
 
     function setOnReTokenEnabled(address onReToken, bool enabled) external {
         LibOnReConfig.setOnReTokenEnabled(onReToken, enabled);
     }
 
-    function setOnReTokenLimits(address onReToken, uint256 maxSupply, uint256 maxMintAmount) external {
-        LibOnReConfig.setOnReTokenLimits(onReToken, maxSupply, maxMintAmount);
+    function setOnReTokenInventorySource(address onReToken, address inventorySource) external {
+        LibOnReConfig.setOnReTokenInventorySource(onReToken, inventorySource);
     }
 
     function addExcludedSupplyAddress(address onReToken, address account) external {
@@ -22,10 +22,6 @@ contract OnReConfigFacet {
 
     function removeExcludedSupplyAddress(address onReToken, address account) external {
         LibOnReConfig.removeExcludedSupplyAddress(onReToken, account);
-    }
-
-    function setMintGateway(address newMintGateway) external {
-        LibOnReConfig.setMintGateway(newMintGateway);
     }
 
     function addApprover(address approver) external {

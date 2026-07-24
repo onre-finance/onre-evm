@@ -10,7 +10,6 @@ library LibOnReStorage {
         bool isKilled;
         address approver1;
         address approver2;
-        address mintGateway;
         mapping(address onReToken => OnReTypes.OnReTokenConfig config) onReTokenConfigs;
         mapping(bytes32 pricerId => OnReTypes.Pricer pricer) pricers;
         mapping(bytes32 quoterId => OnReTypes.Quoter quoter) quoters;

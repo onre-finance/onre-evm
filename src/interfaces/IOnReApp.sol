@@ -7,12 +7,11 @@ import {IOnReAccessControl} from "./IOnReAccessControl.sol";
 import {OnReTypes} from "../types/OnReTypes.sol";
 
 interface IOnReApp is IOnReAppEvents, IOnReAppErrors, IOnReAccessControl {
-    function registerOnReToken(address onReToken, uint256 maxSupply, uint256 maxMintAmount) external;
+    function registerOnReToken(address onReToken, address inventorySource) external;
     function setOnReTokenEnabled(address onReToken, bool enabled) external;
-    function setOnReTokenLimits(address onReToken, uint256 maxSupply, uint256 maxMintAmount) external;
+    function setOnReTokenInventorySource(address onReToken, address inventorySource) external;
     function addExcludedSupplyAddress(address onReToken, address account) external;
     function removeExcludedSupplyAddress(address onReToken, address account) external;
-    function setMintGateway(address newMintGateway) external;
     function addApprover(address approver) external;
     function removeApprover(address approver) external;
     function setKillSwitch(bool killed) external;
@@ -92,8 +91,5 @@ interface IOnReApp is IOnReAppEvents, IOnReAppErrors, IOnReAccessControl {
         returns (OnReTypes.FulfillmentRequest memory);
     function getConfigurableVault(bytes32 vaultId) external view returns (OnReTypes.ConfigurableVault memory);
     function getExcludedSupplyAccounts(address onReToken) external view returns (address[] memory);
-    function appConfig()
-        external
-        view
-        returns (bool isKilled, address approver1, address approver2, address mintGateway);
+    function appConfig() external view returns (bool isKilled, address approver1, address approver2);
 }

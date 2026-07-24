@@ -39,7 +39,7 @@ contract DeployOnReDiamondTest is Test {
         assertEq(IDiamondOwnership(address(diamond)).owner(), diamondOwner);
         assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).DEFAULT_ADMIN_ROLE(), params.admin));
         assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).WORKER_ROLE(), params.worker));
-        (, address configuredApprover1, address configuredApprover2,) = IOnReApp(address(diamond)).appConfig();
+        (, address configuredApprover1, address configuredApprover2) = IOnReApp(address(diamond)).appConfig();
         assertEq(configuredApprover1, approver1);
         assertEq(configuredApprover2, approver2);
     }

@@ -26,23 +26,39 @@ contract OnReAccessControlFacet is IOnReAccessControl {
         LibOnReAccessControl.renounceRole(role, callerConfirmation);
     }
 
+    function boss() external view returns (address) {
+        return LibOnReAccessControl.boss();
+    }
+
+    function pendingBoss() external view returns (address) {
+        return LibOnReAccessControl.pendingBoss();
+    }
+
+    function beginBossTransfer(address newBoss) external {
+        LibOnReAccessControl.beginBossTransfer(newBoss);
+    }
+
+    function cancelBossTransfer() external {
+        LibOnReAccessControl.cancelBossTransfer();
+    }
+
+    function acceptBossTransfer() external {
+        LibOnReAccessControl.acceptBossTransfer();
+    }
+
     function DEFAULT_ADMIN_ROLE() external pure returns (bytes32) {
         return LibOnReRoles.DEFAULT_ADMIN_ROLE;
     }
 
-    function CONFIG_ADMIN_ROLE() external pure returns (bytes32) {
-        return LibOnReRoles.CONFIG_ADMIN_ROLE;
+    function ADMIN_ROLE() external pure returns (bytes32) {
+        return LibOnReRoles.ADMIN_ROLE;
     }
 
     function WORKER_ROLE() external pure returns (bytes32) {
         return LibOnReRoles.WORKER_ROLE;
     }
 
-    function VAULT_ADMIN_ROLE() external pure returns (bytes32) {
-        return LibOnReRoles.VAULT_ADMIN_ROLE;
-    }
-
-    function PAUSER_ROLE() external pure returns (bytes32) {
-        return LibOnReRoles.PAUSER_ROLE;
+    function UPGRADER_ROLE() external pure returns (bytes32) {
+        return LibOnReRoles.UPGRADER_ROLE;
     }
 }

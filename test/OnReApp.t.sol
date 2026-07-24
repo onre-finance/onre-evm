@@ -23,6 +23,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     MockUsd private usd;
 
     address private worker = makeAddr("worker");
+    address private admin = makeAddr("admin");
     address private user = makeAddr("user");
     address private vaultDestination = makeAddr("vaultDestination");
     address private inventorySource = makeAddr("inventorySource");
@@ -45,8 +46,11 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         address[] memory approvers = new address[](1);
         approvers[0] = approver;
-        app =
-            _deployDiamondApp(OnReTypes.InitializeParams({admin: address(this), worker: worker, approvers: approvers}));
+        app = _deployDiamondApp(
+            OnReTypes.InitializeParams({
+                boss: address(this), admin: admin, worker: worker, upgrader: makeAddr("upgrader"), approvers: approvers
+            })
+        );
 
         onReToken = _deployToken(address(app));
         usd = new MockUsd();
@@ -94,11 +98,10 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
     function test_InitializesRolesAndCanonicalDomainRecords() public view {
         assertTrue(app.hasRole(app.DEFAULT_ADMIN_ROLE(), address(this)));
-        assertTrue(app.hasRole(app.CONFIG_ADMIN_ROLE(), address(this)));
-        assertTrue(app.hasRole(app.WORKER_ROLE(), address(this)));
+        assertTrue(app.hasRole(app.ADMIN_ROLE(), admin));
         assertTrue(app.hasRole(app.WORKER_ROLE(), worker));
-        assertTrue(app.hasRole(app.VAULT_ADMIN_ROLE(), address(this)));
-        assertTrue(app.hasRole(app.PAUSER_ROLE(), address(this)));
+        assertFalse(app.hasRole(app.ADMIN_ROLE(), address(this)));
+        assertFalse(app.hasRole(app.WORKER_ROLE(), address(this)));
 
         OnReTypes.OnReTokenConfig memory tokenConfig = app.getOnReTokenConfig(address(onReToken));
         assertTrue(tokenConfig.enabled);
@@ -977,20 +980,47 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.previewExecution(permissionedOfferId, 1e6);
     }
 
-    function test_ConfigOperationsAreRoleProtected() public {
-        bytes32 configRole = app.CONFIG_ADMIN_ROLE();
+    function test_AdminCanOnlyEnableKillSwitch() public {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, configRole)
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, app.ADMIN_ROLE())
+        );
+        vm.prank(user);
+        app.setKillSwitch(true);
+
+        vm.prank(admin);
+        app.setKillSwitch(true);
+        (bool isKilled,,) = app.appConfig();
+        assertTrue(isKilled);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, admin, app.DEFAULT_ADMIN_ROLE()
+            )
+        );
+        vm.prank(admin);
+        app.setKillSwitch(false);
+
+        app.setKillSwitch(false);
+        (isKilled,,) = app.appConfig();
+        assertFalse(isKilled);
+    }
+
+    function test_ConfigOperationsAreRoleProtected() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user, app.DEFAULT_ADMIN_ROLE()
+            )
         );
         vm.prank(user);
         app.createQuoter(OnReTypes.QuoterKind.Nav, 99);
 
-        bytes32 vaultRole = app.VAULT_ADMIN_ROLE();
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, vaultRole)
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, admin, app.DEFAULT_ADMIN_ROLE()
+            )
         );
-        vm.prank(user);
-        app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 99, user, 0);
+        vm.prank(admin);
+        app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 99, admin, 0);
     }
 
     function testFuzz_NavQuoteMatchesDecimalScaling(uint96 rawInput) public view {

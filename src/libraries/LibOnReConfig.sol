@@ -10,13 +10,13 @@ import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 
-/// @notice Token, approver, gateway, and emergency configuration.
+/// @notice OnRe-token registration, inventory source, and supply-exclusion configuration.
 library LibOnReConfig {
     uint8 internal constant ONRE_TOKEN_DECIMALS = 9;
     uint8 internal constant MAX_EXCLUDED_SUPPLY_ADDRESSES = 20;
 
     function registerOnReToken(address onReToken, address inventorySource) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (onReToken == address(0) || inventorySource == address(0)) revert IOnReAppErrors.ZeroAddressError();
 
         OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
@@ -34,7 +34,7 @@ library LibOnReConfig {
     }
 
     function setOnReTokenEnabled(address onReToken, bool enabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
 
         OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
@@ -44,7 +44,7 @@ library LibOnReConfig {
     }
 
     function setOnReTokenInventorySource(address onReToken, address inventorySource) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
         if (inventorySource == address(0)) revert IOnReAppErrors.ZeroAddressError();
 
@@ -56,7 +56,7 @@ library LibOnReConfig {
     }
 
     function addExcludedSupplyAddress(address onReToken, address account) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
         if (account == address(0)) revert IOnReAppErrors.ZeroAddressError();
         if (LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account] != 0) {
@@ -73,7 +73,7 @@ library LibOnReConfig {
     }
 
     function removeExcludedSupplyAddress(address onReToken, address account) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
         if (account == address(0)) revert IOnReAppErrors.ZeroAddressError();
 
@@ -93,47 +93,5 @@ library LibOnReConfig {
         accounts.pop();
         delete LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account];
         emit IOnReAppEvents.ExcludedSupplyAddressRemoved(onReToken, account);
-    }
-
-    function addApprover(address approver) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
-        _addApprover(approver);
-    }
-
-    function removeApprover(address approver) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
-        if (approver == address(0)) revert IOnReAppErrors.ZeroAddressError();
-
-        if (LibOnReStorage.appStorage().approver1 == approver) {
-            LibOnReStorage.appStorage().approver1 = address(0);
-        } else if (LibOnReStorage.appStorage().approver2 == approver) {
-            LibOnReStorage.appStorage().approver2 = address(0);
-        } else {
-            revert IOnReAppErrors.NotApproverError(approver);
-        }
-        emit IOnReAppEvents.ApproverRemoved(approver);
-    }
-
-    function setKillSwitch(bool killed) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.PAUSER_ROLE);
-        if (LibOnReStorage.appStorage().isKilled == killed) revert IOnReAppErrors.NoChangeError();
-        LibOnReStorage.appStorage().isKilled = killed;
-        emit IOnReAppEvents.KillSwitchSet(killed);
-    }
-
-    function _addApprover(address approver) internal {
-        if (approver == address(0)) revert IOnReAppErrors.ZeroAddressError();
-        if (approver == LibOnReStorage.appStorage().approver1 || approver == LibOnReStorage.appStorage().approver2) {
-            revert IOnReAppErrors.ApproverAlreadyExistsError(approver);
-        }
-
-        if (LibOnReStorage.appStorage().approver1 == address(0)) {
-            LibOnReStorage.appStorage().approver1 = approver;
-        } else if (LibOnReStorage.appStorage().approver2 == address(0)) {
-            LibOnReStorage.appStorage().approver2 = approver;
-        } else {
-            revert IOnReAppErrors.BothApproversFilledError();
-        }
-        emit IOnReAppEvents.ApproverAdded(approver);
     }
 }

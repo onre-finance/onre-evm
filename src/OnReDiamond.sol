@@ -4,21 +4,16 @@ pragma solidity 0.8.35;
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IDiamondCut} from "./diamond/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "./diamond/interfaces/IDiamondLoupe.sol";
-import {IDiamondOwnership} from "./diamond/interfaces/IDiamondOwnership.sol";
 import {LibDiamond} from "./diamond/libraries/LibDiamond.sol";
 
 contract OnReDiamond {
     error FunctionNotFound(bytes4 selector);
 
-    constructor(address owner, IDiamondCut.FacetCut[] memory initialCut, address init, bytes memory initCalldata)
-        payable {
-        LibDiamond.setContractOwner(owner);
-
+    constructor(IDiamondCut.FacetCut[] memory initialCut, address init, bytes memory initCalldata) payable {
         LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
         ds.supportedInterfaces[type(IERC165).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
-        ds.supportedInterfaces[type(IDiamondOwnership).interfaceId] = true;
 
         LibDiamond.diamondCut(initialCut, init, initCalldata);
     }

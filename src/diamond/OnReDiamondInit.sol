@@ -9,7 +9,6 @@ import {IOnReAccessControl} from "../interfaces/IOnReAccessControl.sol";
 import {OnReTypes} from "../types/OnReTypes.sol";
 import {IDiamondCut} from "./interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "./interfaces/IDiamondLoupe.sol";
-import {IDiamondOwnership} from "./interfaces/IDiamondOwnership.sol";
 import {LibDiamond} from "./libraries/LibDiamond.sol";
 import {LibOnReStorage} from "./libraries/LibOnReStorage.sol";
 import {LibOnReAccessControl} from "../libraries/LibOnReAccessControl.sol";
@@ -20,14 +19,17 @@ contract OnReDiamondInit is IOnReAppEvents, IOnReAppErrors {
         if (s.initialized) {
             revert NoChangeError();
         }
-        if (params.admin == address(0) || params.worker == address(0)) {
+        if (
+            params.boss == address(0) || params.admin == address(0) || params.worker == address(0)
+                || params.upgrader == address(0)
+        ) {
             revert ZeroAddressError();
         }
         if (params.approvers.length > 2) {
             revert BothApproversFilledError();
         }
 
-        LibOnReAccessControl.initialize(params.admin, params.worker);
+        LibOnReAccessControl.initialize(params.boss, params.admin, params.worker, params.upgrader);
 
         uint256 approverLength = params.approvers.length;
         for (uint256 i = 0; i < approverLength;) {
@@ -41,7 +43,6 @@ contract OnReDiamondInit is IOnReAppEvents, IOnReAppErrors {
         ds.supportedInterfaces[type(IERC165).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
-        ds.supportedInterfaces[type(IDiamondOwnership).interfaceId] = true;
         ds.supportedInterfaces[type(IAccessControl).interfaceId] = true;
         ds.supportedInterfaces[type(IOnReAccessControl).interfaceId] = true;
         s.initialized = true;

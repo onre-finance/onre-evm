@@ -15,7 +15,7 @@ import {OnReMath} from "./OnReMath.sol";
 /// @notice Reusable stateless NAV amount-out dispatch.
 library LibOnReQuoter {
     function createQuoter(OnReTypes.QuoterKind kind, uint64 quoterInstanceId) internal returns (bytes32 quoterId) {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         quoterId = OnReIds.quoterId(kind, quoterInstanceId);
         OnReTypes.Quoter storage quoter = LibOnReStorage.appStorage().quoters[quoterId];
         if (quoter.exists) revert IOnReAppErrors.QuoterAlreadyExistsError(quoterId);
@@ -27,7 +27,7 @@ library LibOnReQuoter {
     }
 
     function setQuoterDisabled(bytes32 quoterId, bool disabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OnReTypes.Quoter storage quoter = LibOnReValidation.requireQuoter(quoterId);
         if (quoter.disabled == disabled) revert IOnReAppErrors.NoChangeError();
         quoter.disabled = disabled;

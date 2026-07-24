@@ -24,7 +24,7 @@ library LibOnReVault {
         address withdrawalDestination,
         uint16 refillTargetBps
     ) internal returns (bytes32 vaultId) {
-        LibOnReAccessControl.checkRole(LibOnReRoles.VAULT_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateRefillTarget(kind, refillTargetBps);
 
         vaultId = OnReIds.configurableVaultId(kind, vaultInstanceId);
@@ -42,7 +42,7 @@ library LibOnReVault {
     }
 
     function updateConfigurableVault(bytes32 vaultId, address withdrawalDestination, uint16 refillTargetBps) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.VAULT_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OnReTypes.ConfigurableVault storage vault = LibOnReValidation.requireConfigurableVault(vaultId);
         _validateRefillTarget(vault.kind, refillTargetBps);
         if (vault.withdrawalDestination == withdrawalDestination && vault.refillTargetBps == refillTargetBps) {

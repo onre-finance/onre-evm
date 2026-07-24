@@ -29,10 +29,14 @@ library OnReTypes {
     }
 
     struct InitializeParams {
-        /// @dev Initial DEFAULT_ADMIN_ROLE holder; also receives every application role.
+        /// @dev Initial DEFAULT_ADMIN_ROLE holder with full application authority.
+        address boss;
+        /// @dev Initial ADMIN_ROLE holder; can only enable the kill switch.
         address admin;
-        /// @dev Initial WORKER_ROLE holder. Additional workers use grantRole.
+        /// @dev Initial WORKER_ROLE holder; can fulfill or administratively cancel requests.
         address worker;
+        /// @dev Initial UPGRADER_ROLE holder; can execute Diamond cuts.
+        address upgrader;
         address[] approvers;
     }
 

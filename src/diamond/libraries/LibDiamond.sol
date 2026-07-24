@@ -2,7 +2,6 @@
 pragma solidity 0.8.35;
 
 import {IDiamondCut} from "../interfaces/IDiamondCut.sol";
-import {IDiamondOwnership} from "../interfaces/IDiamondOwnership.sol";
 
 library LibDiamond {
     error EmptyFacetSelectors();
@@ -17,8 +16,6 @@ library LibDiamond {
     error InitializationReverted(address init, bytes initCalldata);
     error PositionOverflow(uint256 position);
     error RemoveFacetAddressMustBeZero(address facet);
-    error UnauthorizedDiamondOwner(address caller);
-    error ZeroAddressOwner();
 
     /// @custom:storage-location erc7201:onre.storage.Diamond
     struct DiamondStorage {
@@ -26,7 +23,6 @@ library LibDiamond {
         mapping(address facet => FacetFunctionSelectors data) facetFunctionSelectors;
         address[] facetAddresses;
         mapping(bytes4 interfaceId => bool supported) supportedInterfaces;
-        address contractOwner;
     }
 
     struct FacetAddressAndPosition {
@@ -46,26 +42,6 @@ library LibDiamond {
         bytes32 location = DIAMOND_STORAGE_LOCATION;
         assembly ("memory-safe") {
             ds.slot := location
-        }
-    }
-
-    function setContractOwner(address newOwner) internal {
-        if (newOwner == address(0)) {
-            revert ZeroAddressOwner();
-        }
-        DiamondStorage storage ds = diamondStorage();
-        address previousOwner = ds.contractOwner;
-        ds.contractOwner = newOwner;
-        emit IDiamondOwnership.OwnershipTransferred(previousOwner, newOwner);
-    }
-
-    function contractOwner() internal view returns (address) {
-        return diamondStorage().contractOwner;
-    }
-
-    function enforceIsContractOwner() internal view {
-        if (msg.sender != diamondStorage().contractOwner) {
-            revert UnauthorizedDiamondOwner(msg.sender);
         }
     }
 

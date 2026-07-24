@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
 import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
@@ -21,7 +20,7 @@ library LibOnRePricer {
         internal
         returns (bytes32 pricerId)
     {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireEnabledOnReToken(onReToken);
 
         pricerId = OnReIds.pricerId(onReToken, denomination);
@@ -35,7 +34,7 @@ library LibOnRePricer {
     }
 
     function addPricingVector(bytes32 pricerId, OnReTypes.PricingVector calldata vector) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
         if (vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0) {
             revert IOnReAppErrors.InvalidAmountError();
@@ -70,7 +69,7 @@ library LibOnRePricer {
     }
 
     function deletePricingVector(bytes32 pricerId, uint64 startTime) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         // forge-lint: disable-next-line(block-timestamp)
         if (startTime <= block.timestamp) {
             revert IOnReAppErrors.VectorStartTimeInPastError(startTime, uint64(block.timestamp));
@@ -95,7 +94,7 @@ library LibOnRePricer {
     }
 
     function deleteAllPricingVectors(bytes32 pricerId) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
         uint8 deletedCount = pricer.vectorCount;
         for (uint8 i; i < deletedCount;) {
@@ -109,7 +108,7 @@ library LibOnRePricer {
     }
 
     function setPricerDisabled(bytes32 pricerId, bool disabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.CONFIG_ADMIN_ROLE);
+        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
         if (pricer.disabled == disabled) revert IOnReAppErrors.NoChangeError();
         pricer.disabled = disabled;
@@ -148,29 +147,6 @@ library LibOnRePricer {
         return OnReMath.calculateStepPrice(
             vector.apr, vector.basePrice, vector.baseTime, vector.priceFixDuration, timestamp
         );
-    }
-
-    function circulatingSupply(address onReToken) internal view returns (uint256) {
-        uint256 supply = IERC20Metadata(onReToken).totalSupply();
-        address inventorySource = LibOnReStorage.appStorage().onReTokenConfigs[onReToken].inventorySource;
-        uint256 excludedSupply = IERC20Metadata(onReToken).balanceOf(inventorySource);
-        address[] storage excludedAccounts = LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
-        uint256 excludedAccountsLength = excludedAccounts.length;
-        for (uint256 i; i < excludedAccountsLength;) {
-            address account = excludedAccounts[i];
-            if (account != inventorySource) {
-                excludedSupply += IERC20Metadata(onReToken).balanceOf(account);
-            }
-            unchecked {
-                ++i;
-            }
-        }
-        return excludedSupply >= supply ? 0 : supply - excludedSupply;
-    }
-
-    function currentTvl(address onReToken) internal view returns (uint256) {
-        uint256 nav = currentPrice(OnReIds.usdPricerId(onReToken));
-        return OnReMath.calculateTvl(circulatingSupply(onReToken), nav, PRICE_SCALE);
     }
 
     function _cleanOldPricingVectors(

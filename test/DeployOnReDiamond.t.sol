@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {DeployOnReDiamond} from "../script/DeployOnReDiamond.s.sol";
 import {OnReDiamond} from "../src/OnReDiamond.sol";
 import {IDiamondLoupe} from "../src/diamond/interfaces/IDiamondLoupe.sol";
-import {IDiamondOwnership} from "../src/diamond/interfaces/IDiamondOwnership.sol";
 import {IOnReApp} from "../src/interfaces/IOnReApp.sol";
 import {OnReTypes} from "../src/types/OnReTypes.sol";
 
@@ -33,26 +32,29 @@ contract DeployOnReDiamondTest is Test {
         assertEq(params.approvers[0], approver1);
         assertEq(params.approvers[1], approver2);
 
-        address diamondOwner = makeAddr("diamondOwner");
-        OnReDiamond diamond = harness.deploy(diamondOwner, params);
-        assertEq(IDiamondLoupe(address(diamond)).facetAddresses().length, 12);
-        assertEq(IDiamondOwnership(address(diamond)).owner(), diamondOwner);
-        assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).DEFAULT_ADMIN_ROLE(), params.admin));
+        OnReDiamond diamond = harness.deploy(params);
+        assertEq(IDiamondLoupe(address(diamond)).facetAddresses().length, 11);
+        assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).DEFAULT_ADMIN_ROLE(), params.boss));
+        assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).ADMIN_ROLE(), params.admin));
         assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).WORKER_ROLE(), params.worker));
+        assertTrue(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).UPGRADER_ROLE(), params.upgrader));
+        assertFalse(IOnReApp(address(diamond)).hasRole(IOnReApp(address(diamond)).UPGRADER_ROLE(), params.boss));
         (, address configuredApprover1, address configuredApprover2) = IOnReApp(address(diamond)).appConfig();
         assertEq(configuredApprover1, approver1);
         assertEq(configuredApprover2, approver2);
     }
 
     function _setRequiredEnvironment() private {
+        vm.setEnv("ONRE_BOSS", vm.toString(makeAddr("boss")));
         vm.setEnv("ONRE_ADMIN", vm.toString(makeAddr("admin")));
         vm.setEnv("ONRE_WORKER", vm.toString(makeAddr("worker")));
+        vm.setEnv("ONRE_UPGRADER", vm.toString(makeAddr("upgrader")));
     }
 }
 
 contract DeployOnReDiamondHarness is DeployOnReDiamond {
-    function deploy(address diamondOwner, OnReTypes.InitializeParams memory params) external returns (OnReDiamond) {
-        return _deploy(diamondOwner, params);
+    function deploy(OnReTypes.InitializeParams memory params) external returns (OnReDiamond) {
+        return _deploy(params);
     }
 
     function paramsFromEnvironment() external view returns (OnReTypes.InitializeParams memory) {

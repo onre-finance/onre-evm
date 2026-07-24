@@ -2,6 +2,8 @@
 pragma solidity 0.8.35;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IOnReAccessControl} from "../interfaces/IOnReAccessControl.sol";
+import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 
 /// @notice Diamond-native role storage with the OpenZeppelin IAccessControl surface.
@@ -14,6 +16,8 @@ library LibOnReAccessControl {
 
     struct AccessControlStorage {
         mapping(bytes32 role => RoleData) roles;
+        address boss;
+        address pendingBoss;
     }
 
     // keccak256(abi.encode(uint256(keccak256("onre.storage.AccessControl")) - 1)) & ~bytes32(uint256(0xff))
@@ -45,30 +49,101 @@ library LibOnReAccessControl {
         return accessControlStorage().roles[role].adminRole;
     }
 
+    function boss() internal view returns (address) {
+        return accessControlStorage().boss;
+    }
+
+    function pendingBoss() internal view returns (address) {
+        return accessControlStorage().pendingBoss;
+    }
+
     function grantRole(bytes32 role, address account) internal {
+        _requireSupportedRole(role);
+        _requireNonBossRole(role);
+        AccessControlStorage storage s = accessControlStorage();
+        if (role == LibOnReRoles.UPGRADER_ROLE && (account == s.boss || account == s.pendingBoss)) {
+            revert IOnReAppErrors.BossUpgraderRoleConflictError(account);
+        }
         checkRole(getRoleAdmin(role));
         _grantRole(role, account);
     }
 
     function revokeRole(bytes32 role, address account) internal {
+        _requireSupportedRole(role);
+        _requireNonBossRole(role);
         checkRole(getRoleAdmin(role));
         _revokeRole(role, account);
     }
 
     function renounceRole(bytes32 role, address callerConfirmation) internal {
+        _requireSupportedRole(role);
+        _requireNonBossRole(role);
         if (callerConfirmation != msg.sender) {
             revert IAccessControl.AccessControlBadConfirmation();
         }
         _revokeRole(role, callerConfirmation);
     }
 
-    function initialize(address admin, address worker) internal {
-        _grantRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(LibOnReRoles.CONFIG_ADMIN_ROLE, admin);
-        _grantRole(LibOnReRoles.WORKER_ROLE, admin);
-        _grantRole(LibOnReRoles.VAULT_ADMIN_ROLE, admin);
-        _grantRole(LibOnReRoles.PAUSER_ROLE, admin);
+    function initialize(address initialBoss, address admin, address worker, address upgrader) internal {
+        if (initialBoss == upgrader) revert IOnReAppErrors.BossUpgraderRoleConflictError(initialBoss);
+
+        accessControlStorage().boss = initialBoss;
+        _grantRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, initialBoss);
+        _grantRole(LibOnReRoles.ADMIN_ROLE, admin);
         _grantRole(LibOnReRoles.WORKER_ROLE, worker);
+        _grantRole(LibOnReRoles.UPGRADER_ROLE, upgrader);
+    }
+
+    function beginBossTransfer(address newBoss) internal {
+        checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        if (newBoss == address(0)) revert IOnReAppErrors.ZeroAddressError();
+
+        AccessControlStorage storage s = accessControlStorage();
+        if (newBoss == s.boss || newBoss == s.pendingBoss) revert IOnReAppErrors.NoChangeError();
+        if (s.roles[LibOnReRoles.UPGRADER_ROLE].hasRole[newBoss]) {
+            revert IOnReAppErrors.BossUpgraderRoleConflictError(newBoss);
+        }
+
+        address previousPendingBoss = s.pendingBoss;
+        if (previousPendingBoss != address(0)) {
+            emit IOnReAccessControl.BossTransferCancelled(s.boss, previousPendingBoss);
+        }
+        s.pendingBoss = newBoss;
+        emit IOnReAccessControl.BossTransferStarted(s.boss, newBoss);
+    }
+
+    function cancelBossTransfer() internal {
+        checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+
+        AccessControlStorage storage s = accessControlStorage();
+        address cancelledPendingBoss = s.pendingBoss;
+        if (cancelledPendingBoss == address(0)) revert IOnReAppErrors.NoChangeError();
+
+        s.pendingBoss = address(0);
+        emit IOnReAccessControl.BossTransferCancelled(s.boss, cancelledPendingBoss);
+    }
+
+    function acceptBossTransfer() internal {
+        AccessControlStorage storage s = accessControlStorage();
+        address newBoss = s.pendingBoss;
+        if (msg.sender != newBoss) revert IOnReAppErrors.NotPendingBossError(msg.sender);
+
+        address previousBoss = s.boss;
+        s.pendingBoss = address(0);
+        s.boss = newBoss;
+        _revokeRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, previousBoss);
+        _grantRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, newBoss);
+        emit IOnReAccessControl.BossTransferred(previousBoss, newBoss);
+    }
+
+    function _requireSupportedRole(bytes32 role) private pure {
+        if (!LibOnReRoles.isSupportedRole(role)) revert IOnReAppErrors.UnsupportedRoleError(role);
+    }
+
+    function _requireNonBossRole(bytes32 role) private pure {
+        if (role == LibOnReRoles.DEFAULT_ADMIN_ROLE) {
+            revert IOnReAppErrors.BossRoleManagedSeparatelyError();
+        }
     }
 
     function _grantRole(bytes32 role, address account) internal returns (bool granted) {

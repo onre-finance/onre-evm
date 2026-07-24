@@ -6,6 +6,10 @@ This is the EVM form of the Solana account model. A `bytes32` deterministic ID
 replaces a PDA address, operational vault balances remain in Diamond custody,
 and facets are thin adapters over namespaced Diamond storage.
 
+Every application facet implements a domain-specific interface used by the
+deployment selector manifest. `IOnReApp` aggregates those interfaces for
+clients without redefining the facet functions.
+
 The implemented scope intentionally contains:
 
 - one pricing denomination: `Usd`;
@@ -28,7 +32,8 @@ flowchart TB
         AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers"]
         TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals<br/>inventorySource"]
         MarketStats["<b>MarketStats</b><br/>derived view - not stored<br/>APY<br/>circulating supply<br/>USD NAV<br/>NAV adjustment<br/>TVL"]
-        Roles["<b>Application roles</b><br/>CONFIG_ADMIN_ROLE<br/>WORKER_ROLE<br/>VAULT_ADMIN_ROLE<br/>PAUSER_ROLE"]
+        Roles["<b>Application roles</b><br/>DEFAULT_ADMIN_ROLE - exactly one boss, two-step transfer<br/>ADMIN_ROLE - emergency activation only<br/>WORKER_ROLE - fulfill or cancel requests<br/>UPGRADER_ROLE - Diamond cuts, never the boss"]
+        DiamondCut["<b>Diamond upgrades</b><br/>add, replace, or remove selectors"]
     end
 
     subgraph Pricing["Deterministic USD pricing and quoting"]
@@ -76,17 +81,19 @@ flowchart TB
     Request -->|"flow = Worker; direction = OnReToAsset"| OfferConfig
     Fulfill -->|"settles escrowed input"| Request
 
-    Roles -.->|"CONFIG_ADMIN_ROLE"| Pricer
-    Roles -.->|"CONFIG_ADMIN_ROLE"| Nav
-    Roles -.->|"CONFIG_ADMIN_ROLE"| NavPermissionless
-    Roles -.->|"CONFIG_ADMIN_ROLE"| FeeConfig
-    Roles -.->|"CONFIG_ADMIN_ROLE"| OfferConfig
-    Roles -.->|"CONFIG_ADMIN_ROLE"| TokenConfig
-    Roles -.->|"VAULT_ADMIN_ROLE"| FeeVault
-    Roles -.->|"VAULT_ADMIN_ROLE"| ProceedsVault
-    Roles -.->|"VAULT_ADMIN_ROLE"| LiquidityVault
-    Roles -.->|"PAUSER_ROLE"| AppConfig
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| Pricer
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| Nav
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| NavPermissionless
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| FeeConfig
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| OfferConfig
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| TokenConfig
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| FeeVault
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| ProceedsVault
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| LiquidityVault
+    Roles -.->|"DEFAULT_ADMIN_ROLE: enable or disable"| AppConfig
+    Roles -.->|"ADMIN_ROLE: enable only"| AppConfig
     Roles -.->|"WORKER_ROLE"| Fulfill
+    Roles -.->|"UPGRADER_ROLE"| DiamondCut
 ```
 
 ## Deterministic identities
@@ -187,15 +194,18 @@ Cancellation returns only the unfilled input.
 
 ## Diamond boundaries
 
+- `DiamondCutFacet` requires `UPGRADER_ROLE`; the boss is explicitly excluded
+  from that role.
 - `OnRePricerFacet` configures USD Pricers and embedded vectors.
 - `OnReQuoterFacet` configures quoter instances and exposes quote previews.
-- `OnReOfferFacet` configures FeeConfigs and OfferConfigs and dispatches
-  `takeOffer` from the configured permissioned or permissionless flow.
+- `OnReOfferFacet` delegates FeeConfig policy to `LibOnReFeeConfig`,
+  OfferConfig lifecycle to `LibOnReOfferConfig`, and runtime execution to
+  `LibOnReOffer`.
 - `OnReFulfillmentFacet` owns worker request creation, partial fulfillment, and
   cancellation.
 - `OnReConfigurableVaultFacet` owns reusable vault instances, deposits,
   fixed-destination withdrawals, and per-token accounting.
-- `OnReMarketStatsFacet` derives reporting from the token's canonical USD
-  Pricer.
+- `OnReMarketStatsFacet` derives canonical circulating supply and TVL while
+  consuming price and APR data from the token's USD Pricer.
 
 All facets use `LibOnReStorage`; none declares ordinary mutable state.

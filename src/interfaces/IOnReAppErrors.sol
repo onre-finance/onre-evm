@@ -45,6 +45,10 @@ interface IOnReAppErrors {
     error ZeroBalanceError();
     error InsufficientBalanceError(uint256 availableAmount, uint256 requestedAmount);
     error UnauthorizedError(address sender);
+    error UnsupportedRoleError(bytes32 role);
+    error BossRoleManagedSeparatelyError();
+    error NotPendingBossError(address account);
+    error BossUpgraderRoleConflictError(address account);
     error BothApproversFilledError();
     error ApproverAlreadyExistsError(address approver);
     error NotApproverError(address approver);

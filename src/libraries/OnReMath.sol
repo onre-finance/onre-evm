@@ -10,12 +10,20 @@ library OnReMath {
     uint256 internal constant SECONDS_IN_DAY = 86_400;
     uint8 internal constant MAX_TOKEN_DECIMALS = 18;
 
+    function calculateFee(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
+        internal
+        pure
+        returns (uint256)
+    {
+        return Math.mulDiv(amount, feeBasisPoints, maxBasisPoints, Math.Rounding.Ceil);
+    }
+
     function calculateFees(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
         internal
         pure
         returns (uint256 feeAmount, uint256 netAmount)
     {
-        feeAmount = Math.mulDiv(amount, feeBasisPoints, maxBasisPoints, Math.Rounding.Ceil);
+        feeAmount = calculateFee(amount, feeBasisPoints, maxBasisPoints);
         netAmount = amount - feeAmount;
     }
 

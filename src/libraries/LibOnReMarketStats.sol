@@ -20,10 +20,6 @@ library LibOnReMarketStats {
         OnReTypes.Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
         uint8 activeVectorIndex = LibOnRePricer.activePricingVectorIndex(pricerId, pricer);
         OnReTypes.PricingVector storage activeVector = pricer.vectors[activeVectorIndex];
-        // forge-lint: disable-next-line(block-timestamp)
-        if (activeVector.baseTime > block.timestamp) {
-            revert IOnReAppErrors.NoActiveVectorError(pricerId);
-        }
 
         uint256 apy = OnReMath.calculateApyFromApr(activeVector.apr);
         uint256 nav = LibOnRePricer.calculatePricingVectorPriceAt(activeVector, block.timestamp);

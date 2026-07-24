@@ -621,6 +621,341 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.setKillSwitch(true);
     }
 
+    function test_TokenRegistrationRejectsInvalidInputsAndSupportsReenable() public {
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.registerOnReToken(address(0), inventorySource);
+
+        OnReToken secondToken = _deployToken(address(app));
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.registerOnReToken(address(secondToken), address(0));
+
+        vm.expectRevert(IOnReAppErrors.InvalidTokenError.selector);
+        app.registerOnReToken(address(usd), inventorySource);
+
+        app.setOnReTokenEnabled(address(onReToken), false);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.TokenAlreadyRegisteredError.selector, address(onReToken)));
+        app.registerOnReToken(address(onReToken), inventorySource);
+
+        vm.expectRevert(IOnReAppErrors.InvalidTokenError.selector);
+        app.createPricer(address(onReToken), OnReTypes.PricingDenomination.Usd);
+        app.setOnReTokenEnabled(address(onReToken), true);
+
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.setOnReTokenInventorySource(address(onReToken), address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.TokenNotRegisteredError.selector, address(usd)));
+        app.setOnReTokenEnabled(address(usd), true);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.TokenNotRegisteredError.selector, address(usd)));
+        app.createPricer(address(usd), OnReTypes.PricingDenomination.Usd);
+    }
+
+    function test_ExcludedSupplyAddressCapacityRemovalAndInventoryDeduplication() public {
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.addExcludedSupplyAddress(address(onReToken), address(0));
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.removeExcludedSupplyAddress(address(onReToken), address(0));
+
+        address missing = makeAddr("missingExcluded");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOnReAppErrors.ExcludedSupplyAddressNotFoundError.selector, address(onReToken), missing
+            )
+        );
+        app.removeExcludedSupplyAddress(address(onReToken), missing);
+
+        app.addExcludedSupplyAddress(address(onReToken), inventorySource);
+        for (uint160 i = 1; i < 20; ++i) {
+            app.addExcludedSupplyAddress(address(onReToken), address(10_000 + i));
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(IOnReAppErrors.TooManyExcludedSupplyAddressesError.selector, address(onReToken))
+        );
+        app.addExcludedSupplyAddress(address(onReToken), address(20_000));
+
+        assertEq(app.marketStats(address(onReToken)).circulatingSupply, 0);
+        app.removeExcludedSupplyAddress(address(onReToken), inventorySource);
+        app.removeExcludedSupplyAddress(address(onReToken), address(10_018));
+        assertEq(app.getExcludedSupplyAccounts(address(onReToken)).length, 18);
+    }
+
+    function test_ApproverSlotValidationAndReuse() public {
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.addApprover(address(0));
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.removeApprover(address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ApproverAlreadyExistsError.selector, approver));
+        app.addApprover(approver);
+
+        address secondApprover = makeAddr("secondApprover");
+        app.addApprover(secondApprover);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ApproverAlreadyExistsError.selector, secondApprover));
+        app.addApprover(secondApprover);
+
+        vm.expectRevert(IOnReAppErrors.BothApproversFilledError.selector);
+        app.addApprover(makeAddr("thirdApprover"));
+
+        app.removeApprover(approver);
+        address replacement = makeAddr("replacementApprover");
+        app.addApprover(replacement);
+        (, address approver1, address approver2) = app.appConfig();
+        assertEq(approver1, replacement);
+        assertEq(approver2, secondApprover);
+
+        app.removeApprover(secondApprover);
+    }
+
+    function test_MissingComponentsZeroAmountsAndViewBoundsRevert() public {
+        bytes32 missing = keccak256("missing");
+
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.PricerNotFoundError.selector, missing));
+        app.currentPrice(missing);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.QuoterNotFoundError.selector, missing));
+        app.setQuoterDisabled(missing, true);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.FeeConfigNotFoundError.selector, missing));
+        app.updateFeeConfig(missing, 0, 0, feeVaultId);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ConfigurableVaultNotFoundError.selector, missing));
+        app.updateConfigurableVault(missing, vaultDestination, 0);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.OfferConfigNotFoundError.selector, missing));
+        app.setOfferConfigDisabled(missing, true);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.TokenNotRegisteredError.selector, address(usd)));
+        app.marketStats(address(usd));
+
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.VectorIndexOutOfBoundsError.selector, uint8(1), uint8(1)));
+        app.getPricingVector(pricerId, 1);
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        app.quote(permissionlessOfferId, 0);
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        app.previewExecution(permissionlessOfferId, 0);
+
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.depositConfigurableVault(liquidityVaultId, address(0), 1);
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        app.withdrawConfigurableVault(liquidityVaultId, address(0), 1);
+
+        app.setKillSwitch(true);
+        vm.expectRevert(IOnReAppErrors.KilledError.selector);
+        app.withdrawConfigurableVault(liquidityVaultId, address(usd), 1);
+    }
+
+    function test_OfferCreationAndReferenceValidationBranches() public {
+        MockUsd alternativeUsd = new MockUsd();
+
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        _makeOffer(
+            address(0), address(onReToken), OnReTypes.OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
+        );
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        _makeOffer(
+            address(alternativeUsd),
+            address(0),
+            OnReTypes.OfferFlow.Permissioned,
+            navQuoterId,
+            feeConfigId,
+            liquidityVaultId
+        );
+        vm.expectRevert(IOnReAppErrors.InvalidTokenError.selector);
+        _makeOffer(
+            address(alternativeUsd),
+            address(alternativeUsd),
+            OnReTypes.OfferFlow.Permissioned,
+            navQuoterId,
+            feeConfigId,
+            liquidityVaultId
+        );
+
+        MockHighDecimals highDecimals = new MockHighDecimals();
+        vm.expectRevert(IOnReAppErrors.InvalidDecimalsError.selector);
+        _makeOffer(
+            address(highDecimals),
+            address(onReToken),
+            OnReTypes.OfferFlow.Permissioned,
+            navQuoterId,
+            feeConfigId,
+            liquidityVaultId
+        );
+        vm.expectRevert(IOnReAppErrors.InvalidDecimalsError.selector);
+        _makeOffer(
+            address(onReToken),
+            address(highDecimals),
+            OnReTypes.OfferFlow.Permissioned,
+            navQuoterId,
+            feeConfigId,
+            liquidityVaultId
+        );
+
+        bytes32 missing = keccak256("missingReference");
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.QuoterNotFoundError.selector, missing));
+        _makeOffer(
+            address(alternativeUsd),
+            address(onReToken),
+            OnReTypes.OfferFlow.Permissioned,
+            missing,
+            feeConfigId,
+            liquidityVaultId
+        );
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.FeeConfigNotFoundError.selector, missing));
+        _makeOffer(
+            address(alternativeUsd),
+            address(onReToken),
+            OnReTypes.OfferFlow.Permissioned,
+            navQuoterId,
+            missing,
+            liquidityVaultId
+        );
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ConfigurableVaultNotFoundError.selector, missing));
+        _makeOffer(
+            address(alternativeUsd),
+            address(onReToken),
+            OnReTypes.OfferFlow.Permissioned,
+            navQuoterId,
+            feeConfigId,
+            missing
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.QuoterAlreadyExistsError.selector, navQuoterId));
+        app.createQuoter(OnReTypes.QuoterKind.Nav, 0);
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.FeeConfigAlreadyExistsError.selector, feeConfigId));
+        app.createFeeConfig(0, 100, 0, feeVaultId);
+    }
+
+    function test_ApprovalBranchesFeeFloorAndInsufficientLiquidity() public {
+        uint256 inputAmount = 1e6;
+        _fundAndApproveUsd(user, inputAmount);
+
+        OnReTypes.ApprovalMessage memory wrongUser =
+            OnReTypes.ApprovalMessage({user: makeAddr("approvalOther"), expiry: 1 days});
+        vm.expectRevert(IOnReAppErrors.InvalidApprovalError.selector);
+        vm.prank(user);
+        app.takeOffer(
+            _permissionedTakeOfferParams(permissionedOfferId, inputAmount, wrongUser, _signApproval(wrongUser))
+        );
+
+        OnReTypes.ApprovalMessage memory expired = OnReTypes.ApprovalMessage({user: user, expiry: 0});
+        vm.expectRevert(IOnReAppErrors.InvalidApprovalError.selector);
+        vm.prank(user);
+        app.takeOffer(_permissionedTakeOfferParams(permissionedOfferId, inputAmount, expired, _signApproval(expired)));
+
+        uint256 secondApproverKey = 0xB0B;
+        address secondApprover = vm.addr(secondApproverKey);
+        app.addApprover(secondApprover);
+        OnReTypes.ApprovalMessage memory approval = OnReTypes.ApprovalMessage({user: user, expiry: 1 days});
+        vm.prank(user);
+        app.takeOffer(
+            _permissionedTakeOfferParams(
+                permissionedOfferId, inputAmount, approval, _signApprovalWithKey(approval, secondApproverKey)
+            )
+        );
+
+        OnReTypes.TakeOfferParams memory expiryOnly = _takeOfferParams(permissionlessOfferId, 1);
+        expiryOnly.approval.expiry = 1;
+        vm.expectRevert(IOnReAppErrors.InvalidApprovalError.selector);
+        vm.prank(user);
+        app.takeOffer(expiryOnly);
+
+        OnReTypes.TakeOfferParams memory signatureOnly = _takeOfferParams(permissionlessOfferId, 1);
+        signatureOnly.signature = hex"01";
+        vm.expectRevert(IOnReAppErrors.InvalidApprovalError.selector);
+        vm.prank(user);
+        app.takeOffer(signatureOnly);
+
+        app.updateFeeConfig(feeConfigId, 0, 2, feeVaultId);
+        vm.expectRevert(IOnReAppErrors.InvalidFeeError.selector);
+        app.previewExecution(permissionlessOfferId, 1);
+
+        bytes32 reversePermissionless = _makeOffer(
+            address(onReToken),
+            address(usd),
+            OnReTypes.OfferFlow.Permissionless,
+            navPermissionlessQuoterId,
+            feeConfigId,
+            liquidityVaultId
+        );
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
+        onReToken.mint(user, 1e9);
+        vm.prank(user);
+        onReToken.approve(address(app), 1e9);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOnReAppErrors.InsufficientLiquidityError.selector, liquidityVaultId, address(usd), 0, 1e6
+            )
+        );
+        vm.prank(user);
+        app.takeOffer(_takeOfferParams(reversePermissionless, 1e9));
+    }
+
+    function test_FulfillmentRejectsNonWorkerOffersAndZeroAmounts() public {
+        vm.expectRevert(IOnReAppErrors.InvalidFlowQuoterError.selector);
+        vm.prank(user);
+        app.createFulfillmentRequest(permissionlessOfferId, 1, 1);
+
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        vm.prank(user);
+        app.createFulfillmentRequest(workerOfferId, 1, 0);
+
+        onReToken.mint(user, 1e9);
+        vm.startPrank(user);
+        onReToken.approve(address(app), 1e9);
+        bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 2, 1e9);
+        vm.stopPrank();
+
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        vm.prank(worker);
+        app.fulfillWorkerRequest(requestKey, 0);
+    }
+
+    function test_PricingVectorZeroFieldsPastStartAndCompaction() public {
+        OnReTypes.PricingVector memory vector =
+            OnReTypes.PricingVector({startTime: 2, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days});
+
+        vector.startTime = 0;
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        app.addPricingVector(pricerId, vector);
+        vector.startTime = 2;
+        vector.baseTime = 0;
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        app.addPricingVector(pricerId, vector);
+        vector.baseTime = 1;
+        vector.priceFixDuration = 0;
+        vm.expectRevert(IOnReAppErrors.InvalidAmountError.selector);
+        app.addPricingVector(pricerId, vector);
+
+        vector.priceFixDuration = 1 days;
+        for (uint64 startTime = 2; startTime <= 4; ++startTime) {
+            vector.startTime = startTime;
+            app.addPricingVector(pricerId, vector);
+        }
+        vm.warp(3);
+        vector.startTime = 6;
+        app.addPricingVector(pricerId, vector);
+        assertEq(app.getPricer(pricerId).vectorCount, 4);
+        assertEq(app.getPricingVector(pricerId, 0).startTime, 2);
+
+        vm.warp(7);
+        vector.startTime = 7;
+        app.addPricingVector(pricerId, vector);
+        assertEq(app.getPricer(pricerId).vectorCount, 2);
+        assertEq(app.getPricingVector(pricerId, 0).startTime, 6);
+        assertEq(app.getPricingVector(pricerId, 1).startTime, 7);
+
+        vector.startTime = 6;
+        vm.expectRevert(
+            abi.encodeWithSelector(IOnReAppErrors.VectorStartTimeInPastError.selector, uint64(6), uint64(7))
+        );
+        app.addPricingVector(pricerId, vector);
+    }
+
+    function test_MarketStatsReportsNegativeNavAdjustment() public {
+        app.addPricingVector(
+            pricerId,
+            OnReTypes.PricingVector({
+                startTime: 2, baseTime: 2, basePrice: 500_000_000, apr: 0, priceFixDuration: 1 days
+            })
+        );
+        vm.warp(2);
+        assertEq(app.marketStats(address(onReToken)).navAdjustment, -500_000_000);
+    }
+
     function test_DisabledComponentsAndKillSwitchStopExecution() public {
         app.setPricerDisabled(pricerId, true);
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.PricerDisabledError.selector, pricerId));
@@ -719,7 +1054,15 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     }
 
     function _signApproval(OnReTypes.ApprovalMessage memory approval) private view returns (bytes memory) {
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(APPROVER_KEY, _approvalDigest(approval));
+        return _signApprovalWithKey(approval, APPROVER_KEY);
+    }
+
+    function _signApprovalWithKey(OnReTypes.ApprovalMessage memory approval, uint256 key)
+        private
+        view
+        returns (bytes memory)
+    {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, _approvalDigest(approval));
         return abi.encodePacked(r, s, v);
     }
 
@@ -761,5 +1104,13 @@ contract MockUsd is ERC20 {
 
     function mint(address account, uint256 amount) external {
         _mint(account, amount);
+    }
+}
+
+contract MockHighDecimals is ERC20 {
+    constructor() ERC20("High Decimals", "HIGH") {}
+
+    function decimals() public pure override returns (uint8) {
+        return 19;
     }
 }

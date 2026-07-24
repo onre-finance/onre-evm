@@ -220,6 +220,41 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         assertEq(address(separate).code.length > 0, true);
     }
 
+    function test_InitializerRejectsInvalidAddressesAndApprovers() public {
+        OnReDiamondInit init = new OnReDiamondInit();
+        IDiamondCut.FacetCut[] memory emptyCut = new IDiamondCut.FacetCut[](0);
+        OnReTypes.InitializeParams memory params = _defaultParams(owner);
+
+        params.worker = address(0);
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        new OnReDiamond(owner, emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.admin = address(0);
+        params.worker = makeAddr("validWorker");
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        new OnReDiamond(owner, emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.admin = owner;
+        params.approvers = new address[](3);
+        params.approvers[0] = makeAddr("approverA");
+        params.approvers[1] = makeAddr("approverB");
+        params.approvers[2] = makeAddr("approverC");
+        vm.expectRevert(IOnReAppErrors.BothApproversFilledError.selector);
+        new OnReDiamond(owner, emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.approvers = new address[](1);
+        params.approvers[0] = address(0);
+        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        new OnReDiamond(owner, emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        address duplicateApprover = makeAddr("duplicateApprover");
+        params.approvers = new address[](2);
+        params.approvers[0] = duplicateApprover;
+        params.approvers[1] = duplicateApprover;
+        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ApproverAlreadyExistsError.selector, duplicateApprover));
+        new OnReDiamond(owner, emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+    }
+
     function test_RemovingNonLastSelectorsAndFacetsPreservesLoupeBookkeeping() public {
         DiamondMultiSelectorFacet multi = new DiamondMultiSelectorFacet();
         bytes4[] memory multiSelectors = new bytes4[](2);

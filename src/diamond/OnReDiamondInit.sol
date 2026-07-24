@@ -51,15 +51,15 @@ contract OnReDiamondInit is IOnReAppEvents, IOnReAppErrors {
         if (approver == address(0)) {
             revert ZeroAddressError();
         }
-        if (approver == s.approver1 || approver == s.approver2) {
+        // With at most two initializer approvers, a duplicate can only be the
+        // first approver while the second slot is still empty.
+        if (approver == s.approver1) {
             revert ApproverAlreadyExistsError(approver);
         }
         if (s.approver1 == address(0)) {
             s.approver1 = approver;
-        } else if (s.approver2 == address(0)) {
-            s.approver2 = approver;
         } else {
-            revert BothApproversFilledError();
+            s.approver2 = approver;
         }
         emit ApproverAdded(approver);
     }

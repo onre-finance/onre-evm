@@ -73,7 +73,6 @@ library OnReTypes {
     struct FeeConfig {
         uint64 feeConfigId;
         uint16 basisPoints;
-        uint256 minimumAmount;
         bytes32 feeVaultId;
         bool enabled;
         bool exists;

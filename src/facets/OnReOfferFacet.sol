@@ -8,19 +8,16 @@ import {LibOnReOfferConfig} from "../libraries/LibOnReOfferConfig.sol";
 import {IOnReOffer} from "../interfaces/IOnReOffer.sol";
 
 contract OnReOfferFacet is IOnReOffer {
-    function createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, uint256 minimumAmount, bytes32 feeVaultId)
+    function createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, bytes32 feeVaultId)
         external
         override
         returns (bytes32 feeConfigId)
     {
-        return LibOnReFeeConfig.createFeeConfig(feeConfigInstanceId, basisPoints, minimumAmount, feeVaultId);
+        return LibOnReFeeConfig.createFeeConfig(feeConfigInstanceId, basisPoints, feeVaultId);
     }
 
-    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, uint256 minimumAmount, bytes32 feeVaultId)
-        external
-        override
-    {
-        LibOnReFeeConfig.updateFeeConfig(feeConfigId, basisPoints, minimumAmount, feeVaultId);
+    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) external override {
+        LibOnReFeeConfig.updateFeeConfig(feeConfigId, basisPoints, feeVaultId);
     }
 
     function setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) external override {

@@ -44,7 +44,7 @@ flowchart TB
     end
 
     subgraph Configuration["Reusable offer configuration"]
-        FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>minimum amount<br/>feeVaultId<br/>enabled"]
+        FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>feeVaultId<br/>enabled"]
         OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>disabled"]
     end
 
@@ -168,7 +168,7 @@ Every fee is charged in the input token:
 
 ```text
 percentageFee = ceil(grossInput * basisPoints / 10_000)
-fee           = max(percentageFee, minimumAmount)
+fee           = percentageFee
 netInput      = grossInput - fee
 ```
 

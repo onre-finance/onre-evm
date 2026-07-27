@@ -70,6 +70,9 @@ library LibOnReVault {
         if (LibOnReStorage.appStorage().isKilled) revert IOnReAppErrors.KilledError();
         if (token == address(0)) revert IOnReAppErrors.ZeroAddressError();
         OnReTypes.ConfigurableVault storage vault = LibOnReValidation.requireConfigurableVault(vaultId);
+        if (vault.kind == OnReTypes.ConfigurableVaultKind.Liquidity) {
+            LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        }
         address destination = vault.withdrawalDestination;
         if (destination == address(0)) {
             revert IOnReAppErrors.MissingConfigurableVaultDestinationError(vaultId);

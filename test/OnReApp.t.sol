@@ -73,7 +73,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         proceedsVaultId = app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Proceeds, 0, vaultDestination, 0);
         liquidityVaultId =
             app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Liquidity, 0, vaultDestination, 0);
-        feeConfigId = app.createFeeConfig(0, 100, 0, feeVaultId);
+        feeConfigId = app.createFeeConfig(0, 100, feeVaultId);
 
         permissionedOfferId = _makeOffer(
             address(usd),
@@ -174,7 +174,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             liquidityVaultId
         );
 
-        bytes32 secondFee = app.createFeeConfig(1, 0, 0, feeVaultId);
+        bytes32 secondFee = app.createFeeConfig(1, 0, feeVaultId);
         vm.expectRevert(IOnReAppErrors.InvalidOfferDirectionError.selector);
         _makeOffer(
             address(alternativeUsd),
@@ -433,12 +433,12 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.fulfillWorkerRequest(requestKey, 11e9);
     }
 
-    function test_FeeConfigIsReusableMutableAndHasMinimum() public {
-        app.updateFeeConfig(feeConfigId, 0, 2e6, feeVaultId);
+    function test_FeeConfigIsReusableAndMutable() public {
+        app.updateFeeConfig(feeConfigId, 200, feeVaultId);
         OnReTypes.ExecutionAccounting memory preview = app.previewExecution(permissionlessOfferId, 10e6);
-        assertEq(preview.feeAmount, 2e6);
-        assertEq(preview.netInputAmount, 8e6);
-        assertEq(preview.amountOut, 8e9);
+        assertEq(preview.feeAmount, 200_000);
+        assertEq(preview.netInputAmount, 9_800_000);
+        assertEq(preview.amountOut, 9_800_000_000);
 
         app.setFeeConfigEnabled(feeConfigId, false);
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.FeeConfigDisabledError.selector, feeConfigId));
@@ -449,7 +449,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         onReToken.mint(address(this), 1_000e9);
         bytes32 refillVault =
             app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Liquidity, 1, vaultDestination, 1_000);
-        bytes32 zeroFee = app.createFeeConfig(2, 0, 0, feeVaultId);
+        bytes32 zeroFee = app.createFeeConfig(2, 0, feeVaultId);
         app.updateOfferConfigReferences(
             permissionlessOfferId, navPermissionlessQuoterId, zeroFee, proceedsVaultId, refillVault
         );
@@ -483,6 +483,28 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.withdrawConfigurableVault(noDestinationVault, address(usd), 1);
     }
 
+    function test_LiquidityVaultWithdrawalRequiresBoss() public {
+        usd.mint(address(this), 25e6);
+        usd.approve(address(app), 25e6);
+        app.depositConfigurableVault(liquidityVaultId, address(usd), 25e6);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, admin, app.DEFAULT_ADMIN_ROLE()
+            )
+        );
+        vm.prank(admin);
+        app.withdrawConfigurableVault(liquidityVaultId, address(usd), 0);
+
+        assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 25e6);
+        assertEq(usd.balanceOf(vaultDestination), 0);
+
+        uint256 withdrawn = app.withdrawConfigurableVault(liquidityVaultId, address(usd), 0);
+        assertEq(withdrawn, 25e6);
+        assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 0);
+        assertEq(usd.balanceOf(vaultDestination), 25e6);
+    }
+
     function test_ConfigurableVaultAndFeeConfigurationGuards() public {
         vm.expectRevert(IOnReAppErrors.InvalidBasisPointsError.selector);
         app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 12, vaultDestination, 1);
@@ -494,7 +516,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 0, vaultDestination, 0);
 
         vm.expectRevert(IOnReAppErrors.InvalidFeeError.selector);
-        app.createFeeConfig(12, 1_001, 0, feeVaultId);
+        app.createFeeConfig(12, 1_001, feeVaultId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -504,10 +526,10 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
                 uint8(OnReTypes.ConfigurableVaultKind.Proceeds)
             )
         );
-        app.createFeeConfig(12, 0, 0, proceedsVaultId);
+        app.createFeeConfig(12, 0, proceedsVaultId);
 
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
-        app.updateFeeConfig(feeConfigId, 100, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 100, feeVaultId);
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
         app.updateConfigurableVault(liquidityVaultId, vaultDestination, 0);
 
@@ -716,7 +738,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.QuoterNotFoundError.selector, missing));
         app.setQuoterDisabled(missing, true);
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.FeeConfigNotFoundError.selector, missing));
-        app.updateFeeConfig(missing, 0, 0, feeVaultId);
+        app.updateFeeConfig(missing, 0, feeVaultId);
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ConfigurableVaultNotFoundError.selector, missing));
         app.updateConfigurableVault(missing, vaultDestination, 0);
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.OfferConfigNotFoundError.selector, missing));
@@ -819,10 +841,10 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.QuoterAlreadyExistsError.selector, navQuoterId));
         app.createQuoter(OnReTypes.QuoterKind.Nav, 0);
         vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.FeeConfigAlreadyExistsError.selector, feeConfigId));
-        app.createFeeConfig(0, 100, 0, feeVaultId);
+        app.createFeeConfig(0, 100, feeVaultId);
     }
 
-    function test_ApprovalBranchesFeeFloorAndInsufficientLiquidity() public {
+    function test_ApprovalBranchesAndInsufficientLiquidity() public {
         uint256 inputAmount = 1e6;
         _fundAndApproveUsd(user, inputAmount);
 
@@ -862,10 +884,6 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.prank(user);
         app.takeOffer(signatureOnly);
 
-        app.updateFeeConfig(feeConfigId, 0, 2, feeVaultId);
-        vm.expectRevert(IOnReAppErrors.InvalidFeeError.selector);
-        app.previewExecution(permissionlessOfferId, 1);
-
         bytes32 reversePermissionless = _makeOffer(
             address(onReToken),
             address(usd),
@@ -874,7 +892,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             feeConfigId,
             liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
         onReToken.mint(user, 1e9);
         vm.prank(user);
         onReToken.approve(address(app), 1e9);

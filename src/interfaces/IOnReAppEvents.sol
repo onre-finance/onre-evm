@@ -32,13 +32,9 @@ interface IOnReAppEvents {
     event QuoterDisabledSet(bytes32 indexed quoterId, bool disabled);
 
     event FeeConfigCreated(
-        bytes32 indexed feeConfigId,
-        uint64 indexed instanceId,
-        uint16 basisPoints,
-        uint256 minimumAmount,
-        bytes32 feeVaultId
+        bytes32 indexed feeConfigId, uint64 indexed instanceId, uint16 basisPoints, bytes32 feeVaultId
     );
-    event FeeConfigUpdated(bytes32 indexed feeConfigId, uint16 basisPoints, uint256 minimumAmount, bytes32 feeVaultId);
+    event FeeConfigUpdated(bytes32 indexed feeConfigId, uint16 basisPoints, bytes32 feeVaultId);
     event FeeConfigEnabledSet(bytes32 indexed feeConfigId, bool enabled);
 
     event OfferConfigCreated(

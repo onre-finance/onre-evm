@@ -16,7 +16,7 @@ library LibOnReFeeConfig {
     uint16 internal constant MAX_BASIS_POINTS = 10_000;
     uint16 internal constant MAX_ALLOWED_FEE_BPS = 1_000;
 
-    function createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, uint256 minimumAmount, bytes32 feeVaultId)
+    function createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, bytes32 feeVaultId)
         internal
         returns (bytes32 feeConfigId)
     {
@@ -29,30 +29,23 @@ library LibOnReFeeConfig {
 
         feeConfig.feeConfigId = feeConfigInstanceId;
         feeConfig.basisPoints = basisPoints;
-        feeConfig.minimumAmount = minimumAmount;
         feeConfig.feeVaultId = feeVaultId;
         feeConfig.enabled = true;
         feeConfig.exists = true;
-        emit IOnReAppEvents.FeeConfigCreated(feeConfigId, feeConfigInstanceId, basisPoints, minimumAmount, feeVaultId);
+        emit IOnReAppEvents.FeeConfigCreated(feeConfigId, feeConfigInstanceId, basisPoints, feeVaultId);
     }
 
-    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, uint256 minimumAmount, bytes32 feeVaultId)
-        internal
-    {
+    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateFeePolicy(basisPoints, feeVaultId);
         OnReTypes.FeeConfig storage feeConfig = LibOnReValidation.requireFeeConfig(feeConfigId);
-        if (
-            feeConfig.basisPoints == basisPoints && feeConfig.minimumAmount == minimumAmount
-                && feeConfig.feeVaultId == feeVaultId
-        ) {
+        if (feeConfig.basisPoints == basisPoints && feeConfig.feeVaultId == feeVaultId) {
             revert IOnReAppErrors.NoChangeError();
         }
 
         feeConfig.basisPoints = basisPoints;
-        feeConfig.minimumAmount = minimumAmount;
         feeConfig.feeVaultId = feeVaultId;
-        emit IOnReAppEvents.FeeConfigUpdated(feeConfigId, basisPoints, minimumAmount, feeVaultId);
+        emit IOnReAppEvents.FeeConfigUpdated(feeConfigId, basisPoints, feeVaultId);
     }
 
     function setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) internal {
@@ -68,9 +61,7 @@ library LibOnReFeeConfig {
         view
         returns (uint256 feeAmount)
     {
-        feeAmount = OnReMath.calculateFee(grossInputAmount, feeConfig.basisPoints, MAX_BASIS_POINTS);
-        if (feeAmount < feeConfig.minimumAmount) feeAmount = feeConfig.minimumAmount;
-        if (feeAmount > grossInputAmount) revert IOnReAppErrors.InvalidFeeError();
+        return OnReMath.calculateFee(grossInputAmount, feeConfig.basisPoints, MAX_BASIS_POINTS);
     }
 
     function _validateFeePolicy(uint16 basisPoints, bytes32 feeVaultId) private view {

@@ -6,6 +6,7 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {Test} from "forge-std/Test.sol";
 import {OnReDiamond} from "../src/OnReDiamond.sol";
 import {OnReDiamondInit} from "../src/diamond/OnReDiamondInit.sol";
+import {DiamondCutFacet} from "../src/diamond/facets/DiamondCutFacet.sol";
 import {IDiamondCut} from "../src/diamond/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../src/diamond/interfaces/IDiamondLoupe.sol";
 import {LibDiamond} from "../src/diamond/libraries/LibDiamond.sol";
@@ -82,6 +83,26 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
             abi.encodeWithSelector(OnReDiamond.FunctionNotFound.selector, DiamondTestFacetV2.version.selector)
         );
         DiamondTestFacetV2(address(app)).version();
+    }
+
+    function test_DiamondCutSelectorCannotBeRemovedButCanBeSafelyReplaced() public {
+        IDiamondLoupe loupe = IDiamondLoupe(address(app));
+        address originalFacet = loupe.facetAddress(IDiamondCut.diamondCut.selector);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibDiamond.FunctionIsImmutable.selector, IDiamondCut.diamondCut.selector)
+        );
+        _cut(address(0), IDiamondCut.FacetCutAction.Remove, IDiamondCut.diamondCut.selector, address(0), "");
+        assertEq(loupe.facetAddress(IDiamondCut.diamondCut.selector), originalFacet);
+
+        DiamondCutFacet replacement = new DiamondCutFacet();
+        _cut(address(replacement), IDiamondCut.FacetCutAction.Replace, IDiamondCut.diamondCut.selector, address(0), "");
+        assertEq(loupe.facetAddress(IDiamondCut.diamondCut.selector), address(replacement));
+        assertTrue(IERC165(address(app)).supportsInterface(type(IDiamondCut).interfaceId));
+
+        DiamondTestFacetV1 v1 = new DiamondTestFacetV1();
+        _cut(address(v1), IDiamondCut.FacetCutAction.Add, DiamondTestFacetV1.version.selector, address(0), "");
+        assertEq(DiamondTestFacetV1(address(app)).version(), 1);
     }
 
     function test_AccessControlGrantRevokeAndRenounceUsesOpenZeppelinSemantics() public {

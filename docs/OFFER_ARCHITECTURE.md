@@ -202,6 +202,8 @@ Cancellation returns only the unfilled input.
 ## Diamond boundaries
 
 - `DiamondCutFacet` requires `UPGRADER_ROLE`; the boss may also hold that role.
+- `diamondCut` routing cannot be removed, so an upgrade cannot accidentally
+  delete the only upgrade entry point; replacement remains available.
 - `OnRePricerFacet` configures USD Pricers and embedded vectors.
 - `OnReQuoterFacet` configures quoter instances and exposes quote previews.
 - `OnReOfferFacet` delegates FeeConfig policy to `LibOnReFeeConfig`,

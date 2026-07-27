@@ -148,6 +148,9 @@ library LibDiamond {
         uint256 selectorLength = selectors.length;
         for (uint256 i = 0; i < selectorLength;) {
             bytes4 selector = selectors[i];
+            if (selector == IDiamondCut.diamondCut.selector) {
+                revert FunctionIsImmutable(selector);
+            }
             address oldFacet = ds.selectorToFacetAndPosition[selector].facetAddress;
             if (oldFacet == address(0)) {
                 revert FunctionDoesNotExist(selector);

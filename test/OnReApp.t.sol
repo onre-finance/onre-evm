@@ -412,6 +412,38 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         assertFalse(app.getFulfillmentRequest(requestKey).exists);
     }
 
+    function test_WorkerCancellationRejectsExcessDiamondDebit() public {
+        MockSenderPaysFeeToken taxedToken = new MockSenderPaysFeeToken(address(app));
+        app.registerOnReToken(address(taxedToken), inventorySource);
+        bytes32 taxedPricerId = app.createPricer(address(taxedToken), OnReTypes.PricingDenomination.Usd);
+        app.addPricingVector(
+            taxedPricerId,
+            OnReTypes.PricingVector({startTime: 1, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})
+        );
+        bytes32 taxedWorkerOfferId = _makeOffer(
+            address(taxedToken), address(usd), OnReTypes.OfferFlow.Worker, navQuoterId, feeConfigId, liquidityVaultId
+        );
+
+        taxedToken.mint(user, 100e9);
+        vm.startPrank(user);
+        taxedToken.approve(address(app), 100e9);
+        bytes32 requestKey = app.createFulfillmentRequest(taxedWorkerOfferId, 88, 100e9);
+        vm.stopPrank();
+        taxedToken.mint(address(app), 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOnReAppErrors.ExactAssetDebitRequiredError.selector, address(taxedToken), 100e9, 100e9 + 1
+            )
+        );
+        vm.prank(user);
+        app.cancelFulfillmentRequest(requestKey);
+
+        assertTrue(app.getFulfillmentRequest(requestKey).exists);
+        assertEq(taxedToken.balanceOf(address(app)), 100e9 + 1);
+        assertEq(taxedToken.balanceOf(user), 0);
+    }
+
     function test_WorkerFlowEnforcesRoleAndRemainingAmount() public {
         onReToken.mint(user, 10e9);
         vm.startPrank(user);
@@ -481,6 +513,62 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             abi.encodeWithSelector(IOnReAppErrors.MissingConfigurableVaultDestinationError.selector, noDestinationVault)
         );
         app.withdrawConfigurableVault(noDestinationVault, address(usd), 1);
+    }
+
+    function test_ExactDepositRejectsExcessSenderDebit() public {
+        MockSenderPaysFeeToken taxedToken = new MockSenderPaysFeeToken(user);
+        bytes32 taxedVault = app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 20, vaultDestination, 0);
+        taxedToken.mint(user, 101);
+
+        vm.startPrank(user);
+        taxedToken.approve(address(app), 100);
+        vm.expectRevert(
+            abi.encodeWithSelector(IOnReAppErrors.ExactAssetDebitRequiredError.selector, address(taxedToken), 100, 101)
+        );
+        app.depositConfigurableVault(taxedVault, address(taxedToken), 100);
+        vm.stopPrank();
+
+        assertEq(taxedToken.balanceOf(user), 101);
+        assertEq(taxedToken.balanceOf(address(app)), 0);
+        assertEq(app.configurableVaultBalance(taxedVault, address(taxedToken)), 0);
+    }
+
+    function test_ExactDepositRejectsShortRecipientCredit() public {
+        MockRecipientPaysFeeToken taxedToken = new MockRecipientPaysFeeToken(address(app));
+        bytes32 taxedVault = app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 22, vaultDestination, 0);
+        taxedToken.mint(user, 100);
+
+        vm.startPrank(user);
+        taxedToken.approve(address(app), 100);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOnReAppErrors.ExactAssetTransferRequiredError.selector, address(taxedToken), 100, 99
+            )
+        );
+        app.depositConfigurableVault(taxedVault, address(taxedToken), 100);
+        vm.stopPrank();
+
+        assertEq(taxedToken.balanceOf(user), 100);
+        assertEq(taxedToken.balanceOf(address(app)), 0);
+        assertEq(app.configurableVaultBalance(taxedVault, address(taxedToken)), 0);
+    }
+
+    function test_ExactWithdrawalRejectsExcessDiamondDebit() public {
+        MockSenderPaysFeeToken taxedToken = new MockSenderPaysFeeToken(address(app));
+        bytes32 taxedVault = app.createConfigurableVault(OnReTypes.ConfigurableVaultKind.Fee, 21, vaultDestination, 0);
+        taxedToken.mint(address(this), 100);
+        taxedToken.approve(address(app), 100);
+        app.depositConfigurableVault(taxedVault, address(taxedToken), 100);
+        taxedToken.mint(address(app), 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IOnReAppErrors.ExactAssetDebitRequiredError.selector, address(taxedToken), 50, 51)
+        );
+        app.withdrawConfigurableVault(taxedVault, address(taxedToken), 50);
+
+        assertEq(taxedToken.balanceOf(address(app)), 101);
+        assertEq(taxedToken.balanceOf(vaultDestination), 0);
+        assertEq(app.configurableVaultBalance(taxedVault, address(taxedToken)), 100);
     }
 
     function test_LiquidityVaultWithdrawalRequiresBoss() public {
@@ -1160,5 +1248,51 @@ contract MockHighDecimals is ERC20 {
 
     function decimals() public pure override returns (uint8) {
         return 19;
+    }
+}
+
+contract MockSenderPaysFeeToken is ERC20 {
+    address private immutable feeSource;
+
+    constructor(address feeSource_) ERC20("Sender Pays Fee", "SPF") {
+        feeSource = feeSource_;
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 9;
+    }
+
+    function mint(address account, uint256 amount) external {
+        _mint(account, amount);
+    }
+
+    function _update(address from, address to, uint256 amount) internal override {
+        super._update(from, to, amount);
+        if (from == feeSource && to != address(0)) {
+            _burn(from, 1);
+        }
+    }
+}
+
+contract MockRecipientPaysFeeToken is ERC20 {
+    address private immutable feeRecipient;
+
+    constructor(address feeRecipient_) ERC20("Recipient Pays Fee", "RPF") {
+        feeRecipient = feeRecipient_;
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 9;
+    }
+
+    function mint(address account, uint256 amount) external {
+        _mint(account, amount);
+    }
+
+    function _update(address from, address to, uint256 amount) internal override {
+        super._update(from, to, amount);
+        if (to == feeRecipient && from != address(0)) {
+            _burn(to, 1);
+        }
     }
 }

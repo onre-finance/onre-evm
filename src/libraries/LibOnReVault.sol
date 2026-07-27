@@ -86,7 +86,7 @@ library LibOnReVault {
         }
 
         LibOnReStorage.appStorage().configurableVaultBalances[vaultId][token] = availableAmount - withdrawnAmount;
-        _transferExact(token, destination, withdrawnAmount);
+        transferExactTokenAmount(token, destination, withdrawnAmount);
         emit IOnReAppEvents.ConfigurableVaultWithdrawn(vaultId, token, destination, withdrawnAmount);
     }
 
@@ -96,12 +96,22 @@ library LibOnReVault {
 
     function transferExactTokenAmountFrom(address token, address from, address recipient, uint256 amount) internal {
         IERC20 tokenContract = IERC20(token);
-        uint256 balanceBefore = tokenContract.balanceOf(recipient);
+        uint256 senderBalanceBefore = tokenContract.balanceOf(from);
+        uint256 recipientBalanceBefore = tokenContract.balanceOf(recipient);
         tokenContract.safeTransferFrom(from, recipient, amount);
-        uint256 receivedAmount = tokenContract.balanceOf(recipient) - balanceBefore;
-        if (receivedAmount != amount) {
-            revert IOnReAppErrors.ExactAssetTransferRequiredError(token, amount, receivedAmount);
-        }
+        _requireExactBalanceDeltas(
+            tokenContract, token, from, recipient, amount, senderBalanceBefore, recipientBalanceBefore
+        );
+    }
+
+    function transferExactTokenAmount(address token, address recipient, uint256 amount) internal {
+        IERC20 tokenContract = IERC20(token);
+        uint256 senderBalanceBefore = tokenContract.balanceOf(address(this));
+        uint256 recipientBalanceBefore = tokenContract.balanceOf(recipient);
+        tokenContract.safeTransfer(recipient, amount);
+        _requireExactBalanceDeltas(
+            tokenContract, token, address(this), recipient, amount, senderBalanceBefore, recipientBalanceBefore
+        );
     }
 
     function accrue(bytes32 vaultId, address token, uint256 amount) internal {
@@ -119,7 +129,7 @@ library LibOnReVault {
             revert IOnReAppErrors.InsufficientLiquidityError(vaultId, token, availableAmount, amount);
         }
         LibOnReStorage.appStorage().configurableVaultBalances[vaultId][token] = availableAmount - amount;
-        _transferExact(token, recipient, amount);
+        transferExactTokenAmount(token, recipient, amount);
     }
 
     function balance(bytes32 vaultId, address token) internal view returns (uint256) {
@@ -133,11 +143,24 @@ library LibOnReVault {
         }
     }
 
-    function _transferExact(address token, address recipient, uint256 amount) private {
-        IERC20 tokenContract = IERC20(token);
-        uint256 balanceBefore = tokenContract.balanceOf(recipient);
-        tokenContract.safeTransfer(recipient, amount);
-        uint256 receivedAmount = tokenContract.balanceOf(recipient) - balanceBefore;
+    function _requireExactBalanceDeltas(
+        IERC20 tokenContract,
+        address token,
+        address sender,
+        address recipient,
+        uint256 amount,
+        uint256 senderBalanceBefore,
+        uint256 recipientBalanceBefore
+    ) private view {
+        uint256 senderBalanceAfter = tokenContract.balanceOf(sender);
+        uint256 debitedAmount = senderBalanceAfter <= senderBalanceBefore ? senderBalanceBefore - senderBalanceAfter : 0;
+        if (debitedAmount != amount) {
+            revert IOnReAppErrors.ExactAssetDebitRequiredError(token, amount, debitedAmount);
+        }
+
+        uint256 recipientBalanceAfter = tokenContract.balanceOf(recipient);
+        uint256 receivedAmount =
+            recipientBalanceAfter >= recipientBalanceBefore ? recipientBalanceAfter - recipientBalanceBefore : 0;
         if (receivedAmount != amount) {
             revert IOnReAppErrors.ExactAssetTransferRequiredError(token, amount, receivedAmount);
         }

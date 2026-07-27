@@ -165,23 +165,30 @@ Recommended remediation:
 
 Severity: Medium for unsupported or behavior-changing token contracts
 
-Outgoing exact transfers verify only the recipient's balance increase. They do
-not verify the Diamond's balance decrease.
+Status: Resolved in the current working tree
+
+At the reviewed commit, outgoing exact transfers verified only the recipient's
+balance increase. They did not verify the Diamond's balance decrease.
 
 If a token credits the recipient with 100 units but debits the Diamond by 110,
 the transfer check passes while the logical vault balance decreases by only
 100. Physical assets then fall below aggregate logical vault liabilities.
 
-Worker-request cancellation is weaker: it uses `safeTransfer` without any
-recipient or sender balance-delta check.
+Worker-request cancellation was weaker because it used `safeTransfer` without
+any recipient or sender balance-delta check.
 
-Recommended remediation:
+Resolution:
 
-- verify that both recipient increase and sender decrease equal the requested
+- every exact `transfer` and `transferFrom` snapshots both participants and
+  requires the sender decrease and recipient increase to equal the requested
   amount;
-- use the same exact-transfer helper for cancellation; and
-- enforce and document an allowlist of canonical, non-rebasing, non-taxed
-  assets.
+- worker-request cancellation uses the same exact outgoing-transfer helper;
+- failed checks revert the complete accounting and token state transition; and
+- adversarial tests cover excess sender debit on deposits, vault withdrawals,
+  and cancellation, plus short recipient credit.
+
+Canonical non-rebasing, non-taxed assets should still be enforced operationally;
+unsupported behavior now causes a safe revert rather than accounting drift.
 
 ## Low-severity findings
 
@@ -342,16 +349,16 @@ Privileged trust assumptions:
 
 ## Measured validation
 
-- Foundry tests: 80 passed, 0 failed, 0 skipped.
+- Foundry tests: 84 passed, 0 failed, 0 skipped.
 - Extended fuzzing: 10,000 runs passed.
 - Coverage:
-  - lines: 97.96%;
-  - statements: 97.39%;
-  - branches: 91.87%;
-  - functions: 98.55%.
+  - lines: 98.00%;
+  - statements: 97.50%;
+  - branches: 92.89%;
+  - functions: 98.25%.
 - Largest production runtime:
-  - `OnReOfferFacet`: 9,871 bytes;
-  - EIP-170 margin: 14,705 bytes.
+  - `OnReOfferFacet`: 10,195 bytes;
+  - EIP-170 margin: 14,381 bytes.
 - Principal gas observations:
   - `takeOffer`: up to 201,247;
   - `createFulfillmentRequest`: up to 162,758;
@@ -368,6 +375,5 @@ Privileged trust assumptions:
 ## Recommended implementation order
 
 1. Add request-level worker user protections.
-2. Enforce exact token compatibility and cancellation refunds.
-3. Add Diamond/UUPS storage-layout gates and stateful invariants.
-4. Add coverage, gas, lint, and static-analysis CI gates.
+2. Add Diamond/UUPS storage-layout gates and stateful invariants.
+3. Add coverage, gas, lint, and static-analysis CI gates.

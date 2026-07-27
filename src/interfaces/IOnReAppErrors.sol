@@ -16,6 +16,7 @@ interface IOnReAppErrors {
     error WorkerOfferRequiresFulfillmentRequestError(bytes32 offerConfigId);
     error KilledError();
     error ExactAssetTransferRequiredError(address asset, uint256 expectedAmount, uint256 receivedAmount);
+    error ExactAssetDebitRequiredError(address asset, uint256 expectedAmount, uint256 debitedAmount);
     error ExcludedSupplyAddressAlreadyExistsError(address onReToken, address account);
     error ExcludedSupplyAddressNotFoundError(address onReToken, address account);
     error TooManyExcludedSupplyAddressesError(address onReToken);

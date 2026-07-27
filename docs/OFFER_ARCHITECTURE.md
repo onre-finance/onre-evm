@@ -177,7 +177,8 @@ Fee vault, refills the configured Liquidity vault up to its TVL target, accounts
 the remainder in the Proceeds vault, and transfers the OnRe output directly from
 the token's configured inventory multisig to the user. The multisig holds
 pre-minted inventory and grants the Diamond a `type(uint256).max` allowance.
-The transfer must increase the user's balance by the exact quoted amount.
+The transfer must decrease the inventory source by exactly the quoted amount
+and increase the user's balance by exactly the same amount.
 
 The inventory-source balance is excluded from circulating supply. A source
 change therefore changes which balance is treated as undistributed inventory;
@@ -187,6 +188,12 @@ the same operational change.
 For `OnReToAsset`, the Diamond pulls or has already escrowed the OnRe input,
 accounts the input fee, burns the net input, debits the configured Liquidity
 vault, and transfers the asset output to the user.
+
+Every token transfer used by deposits, settlement, vault withdrawal, and
+request cancellation verifies both sides of the balance change. The sender
+must lose exactly the requested amount and the recipient must receive exactly
+that amount; taxed, rebasing, or otherwise non-exact behavior reverts the full
+transaction.
 
 Worker request creation does not lock a price or fee. Every partial fill reads
 the current USD Pricer and FeeConfig, then updates `fulfilledInputAmount`.

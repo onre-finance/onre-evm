@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
 import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
 import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
@@ -16,8 +14,6 @@ import {OnReIds} from "./OnReIds.sol";
 
 /// @notice Escrowed worker requests that execute against reverse-pair Worker OfferConfigs.
 library LibOnReFulfillment {
-    using SafeERC20 for IERC20;
-
     function createFulfillmentRequest(bytes32 offerConfigId, uint64 requestId, uint256 inputAmount)
         internal
         returns (bytes32 fulfillmentRequestId)
@@ -58,7 +54,7 @@ library LibOnReFulfillment {
         address tokenIn = LibOnReValidation.requireOfferConfig(offerConfigId).tokenIn;
         delete LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
 
-        if (returnedAmount > 0) IERC20(tokenIn).safeTransfer(user, returnedAmount);
+        if (returnedAmount > 0) LibOnReVault.transferExactTokenAmount(tokenIn, user, returnedAmount);
         emit IOnReAppEvents.FulfillmentRequestCancelled(
             fulfillmentRequestId, offerConfigId, user, returnedAmount, sender
         );

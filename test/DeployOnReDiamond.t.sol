@@ -14,6 +14,8 @@ contract DeployOnReDiamondTest is Test {
     function setUp() public {
         harness = new DeployOnReDiamondHarness();
         _setRequiredEnvironment();
+        vm.setEnv("ONRE_APPROVER_1", vm.toString(address(0)));
+        vm.setEnv("ONRE_APPROVER_2", vm.toString(address(0)));
     }
 
     function test_ProductionDeploymentAndOptionalApproverAssembly() public {
@@ -42,6 +44,23 @@ contract DeployOnReDiamondTest is Test {
         (, address configuredApprover1, address configuredApprover2) = IOnReApp(address(diamond)).appConfig();
         assertEq(configuredApprover1, approver1);
         assertEq(configuredApprover2, approver2);
+    }
+
+    function test_ProductionDeploymentAllowsBossAsUpgrader() public {
+        address sharedBossAndUpgrader = makeAddr("sharedBossAndUpgrader");
+        OnReTypes.InitializeParams memory params = OnReTypes.InitializeParams({
+            boss: sharedBossAndUpgrader,
+            admin: makeAddr("sharedDeploymentAdmin"),
+            worker: makeAddr("sharedDeploymentWorker"),
+            upgrader: sharedBossAndUpgrader,
+            approvers: new address[](0)
+        });
+        OnReDiamond diamond = harness.deploy(params);
+        IOnReApp app = IOnReApp(address(diamond));
+
+        assertEq(app.boss(), sharedBossAndUpgrader);
+        assertTrue(app.hasRole(app.DEFAULT_ADMIN_ROLE(), sharedBossAndUpgrader));
+        assertTrue(app.hasRole(app.UPGRADER_ROLE(), sharedBossAndUpgrader));
     }
 
     function _setRequiredEnvironment() private {

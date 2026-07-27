@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-/// @notice Application roles are separate from Diamond upgrade ownership.
+/// @notice Application roles include the authority used for Diamond upgrades.
 library LibOnReRoles {
     bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
     bytes32 internal constant ADMIN_ROLE = keccak256("ONRE_ADMIN_ROLE");

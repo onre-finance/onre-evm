@@ -60,10 +60,6 @@ library LibOnReAccessControl {
     function grantRole(bytes32 role, address account) internal {
         _requireSupportedRole(role);
         _requireNonBossRole(role);
-        AccessControlStorage storage s = accessControlStorage();
-        if (role == LibOnReRoles.UPGRADER_ROLE && (account == s.boss || account == s.pendingBoss)) {
-            revert IOnReAppErrors.BossUpgraderRoleConflictError(account);
-        }
         checkRole(getRoleAdmin(role));
         _grantRole(role, account);
     }
@@ -85,8 +81,6 @@ library LibOnReAccessControl {
     }
 
     function initialize(address initialBoss, address admin, address worker, address upgrader) internal {
-        if (initialBoss == upgrader) revert IOnReAppErrors.BossUpgraderRoleConflictError(initialBoss);
-
         accessControlStorage().boss = initialBoss;
         _grantRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, initialBoss);
         _grantRole(LibOnReRoles.ADMIN_ROLE, admin);
@@ -100,9 +94,6 @@ library LibOnReAccessControl {
 
         AccessControlStorage storage s = accessControlStorage();
         if (newBoss == s.boss || newBoss == s.pendingBoss) revert IOnReAppErrors.NoChangeError();
-        if (s.roles[LibOnReRoles.UPGRADER_ROLE].hasRole[newBoss]) {
-            revert IOnReAppErrors.BossUpgraderRoleConflictError(newBoss);
-        }
 
         address previousPendingBoss = s.pendingBoss;
         if (previousPendingBoss != address(0)) {

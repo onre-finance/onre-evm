@@ -160,9 +160,9 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(IOnReAppErrors.BossRoleManagedSeparatelyError.selector);
         vm.prank(boss);
         app.renounceRole(defaultAdminRole, boss);
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.BossUpgraderRoleConflictError.selector, boss));
         vm.prank(boss);
         app.grantRole(upgraderRole, boss);
+        assertTrue(app.hasRole(upgraderRole, boss));
 
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, other, defaultAdminRole)
@@ -176,18 +176,20 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
         vm.prank(boss);
         app.beginBossTransfer(boss);
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.BossUpgraderRoleConflictError.selector, upgrader));
         vm.prank(boss);
         app.beginBossTransfer(upgrader);
+        assertEq(app.pendingBoss(), upgrader);
+        vm.prank(boss);
+        app.cancelBossTransfer();
 
         vm.expectEmit(true, true, false, false, address(app));
         emit IOnReAccessControl.BossTransferStarted(boss, other);
         vm.prank(boss);
         app.beginBossTransfer(other);
         assertEq(app.pendingBoss(), other);
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.BossUpgraderRoleConflictError.selector, other));
         vm.prank(boss);
         app.grantRole(upgraderRole, other);
+        assertTrue(app.hasRole(upgraderRole, other));
 
         vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
         vm.prank(boss);
@@ -230,6 +232,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         assertEq(app.pendingBoss(), address(0));
         assertFalse(app.hasRole(defaultAdminRole, boss));
         assertTrue(app.hasRole(defaultAdminRole, other));
+        assertTrue(app.hasRole(upgraderRole, other));
 
         vm.expectRevert(
             abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, boss, defaultAdminRole)
@@ -366,10 +369,6 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         params.boss = boss;
         params.upgrader = address(0);
         vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
-
-        params.upgrader = boss;
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.BossUpgraderRoleConflictError.selector, boss));
         new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.upgrader = upgrader;

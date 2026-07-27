@@ -48,7 +48,6 @@ interface IOnReAppErrors {
     error UnsupportedRoleError(bytes32 role);
     error BossRoleManagedSeparatelyError();
     error NotPendingBossError(address account);
-    error BossUpgraderRoleConflictError(address account);
     error BothApproversFilledError();
     error ApproverAlreadyExistsError(address approver);
     error NotApproverError(address approver);

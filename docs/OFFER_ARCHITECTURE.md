@@ -32,7 +32,7 @@ flowchart TB
         AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers"]
         TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals<br/>inventorySource"]
         MarketStats["<b>MarketStats</b><br/>derived view - not stored<br/>APY<br/>circulating supply<br/>USD NAV<br/>NAV adjustment<br/>TVL"]
-        Roles["<b>Application roles</b><br/>DEFAULT_ADMIN_ROLE - exactly one boss, two-step transfer<br/>ADMIN_ROLE - emergency activation only<br/>WORKER_ROLE - fulfill or cancel requests<br/>UPGRADER_ROLE - Diamond cuts, never the boss"]
+        Roles["<b>Application roles</b><br/>DEFAULT_ADMIN_ROLE - exactly one boss, two-step transfer<br/>ADMIN_ROLE - emergency activation only<br/>WORKER_ROLE - fulfill or cancel requests<br/>UPGRADER_ROLE - Diamond cuts, may also be the boss"]
         DiamondCut["<b>Diamond upgrades</b><br/>add, replace, or remove selectors"]
     end
 
@@ -194,8 +194,7 @@ Cancellation returns only the unfilled input.
 
 ## Diamond boundaries
 
-- `DiamondCutFacet` requires `UPGRADER_ROLE`; the boss is explicitly excluded
-  from that role.
+- `DiamondCutFacet` requires `UPGRADER_ROLE`; the boss may also hold that role.
 - `OnRePricerFacet` configures USD Pricers and embedded vectors.
 - `OnReQuoterFacet` configures quoter instances and exposes quote previews.
 - `OnReOfferFacet` delegates FeeConfig policy to `LibOnReFeeConfig`,

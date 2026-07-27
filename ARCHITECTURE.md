@@ -72,7 +72,8 @@ expose a reusable initializer. Every later cut should include an initializer
 when storage migration or invariant restoration is required.
 
 Diamond cuts require `UPGRADER_ROLE`; there is no separate Diamond-owner
-authority. Production should assign that role to a dedicated multisig.
+authority. Production may assign that role to the boss or to a dedicated
+multisig.
 Application roles are:
 
 - `DEFAULT_ADMIN_ROLE`: boss authority over role administration, token
@@ -82,17 +83,15 @@ Application roles are:
 - `ADMIN_ROLE`: may only activate the kill switch. It cannot recover the
   application or perform configuration.
 - `WORKER_ROLE`: partial fulfillment and worker-authorized request cancellation.
-- `UPGRADER_ROLE`: may execute Diamond cuts. The boss cannot hold this role.
+- `UPGRADER_ROLE`: may execute Diamond cuts. The boss may also hold this role.
 
-Initialization takes separate boss, admin, worker, and upgrader addresses. The
-boss starts a transfer and the pending boss must accept it; acceptance
-atomically revokes the previous boss before granting the role to the new boss.
-The standard `grantRole`, `revokeRole`, and `renounceRole` functions cannot
-modify `DEFAULT_ADMIN_ROLE`. They remain available for `ADMIN_ROLE`,
-`WORKER_ROLE`, and `UPGRADER_ROLE`. A current or pending boss cannot receive
-`UPGRADER_ROLE`, and an upgrader cannot accept a boss nomination without first
-losing the upgrader role. Request owners retain the ability to cancel their own
-requests.
+Initialization takes boss, admin, worker, and upgrader addresses; role holders
+may overlap. The boss starts a transfer and the pending boss must accept it;
+acceptance atomically revokes the previous boss before granting the role to the
+new boss. The standard `grantRole`, `revokeRole`, and `renounceRole` functions
+cannot modify `DEFAULT_ADMIN_ROLE`. They remain available for `ADMIN_ROLE`,
+`WORKER_ROLE`, and `UPGRADER_ROLE`. Request owners retain the ability to cancel
+their own requests.
 
 ## Vault boundary
 

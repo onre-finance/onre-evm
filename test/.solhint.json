@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "func-name-mixedcase": "off",
+    "one-contract-per-file": "off",
+    "no-empty-blocks": "off",
+    "no-global-import": "off",
+    "no-console": "off",
+    "gas-custom-errors": "off",
+    "gas-indexed-events": "off",
+    "gas-small-strings": "off",
+    "gas-calldata-parameters": "off",
+    "reason-string": "off",
+    "max-states-count": "off",
+    "function-max-lines": "off",
+    "interface-starts-with-i": "off"
+  }
+}

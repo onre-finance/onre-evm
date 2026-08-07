@@ -163,6 +163,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         _;
     }
 
+    // solhint-disable-next-line no-empty-blocks
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
     function _addMinter(address account) internal {

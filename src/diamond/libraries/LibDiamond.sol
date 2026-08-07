@@ -35,6 +35,7 @@ library LibDiamond {
         uint32 facetAddressPosition;
     }
 
+    // keccak256(abi.encode(uint256(keccak256("onre.storage.Diamond")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 internal constant DIAMOND_STORAGE_LOCATION =
         0xe7a65135aebfc21c80a162a36674f54347f18e2d3a36aad28796c9ad8e262e00;
 

@@ -14,6 +14,7 @@ library LibOnReAccessControl {
         bytes32 adminRole;
     }
 
+    /// @custom:storage-location erc7201:onre.storage.AccessControl
     struct AccessControlStorage {
         mapping(bytes32 role => RoleData) roles;
         address boss;

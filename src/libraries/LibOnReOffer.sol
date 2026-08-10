@@ -1,11 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
-import {IOnReToken} from "../interfaces/IOnReToken.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {
+    InvalidAmountError,
+    InvalidApprovalError,
+    LiquidityVaultRequiredError,
+    MinimumAmountOutNotMetError,
+    TakeOfferDeadlineExpiredError,
+    WorkerOfferRequiresFulfillmentRequestError
+} from "../types/OnReAppErrors.sol";
+import {OfferExecuted} from "../types/OnReAppEvents.sol";
+import {IOnReToken} from "../IOnReToken.sol";
+import {
+    ConfigurableVault,
+    ConfigurableVaultKind,
+    ExecutionAccounting,
+    FeeConfig,
+    OfferConfig,
+    OfferDirection,
+    OfferFlow,
+    QuoteResult,
+    TakeOfferParams
+} from "../types/OnReTypes.sol";
 import {LibOnReApproval} from "./LibOnReApproval.sol";
 import {LibOnReFeeConfig} from "./LibOnReFeeConfig.sol";
 import {LibOnReMarketStats} from "./LibOnReMarketStats.sol";
@@ -18,22 +35,22 @@ import {OnReMath} from "./OnReMath.sol";
 library LibOnReOffer {
     uint16 internal constant MAX_BASIS_POINTS = 10_000;
 
-    function takeOffer(OnReTypes.TakeOfferParams calldata params) internal returns (uint256 amountOut) {
-        OnReTypes.OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(params.offerConfigId);
+    function takeOffer(TakeOfferParams calldata params) internal returns (uint256 amountOut) {
+        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(params.offerConfigId);
         if (block.timestamp > params.deadline) {
-            revert IOnReAppErrors.TakeOfferDeadlineExpiredError(params.deadline);
+            revert TakeOfferDeadlineExpiredError(params.deadline);
         }
 
-        if (offer.flow == OnReTypes.OfferFlow.Permissioned) {
+        if (offer.flow == OfferFlow.Permissioned) {
             if (!LibOnReApproval.isValidForUser(msg.sender, params.approval, params.signature)) {
-                revert IOnReAppErrors.InvalidApprovalError();
+                revert InvalidApprovalError();
             }
-        } else if (offer.flow == OnReTypes.OfferFlow.Permissionless) {
+        } else if (offer.flow == OfferFlow.Permissionless) {
             if (params.approval.user != address(0) || params.approval.expiry != 0 || params.signature.length != 0) {
-                revert IOnReAppErrors.InvalidApprovalError();
+                revert InvalidApprovalError();
             }
         } else {
-            revert IOnReAppErrors.WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
+            revert WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
         }
 
         return _executeCollectedFromUser(params.offerConfigId, offer, params.grossInputAmount, params.minimumAmountOut);
@@ -42,25 +59,25 @@ library LibOnReOffer {
     function previewExecution(bytes32 offerConfigId, uint256 grossInputAmount)
         internal
         view
-        returns (OnReTypes.ExecutionAccounting memory accounting)
+        returns (ExecutionAccounting memory accounting)
     {
-        OnReTypes.OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
+        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
         return previewExecution(offerConfigId, offer, grossInputAmount);
     }
 
-    function previewExecution(bytes32 offerConfigId, OnReTypes.OfferConfig storage offer, uint256 grossInputAmount)
+    function previewExecution(bytes32 offerConfigId, OfferConfig storage offer, uint256 grossInputAmount)
         internal
         view
-        returns (OnReTypes.ExecutionAccounting memory accounting)
+        returns (ExecutionAccounting memory accounting)
     {
-        if (grossInputAmount == 0) revert IOnReAppErrors.InvalidAmountError();
-        OnReTypes.FeeConfig storage feeConfig = LibOnReValidation.requireExecutableFeeConfig(offer.feeConfigId);
+        if (grossInputAmount == 0) revert InvalidAmountError();
+        FeeConfig storage feeConfig = LibOnReValidation.requireExecutableFeeConfig(offer.feeConfigId);
         uint256 feeAmount = LibOnReFeeConfig.calculateFee(grossInputAmount, feeConfig);
         uint256 netInputAmount = grossInputAmount - feeAmount;
-        if (netInputAmount == 0) revert IOnReAppErrors.InvalidAmountError();
-        OnReTypes.QuoteResult memory quoteResult = LibOnReQuoter.quote(offerConfigId, offer, netInputAmount);
+        if (netInputAmount == 0) revert InvalidAmountError();
+        QuoteResult memory quoteResult = LibOnReQuoter.quote(offerConfigId, offer, netInputAmount);
 
-        return OnReTypes.ExecutionAccounting({
+        return ExecutionAccounting({
             price: quoteResult.price,
             grossInputAmount: grossInputAmount,
             feeAmount: feeAmount,
@@ -73,23 +90,23 @@ library LibOnReOffer {
 
     function settleEscrowedWorkerInput(
         bytes32 offerConfigId,
-        OnReTypes.OfferConfig storage offer,
+        OfferConfig storage offer,
         address recipient,
         uint256 grossInputAmount
-    ) internal returns (OnReTypes.ExecutionAccounting memory accounting) {
+    ) internal returns (ExecutionAccounting memory accounting) {
         accounting = previewExecution(offerConfigId, offer, grossInputAmount);
         _settleCollectedInput(offerConfigId, offer, recipient, accounting);
     }
 
     function _executeCollectedFromUser(
         bytes32 offerConfigId,
-        OnReTypes.OfferConfig storage offer,
+        OfferConfig storage offer,
         uint256 grossInputAmount,
         uint256 minimumAmountOut
     ) private returns (uint256 amountOut) {
-        OnReTypes.ExecutionAccounting memory accounting = previewExecution(offerConfigId, offer, grossInputAmount);
+        ExecutionAccounting memory accounting = previewExecution(offerConfigId, offer, grossInputAmount);
         if (accounting.amountOut < minimumAmountOut) {
-            revert IOnReAppErrors.MinimumAmountOutNotMetError(minimumAmountOut, accounting.amountOut);
+            revert MinimumAmountOutNotMetError(minimumAmountOut, accounting.amountOut);
         }
         LibOnReVault.pullExactTokenAmount(offer.tokenIn, msg.sender, grossInputAmount);
         _settleCollectedInput(offerConfigId, offer, msg.sender, accounting);
@@ -98,20 +115,20 @@ library LibOnReOffer {
 
     function _settleCollectedInput(
         bytes32 offerConfigId,
-        OnReTypes.OfferConfig storage offer,
+        OfferConfig storage offer,
         address recipient,
-        OnReTypes.ExecutionAccounting memory accounting
+        ExecutionAccounting memory accounting
     ) private {
-        OnReTypes.FeeConfig storage feeConfig = LibOnReValidation.requireExecutableFeeConfig(offer.feeConfigId);
+        FeeConfig storage feeConfig = LibOnReValidation.requireExecutableFeeConfig(offer.feeConfigId);
         LibOnReVault.accrue(feeConfig.feeVaultId, offer.tokenIn, accounting.feeAmount);
 
-        if (offer.direction == OnReTypes.OfferDirection.AssetToOnRe) {
+        if (offer.direction == OfferDirection.AssetToOnRe) {
             _settleAssetToOnRe(offer, recipient, accounting);
         } else {
             _settleOnReToAsset(offerConfigId, offer, recipient, accounting);
         }
 
-        emit IOnReAppEvents.OfferExecuted(
+        emit OfferExecuted(
             offerConfigId,
             recipient,
             offer.flow,
@@ -125,11 +142,9 @@ library LibOnReOffer {
         );
     }
 
-    function _settleAssetToOnRe(
-        OnReTypes.OfferConfig storage offer,
-        address recipient,
-        OnReTypes.ExecutionAccounting memory accounting
-    ) private {
+    function _settleAssetToOnRe(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
+        private
+    {
         accounting.liquidityRefillAmount = _calculateLiquidityRefill(offer, accounting.netInputAmount);
         accounting.proceedsAmount = accounting.netInputAmount - accounting.liquidityRefillAmount;
         LibOnReVault.accrue(offer.liquidityVaultId, offer.tokenIn, accounting.liquidityRefillAmount);
@@ -140,25 +155,25 @@ library LibOnReOffer {
 
     function _settleOnReToAsset(
         bytes32 offerConfigId,
-        OnReTypes.OfferConfig storage offer,
+        OfferConfig storage offer,
         address recipient,
-        OnReTypes.ExecutionAccounting memory accounting
+        ExecutionAccounting memory accounting
     ) private {
         if (offer.liquidityVaultId == bytes32(0)) {
-            revert IOnReAppErrors.LiquidityVaultRequiredError(offerConfigId);
+            revert LiquidityVaultRequiredError(offerConfigId);
         }
         IOnReToken(offer.tokenIn).burn(accounting.netInputAmount);
         LibOnReVault.consumeLiquidity(offer.liquidityVaultId, offer.tokenOut, recipient, accounting.amountOut);
     }
 
-    function _calculateLiquidityRefill(OnReTypes.OfferConfig storage offer, uint256 netInputAmount)
+    function _calculateLiquidityRefill(OfferConfig storage offer, uint256 netInputAmount)
         private
         view
         returns (uint256)
     {
         if (offer.liquidityVaultId == bytes32(0) || netInputAmount == 0) return 0;
-        OnReTypes.ConfigurableVault storage liquidityVault =
-            LibOnReValidation.requireVaultKind(offer.liquidityVaultId, OnReTypes.ConfigurableVaultKind.Liquidity);
+        ConfigurableVault storage liquidityVault =
+            LibOnReValidation.requireVaultKind(offer.liquidityVaultId, ConfigurableVaultKind.Liquidity);
         if (liquidityVault.refillTargetBps == 0) return 0;
 
         address onReToken = _onReToken(offer);
@@ -174,7 +189,7 @@ library LibOnReOffer {
         );
     }
 
-    function _onReToken(OnReTypes.OfferConfig storage offer) private view returns (address) {
-        return offer.direction == OnReTypes.OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
+    function _onReToken(OfferConfig storage offer) private view returns (address) {
+        return offer.direction == OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
     }
 }

@@ -1,34 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {ExecutionAccounting, MakeOfferConfigParams, TakeOfferParams} from "../types/OnReTypes.sol";
 import {LibOnReFeeConfig} from "../libraries/LibOnReFeeConfig.sol";
 import {LibOnReOffer} from "../libraries/LibOnReOffer.sol";
 import {LibOnReOfferConfig} from "../libraries/LibOnReOfferConfig.sol";
-import {IOnReOffer} from "../interfaces/IOnReOffer.sol";
 
-contract OnReOfferFacet is IOnReOffer {
+contract OnReOfferFacet {
     function createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, bytes32 feeVaultId)
         external
-        override
         returns (bytes32 feeConfigId)
     {
         return LibOnReFeeConfig.createFeeConfig(feeConfigInstanceId, basisPoints, feeVaultId);
     }
 
-    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) external override {
+    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) external {
         LibOnReFeeConfig.updateFeeConfig(feeConfigId, basisPoints, feeVaultId);
     }
 
-    function setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) external override {
+    function setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) external {
         LibOnReFeeConfig.setFeeConfigEnabled(feeConfigId, enabled);
     }
 
-    function makeOfferConfig(OnReTypes.MakeOfferConfigParams calldata params)
-        external
-        override
-        returns (bytes32 offerConfigId)
-    {
+    function makeOfferConfig(MakeOfferConfigParams calldata params) external returns (bytes32 offerConfigId) {
         return LibOnReOfferConfig.makeOfferConfig(params);
     }
 
@@ -38,25 +32,24 @@ contract OnReOfferFacet is IOnReOffer {
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
-    ) external override {
+    ) external {
         LibOnReOfferConfig.updateOfferConfigReferences(
             offerConfigId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
     }
 
-    function setOfferConfigDisabled(bytes32 offerConfigId, bool disabled) external override {
+    function setOfferConfigDisabled(bytes32 offerConfigId, bool disabled) external {
         LibOnReOfferConfig.setOfferConfigDisabled(offerConfigId, disabled);
     }
 
-    function takeOffer(OnReTypes.TakeOfferParams calldata params) external override returns (uint256 amountOut) {
+    function takeOffer(TakeOfferParams calldata params) external returns (uint256 amountOut) {
         return LibOnReOffer.takeOffer(params);
     }
 
     function previewExecution(bytes32 offerConfigId, uint256 grossInputAmount)
         external
         view
-        override
-        returns (OnReTypes.ExecutionAccounting memory accounting)
+        returns (ExecutionAccounting memory accounting)
     {
         return LibOnReOffer.previewExecution(offerConfigId, grossInputAmount);
     }

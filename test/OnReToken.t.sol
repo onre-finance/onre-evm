@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
+import {ZeroAddressError} from "../src/types/OnReAppErrors.sol";
+import {InitializeParams} from "../src/types/OnReTypes.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
-import {IOnReToken} from "../src/interfaces/IOnReToken.sol";
+import {IOnReToken} from "../src/IOnReToken.sol";
 import {OnReToken} from "../src/OnReToken.sol";
 
 contract OnReTokenTest is Test {
@@ -110,11 +112,11 @@ contract OnReTokenTest is Test {
     }
 
     function test_AdminRoleChangesRejectZeroAddress() public {
-        vm.expectRevert(IOnReToken.ZeroAddressError.selector);
+        vm.expectRevert(ZeroAddressError.selector);
         vm.prank(admin);
         token.grantMintRole(address(0));
 
-        vm.expectRevert(IOnReToken.ZeroAddressError.selector);
+        vm.expectRevert(ZeroAddressError.selector);
         vm.prank(admin);
         token.grantBurnRole(address(0));
     }
@@ -215,7 +217,7 @@ contract OnReTokenTest is Test {
     function test_AdminCanUpdateCCIPAdmin() public {
         address nextAdmin = makeAddr("nextAdmin");
 
-        vm.expectRevert(IOnReToken.ZeroAddressError.selector);
+        vm.expectRevert(ZeroAddressError.selector);
         vm.prank(admin);
         token.setCCIPAdmin(address(0));
 
@@ -272,7 +274,7 @@ contract OnReTokenTest is Test {
             initialBurners: initialBurners
         });
 
-        vm.expectRevert(IOnReToken.ZeroAddressError.selector);
+        vm.expectRevert(ZeroAddressError.selector);
         new ERC1967Proxy(address(implementation), abi.encodeCall(OnReToken.initialize, (params)));
     }
 

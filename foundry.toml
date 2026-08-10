@@ -9,6 +9,13 @@ via_ir = true
 bytecode_hash = "none"
 cbor_metadata = false
 
+[fmt]
+# `src/generated` is written by `gemforge build` in Gemforge's own style, and
+# `templates` holds a Gemforge template whose `pragma solidity >=__SOLC_VERSION__;`
+# placeholder is not parseable Solidity until it is rendered.
+# Note: forge 1.5.1 does not match these files with a `dir/**` glob; `dir/*.sol` does.
+ignore = ["src/generated/*.sol", "templates/*.sol"]
+
 [lint]
 # `lib/` is excluded by default; tests use Foundry's test_ naming convention.
 ignore = ["test/**"]

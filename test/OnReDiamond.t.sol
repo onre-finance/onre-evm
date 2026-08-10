@@ -4,20 +4,26 @@ pragma solidity 0.8.35;
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Test} from "forge-std/Test.sol";
-import {OnReDiamond} from "../src/OnReDiamond.sol";
 import {OnReDiamondInit} from "../src/diamond/OnReDiamondInit.sol";
-import {DiamondCutFacet} from "../src/diamond/facets/DiamondCutFacet.sol";
-import {IDiamondCut} from "../src/diamond/interfaces/IDiamondCut.sol";
-import {IDiamondLoupe} from "../src/diamond/interfaces/IDiamondLoupe.sol";
-import {LibDiamond} from "../src/diamond/libraries/LibDiamond.sol";
-import {LibOnReSelectors} from "../src/diamond/libraries/LibOnReSelectors.sol";
-import {LibOnReStorage} from "../src/diamond/libraries/LibOnReStorage.sol";
-import {IOnReApp} from "../src/interfaces/IOnReApp.sol";
-import {IOnReAppErrors} from "../src/interfaces/IOnReAppErrors.sol";
-import {IOnReAccessControl} from "../src/interfaces/IOnReAccessControl.sol";
-import {IOnReConfig} from "../src/interfaces/IOnReConfig.sol";
-import {IOnReMarketStats} from "../src/interfaces/IOnReMarketStats.sol";
-import {OnReTypes} from "../src/types/OnReTypes.sol";
+import {Diamond} from "../src/diamond/contracts/Diamond.sol";
+import {DiamondCutFacet} from "../src/diamond/contracts/facets/DiamondCutFacet.sol";
+import {IDiamondCut} from "../src/diamond/contracts/interfaces/IDiamondCut.sol";
+import {IDiamondLoupe} from "../src/diamond/contracts/interfaces/IDiamondLoupe.sol";
+import {LibDiamond} from "../src/diamond/contracts/libraries/LibDiamond.sol";
+import {LibOnReStorage} from "../src/diamond/LibOnReStorage.sol";
+import {DiamondProxy} from "../src/generated/DiamondProxy.sol";
+import {IDiamondProxy} from "../src/generated/IDiamondProxy.sol";
+import {
+    ApproverAlreadyExistsError,
+    BossRoleManagedSeparatelyError,
+    BothApproversFilledError,
+    NoChangeError,
+    NotPendingBossError,
+    UnsupportedRoleError,
+    ZeroAddressError
+} from "../src/types/OnReAppErrors.sol";
+import {BossTransferCancelled, BossTransferStarted, BossTransferred} from "../src/types/OnReAppEvents.sol";
+import {InitializeParams, MarketStats, OnReTokenConfig} from "../src/types/OnReTypes.sol";
 import {OnReDiamondTestHelper} from "./helpers/OnReDiamondTestHelper.sol";
 
 contract OnReDiamondTest is Test, OnReDiamondTestHelper {
@@ -26,10 +32,10 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     address private worker = makeAddr("worker");
     address private upgrader = makeAddr("upgrader");
     address private other = makeAddr("other");
-    IOnReApp private app;
+    IDiamondProxy private app;
 
     function setUp() public {
-        OnReTypes.InitializeParams memory params = OnReTypes.InitializeParams({
+        InitializeParams memory params = InitializeParams({
             boss: boss, admin: admin, worker: worker, upgrader: upgrader, approvers: new address[](0)
         });
         app = _deployDiamondApp(params);
@@ -39,32 +45,24 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         IDiamondLoupe loupe = IDiamondLoupe(address(app));
         assertEq(loupe.facetAddresses().length, 11);
         assertEq(loupe.facets().length, 11);
-        assertTrue(loupe.facetAddress(IOnReConfig.registerOnReToken.selector) != address(0));
-        assertTrue(loupe.facetAddress(IOnReMarketStats.marketStats.selector) != address(0));
+        assertTrue(loupe.facetAddress(IDiamondProxy.registerOnReToken.selector) != address(0));
+        assertTrue(loupe.facetAddress(IDiamondProxy.marketStats.selector) != address(0));
         assertNotEq(
-            loupe.facetAddress(IOnReConfig.registerOnReToken.selector),
-            loupe.facetAddress(IOnReMarketStats.marketStats.selector)
+            loupe.facetAddress(IDiamondProxy.registerOnReToken.selector),
+            loupe.facetAddress(IDiamondProxy.marketStats.selector)
         );
-        assertEq(loupe.facetFunctionSelectors(loupe.facetAddress(IOnReMarketStats.marketStats.selector)).length, 1);
-
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.config());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.accessControl());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.pricer());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.quoter());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.offer());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.fulfillment());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.viewFunctions());
-        _assertSelectorsOnSingleFacet(loupe, LibOnReSelectors.configurableVault());
+        assertEq(loupe.facetFunctionSelectors(loupe.facetAddress(IDiamondProxy.marketStats.selector)).length, 1);
 
         IERC165 erc165 = IERC165(address(app));
         assertTrue(erc165.supportsInterface(type(IERC165).interfaceId));
         assertTrue(erc165.supportsInterface(type(IDiamondCut).interfaceId));
         assertTrue(erc165.supportsInterface(type(IDiamondLoupe).interfaceId));
         assertTrue(erc165.supportsInterface(type(IAccessControl).interfaceId));
-        assertTrue(erc165.supportsInterface(type(IOnReAccessControl).interfaceId));
         // The mutable application ABI is discovered through the loupe. Only stable
-        // standard interfaces are advertised through ERC-165.
-        assertFalse(erc165.supportsInterface(type(IOnReApp).interfaceId));
+        // standard interfaces are advertised through ERC-165. The boss-transfer
+        // surface is no longer advertised: it had no standard id, and a stored
+        // ERC-165 flag cannot track a selector set that a cut can change.
+        assertFalse(erc165.supportsInterface(type(IDiamondProxy).interfaceId));
         assertFalse(erc165.supportsInterface(0xffffffff));
     }
 
@@ -79,9 +77,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         assertEq(IDiamondLoupe(address(app)).facetAddress(DiamondTestFacetV2.version.selector), address(v2));
 
         _cut(address(0), IDiamondCut.FacetCutAction.Remove, DiamondTestFacetV2.version.selector, address(0), "");
-        vm.expectRevert(
-            abi.encodeWithSelector(OnReDiamond.FunctionNotFound.selector, DiamondTestFacetV2.version.selector)
-        );
+        vm.expectRevert(abi.encodeWithSelector(Diamond.FunctionNotFound.selector, DiamondTestFacetV2.version.selector));
         DiamondTestFacetV2(address(app)).version();
     }
 
@@ -153,13 +149,13 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         assertFalse(app.hasRole(adminRole, other));
 
         bytes32 unsupportedRole = keccak256("unsupported");
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.UnsupportedRoleError.selector, unsupportedRole));
+        vm.expectRevert(abi.encodeWithSelector(UnsupportedRoleError.selector, unsupportedRole));
         vm.prank(boss);
         app.grantRole(unsupportedRole, other);
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.UnsupportedRoleError.selector, unsupportedRole));
+        vm.expectRevert(abi.encodeWithSelector(UnsupportedRoleError.selector, unsupportedRole));
         vm.prank(boss);
         app.revokeRole(unsupportedRole, other);
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.UnsupportedRoleError.selector, unsupportedRole));
+        vm.expectRevert(abi.encodeWithSelector(UnsupportedRoleError.selector, unsupportedRole));
         vm.prank(other);
         app.renounceRole(unsupportedRole, other);
     }
@@ -172,13 +168,13 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         assertEq(app.boss(), boss);
         assertEq(app.pendingBoss(), address(0));
 
-        vm.expectRevert(IOnReAppErrors.BossRoleManagedSeparatelyError.selector);
+        vm.expectRevert(BossRoleManagedSeparatelyError.selector);
         vm.prank(boss);
         app.grantRole(defaultAdminRole, other);
-        vm.expectRevert(IOnReAppErrors.BossRoleManagedSeparatelyError.selector);
+        vm.expectRevert(BossRoleManagedSeparatelyError.selector);
         vm.prank(boss);
         app.revokeRole(defaultAdminRole, boss);
-        vm.expectRevert(IOnReAppErrors.BossRoleManagedSeparatelyError.selector);
+        vm.expectRevert(BossRoleManagedSeparatelyError.selector);
         vm.prank(boss);
         app.renounceRole(defaultAdminRole, boss);
         vm.prank(boss);
@@ -191,10 +187,10 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         vm.prank(other);
         app.beginBossTransfer(other);
 
-        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
+        vm.expectRevert(ZeroAddressError.selector);
         vm.prank(boss);
         app.beginBossTransfer(address(0));
-        vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
+        vm.expectRevert(NoChangeError.selector);
         vm.prank(boss);
         app.beginBossTransfer(boss);
         vm.prank(boss);
@@ -204,7 +200,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         app.cancelBossTransfer();
 
         vm.expectEmit(true, true, false, false, address(app));
-        emit IOnReAccessControl.BossTransferStarted(boss, other);
+        emit BossTransferStarted(boss, other);
         vm.prank(boss);
         app.beginBossTransfer(other);
         assertEq(app.pendingBoss(), other);
@@ -212,31 +208,31 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         app.grantRole(upgraderRole, other);
         assertTrue(app.hasRole(upgraderRole, other));
 
-        vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
+        vm.expectRevert(NoChangeError.selector);
         vm.prank(boss);
         app.beginBossTransfer(other);
 
         vm.expectEmit(true, true, false, false, address(app));
-        emit IOnReAccessControl.BossTransferCancelled(boss, other);
+        emit BossTransferCancelled(boss, other);
         vm.expectEmit(true, true, false, false, address(app));
-        emit IOnReAccessControl.BossTransferStarted(boss, replacementBoss);
+        emit BossTransferStarted(boss, replacementBoss);
         vm.prank(boss);
         app.beginBossTransfer(replacementBoss);
         assertEq(app.pendingBoss(), replacementBoss);
 
         vm.expectEmit(true, true, false, false, address(app));
-        emit IOnReAccessControl.BossTransferCancelled(boss, replacementBoss);
+        emit BossTransferCancelled(boss, replacementBoss);
         vm.prank(boss);
         app.cancelBossTransfer();
         assertEq(app.pendingBoss(), address(0));
 
-        vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
+        vm.expectRevert(NoChangeError.selector);
         vm.prank(boss);
         app.cancelBossTransfer();
 
         vm.prank(boss);
         app.beginBossTransfer(other);
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.NotPendingBossError.selector, replacementBoss));
+        vm.expectRevert(abi.encodeWithSelector(NotPendingBossError.selector, replacementBoss));
         vm.prank(replacementBoss);
         app.acceptBossTransfer();
 
@@ -245,7 +241,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         vm.expectEmit(true, true, true, true, address(app));
         emit IAccessControl.RoleGranted(defaultAdminRole, other, other);
         vm.expectEmit(true, true, false, false, address(app));
-        emit IOnReAccessControl.BossTransferred(boss, other);
+        emit BossTransferred(boss, other);
         vm.prank(other);
         app.acceptBossTransfer();
 
@@ -357,60 +353,78 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
     function test_InitializerIsOneTimeAndAllowsSeparateApplicationAdmin() public {
         OnReDiamondInit init = new OnReDiamondInit();
-        OnReTypes.InitializeParams memory params = _defaultParams(boss);
+        InitializeParams memory params = _defaultParams(boss);
 
-        vm.expectRevert(IOnReAppErrors.NoChangeError.selector);
+        vm.expectRevert(NoChangeError.selector);
         _initializeOnly(address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
-        IDiamondCut.FacetCut[] memory emptyCut = new IDiamondCut.FacetCut[](0);
         params.admin = other;
-        OnReDiamond separate = new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
-        assertEq(address(separate).code.length > 0, true);
+        address separate = _initializeBareDiamond(address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        assertEq(separate.code.length > 0, true);
+    }
+
+    function test_InitializerHandsOffTheBootstrapUpgraderGrant() public {
+        // `app` was deployed by this contract, so this contract held the bootstrap
+        // UPGRADER_ROLE granted by the proxy constructor and signed the first cut,
+        // exactly as the Gemforge deploy wallet does. The initializer must have
+        // taken that grant back once the configured upgrader was in place.
+        bytes32 upgraderRole = app.UPGRADER_ROLE();
+        assertFalse(app.hasRole(upgraderRole, address(this)));
+        assertTrue(app.hasRole(upgraderRole, upgrader));
+
+        // A deployer that is itself the configured upgrader keeps the role.
+        InitializeParams memory params = InitializeParams({
+            boss: boss, admin: admin, worker: worker, upgrader: address(this), approvers: new address[](0)
+        });
+        IDiamondProxy retained = _deployDiamondApp(params);
+        assertTrue(retained.hasRole(upgraderRole, address(this)));
     }
 
     function test_InitializerRejectsInvalidAddressesAndApprovers() public {
         OnReDiamondInit init = new OnReDiamondInit();
-        IDiamondCut.FacetCut[] memory emptyCut = new IDiamondCut.FacetCut[](0);
-        OnReTypes.InitializeParams memory params = _defaultParams(boss);
+        InitializeParams memory params = _defaultParams(boss);
+        // Every attempt below reverts, so the diamond's state is untouched and one
+        // bare proxy serves for all of them.
+        DiamondProxy bare = new DiamondProxy(address(this));
 
         params.worker = address(0);
-        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(ZeroAddressError.selector);
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.admin = address(0);
         params.worker = makeAddr("validWorker");
-        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(ZeroAddressError.selector);
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.admin = admin;
         params.boss = address(0);
-        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(ZeroAddressError.selector);
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.boss = boss;
         params.upgrader = address(0);
-        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(ZeroAddressError.selector);
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.upgrader = upgrader;
         params.approvers = new address[](3);
         params.approvers[0] = makeAddr("approverA");
         params.approvers[1] = makeAddr("approverB");
         params.approvers[2] = makeAddr("approverC");
-        vm.expectRevert(IOnReAppErrors.BothApproversFilledError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(BothApproversFilledError.selector);
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.approvers = new address[](1);
         params.approvers[0] = address(0);
-        vm.expectRevert(IOnReAppErrors.ZeroAddressError.selector);
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(ZeroAddressError.selector);
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         address duplicateApprover = makeAddr("duplicateApprover");
         params.approvers = new address[](2);
         params.approvers[0] = duplicateApprover;
         params.approvers[1] = duplicateApprover;
-        vm.expectRevert(abi.encodeWithSelector(IOnReAppErrors.ApproverAlreadyExistsError.selector, duplicateApprover));
-        new OnReDiamond(emptyCut, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+        vm.expectRevert(abi.encodeWithSelector(ApproverAlreadyExistsError.selector, duplicateApprover));
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
     }
 
     function test_RemovingNonLastSelectorsAndFacetsPreservesLoupeBookkeeping() public {
@@ -442,14 +456,10 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
         StorageAwareMarketStatsFacet replacement = new StorageAwareMarketStatsFacet();
         _cut(
-            address(replacement),
-            IDiamondCut.FacetCutAction.Replace,
-            IOnReMarketStats.marketStats.selector,
-            address(0),
-            ""
+            address(replacement), IDiamondCut.FacetCutAction.Replace, IDiamondProxy.marketStats.selector, address(0), ""
         );
 
-        OnReTypes.MarketStats memory stats = app.marketStats(address(token));
+        MarketStats memory stats = app.marketStats(address(token));
         assertEq(stats.tvl, uint160(inventorySource));
         assertEq(stats.nav, 9);
     }
@@ -493,7 +503,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
     function test_UnknownSelectorReverts() public {
         bytes4 unknownSelector = bytes4(keccak256("unknown()"));
-        vm.expectRevert(abi.encodeWithSelector(OnReDiamond.FunctionNotFound.selector, unknownSelector));
+        vm.expectRevert(abi.encodeWithSelector(Diamond.FunctionNotFound.selector, unknownSelector));
         IDiamondUnknown(address(app)).unknown();
     }
 
@@ -520,6 +530,19 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         IDiamondCut(address(app)).diamondCut(cut, init, initCalldata);
     }
 
+    /// @dev Deploys a bare diamond the way Gemforge does — proxy constructor
+    /// installs the core facets and grants this contract the bootstrap
+    /// UPGRADER_ROLE — then runs only the initializer through the first cut.
+    function _initializeBareDiamond(address init, bytes memory initCalldata) private returns (address) {
+        DiamondProxy bare = new DiamondProxy(address(this));
+        _cutBare(bare, init, initCalldata);
+        return address(bare);
+    }
+
+    function _cutBare(DiamondProxy bare, address init, bytes memory initCalldata) private {
+        IDiamondCut(address(bare)).diamondCut(new IDiamondCut.FacetCut[](0), init, initCalldata);
+    }
+
     function _initializeOnly(address init, bytes memory initCalldata) private {
         IDiamondCut.FacetCut[] memory cut = new IDiamondCut.FacetCut[](0);
         vm.prank(upgrader);
@@ -531,17 +554,8 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         selectors[0] = selector;
     }
 
-    function _assertSelectorsOnSingleFacet(IDiamondLoupe loupe, bytes4[] memory selectors) private view {
-        address facet = loupe.facetAddress(selectors[0]);
-        assertTrue(facet != address(0));
-        assertEq(loupe.facetFunctionSelectors(facet).length, selectors.length);
-        for (uint256 i; i < selectors.length; ++i) {
-            assertEq(loupe.facetAddress(selectors[i]), facet);
-        }
-    }
-
-    function _defaultParams(address initialBoss) private returns (OnReTypes.InitializeParams memory params) {
-        params = OnReTypes.InitializeParams({
+    function _defaultParams(address initialBoss) private returns (InitializeParams memory params) {
+        params = InitializeParams({
             boss: initialBoss,
             admin: makeAddr("initAdmin"),
             worker: makeAddr("initWorker"),
@@ -574,8 +588,8 @@ contract DiamondMultiSelectorFacet {
 }
 
 contract StorageAwareMarketStatsFacet {
-    function marketStats(address token) external view returns (OnReTypes.MarketStats memory stats) {
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[token];
+    function marketStats(address token) external view returns (MarketStats memory stats) {
+        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[token];
         stats.tvl = uint160(config.inventorySource);
         stats.nav = config.decimals;
     }

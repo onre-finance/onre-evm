@@ -1,10 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {
+    DuplicateVectorStartTimeError,
+    InvalidAmountError,
+    InvalidVectorOrderError,
+    NoActiveVectorError,
+    NoChangeError,
+    PricerAlreadyExistsError,
+    TooManyVectorsError,
+    VectorBaseTimeAfterStartTimeError,
+    VectorNotFoundError,
+    VectorStartTimeInPastError
+} from "../types/OnReAppErrors.sol";
+import {
+    AllPricingVectorsDeleted,
+    PricerCreated,
+    PricerDisabledSet,
+    PricingVectorAdded,
+    PricingVectorDeleted,
+    PricingVectorEvicted
+} from "../types/OnReAppEvents.sol";
+import {Pricer, PricingDenomination, PricingVector} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
@@ -16,54 +34,51 @@ library LibOnRePricer {
     uint8 internal constant MAX_VECTORS = 10;
     uint256 internal constant PRICE_SCALE = 1e9;
 
-    function createPricer(address onReToken, OnReTypes.PricingDenomination denomination)
-        internal
-        returns (bytes32 pricerId)
-    {
+    function createPricer(address onReToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireEnabledOnReToken(onReToken);
 
         pricerId = OnReIds.pricerId(onReToken, denomination);
-        OnReTypes.Pricer storage pricer = LibOnReStorage.appStorage().pricers[pricerId];
-        if (pricer.exists) revert IOnReAppErrors.PricerAlreadyExistsError(pricerId);
+        Pricer storage pricer = LibOnReStorage.appStorage().pricers[pricerId];
+        if (pricer.exists) revert PricerAlreadyExistsError(pricerId);
 
         pricer.onReToken = onReToken;
         pricer.denomination = denomination;
         pricer.exists = true;
-        emit IOnReAppEvents.PricerCreated(pricerId, onReToken, denomination);
+        emit PricerCreated(pricerId, onReToken, denomination);
     }
 
-    function addPricingVector(bytes32 pricerId, OnReTypes.PricingVector calldata vector) internal {
+    function addPricingVector(bytes32 pricerId, PricingVector calldata vector) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
         if (vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0) {
-            revert IOnReAppErrors.InvalidAmountError();
+            revert InvalidAmountError();
         }
         if (vector.baseTime > vector.startTime) {
-            revert IOnReAppErrors.VectorBaseTimeAfterStartTimeError(vector.baseTime, vector.startTime);
+            revert VectorBaseTimeAfterStartTimeError(vector.baseTime, vector.startTime);
         }
 
         uint64 currentTime = uint64(block.timestamp);
         if (vector.startTime < currentTime) {
-            revert IOnReAppErrors.VectorStartTimeInPastError(vector.startTime, currentTime);
+            revert VectorStartTimeInPastError(vector.startTime, currentTime);
         }
 
         uint8 vectorCount = pricer.vectorCount;
         if (vectorCount > 0) {
             uint64 latestStartTime = pricer.vectors[vectorCount - 1].startTime;
             if (vector.startTime == latestStartTime) {
-                revert IOnReAppErrors.DuplicateVectorStartTimeError(vector.startTime);
+                revert DuplicateVectorStartTimeError(vector.startTime);
             }
-            if (vector.startTime < latestStartTime) revert IOnReAppErrors.InvalidVectorOrderError();
+            if (vector.startTime < latestStartTime) revert InvalidVectorOrderError();
         }
 
         _cleanOldPricingVectors(pricerId, pricer, vector.startTime, currentTime);
         vectorCount = pricer.vectorCount;
-        if (vectorCount >= MAX_VECTORS) revert IOnReAppErrors.TooManyVectorsError();
+        if (vectorCount >= MAX_VECTORS) revert TooManyVectorsError();
 
         pricer.vectors[vectorCount] = vector;
         pricer.vectorCount = vectorCount + 1;
-        emit IOnReAppEvents.PricingVectorAdded(
+        emit PricingVectorAdded(
             pricerId, vector.startTime, vector.baseTime, vector.basePrice, vector.apr, vector.priceFixDuration
         );
     }
@@ -72,10 +87,10 @@ library LibOnRePricer {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         // forge-lint: disable-next-line(block-timestamp)
         if (startTime <= block.timestamp) {
-            revert IOnReAppErrors.VectorStartTimeInPastError(startTime, uint64(block.timestamp));
+            revert VectorStartTimeInPastError(startTime, uint64(block.timestamp));
         }
 
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
         uint8 vectorCount = pricer.vectorCount;
         uint8 vectorIndex = type(uint8).max;
         for (uint8 i; i < vectorCount;) {
@@ -87,15 +102,15 @@ library LibOnRePricer {
                 ++i;
             }
         }
-        if (vectorIndex == type(uint8).max) revert IOnReAppErrors.VectorNotFoundError(startTime);
+        if (vectorIndex == type(uint8).max) revert VectorNotFoundError(startTime);
 
         _removePricingVectorAt(pricer, vectorIndex);
-        emit IOnReAppEvents.PricingVectorDeleted(pricerId, startTime);
+        emit PricingVectorDeleted(pricerId, startTime);
     }
 
     function deleteAllPricingVectors(bytes32 pricerId) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
         uint8 deletedCount = pricer.vectorCount;
         for (uint8 i; i < deletedCount;) {
             delete pricer.vectors[i];
@@ -104,31 +119,31 @@ library LibOnRePricer {
             }
         }
         pricer.vectorCount = 0;
-        emit IOnReAppEvents.AllPricingVectorsDeleted(pricerId, deletedCount);
+        emit AllPricingVectorsDeleted(pricerId, deletedCount);
     }
 
     function setPricerDisabled(bytes32 pricerId, bool disabled) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
-        if (pricer.disabled == disabled) revert IOnReAppErrors.NoChangeError();
+        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+        if (pricer.disabled == disabled) revert NoChangeError();
         pricer.disabled = disabled;
-        emit IOnReAppEvents.PricerDisabledSet(pricerId, disabled);
+        emit PricerDisabledSet(pricerId, disabled);
     }
 
     function currentPrice(bytes32 pricerId) internal view returns (uint256) {
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
+        Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
         return calculatePricingVectorPriceAt(activePricingVector(pricerId, pricer), block.timestamp);
     }
 
-    function activePricingVector(bytes32 pricerId, OnReTypes.Pricer storage pricer)
+    function activePricingVector(bytes32 pricerId, Pricer storage pricer)
         internal
         view
-        returns (OnReTypes.PricingVector storage)
+        returns (PricingVector storage)
     {
         return pricer.vectors[activePricingVectorIndex(pricerId, pricer)];
     }
 
-    function activePricingVectorIndex(bytes32 pricerId, OnReTypes.Pricer storage pricer) internal view returns (uint8) {
+    function activePricingVectorIndex(bytes32 pricerId, Pricer storage pricer) internal view returns (uint8) {
         for (uint8 i = pricer.vectorCount; i > 0;) {
             unchecked {
                 --i;
@@ -136,10 +151,10 @@ library LibOnRePricer {
             // forge-lint: disable-next-line(block-timestamp)
             if (pricer.vectors[i].startTime <= block.timestamp) return i;
         }
-        revert IOnReAppErrors.NoActiveVectorError(pricerId);
+        revert NoActiveVectorError(pricerId);
     }
 
-    function calculatePricingVectorPriceAt(OnReTypes.PricingVector storage vector, uint256 timestamp)
+    function calculatePricingVectorPriceAt(PricingVector storage vector, uint256 timestamp)
         internal
         view
         returns (uint256)
@@ -149,12 +164,9 @@ library LibOnRePricer {
         );
     }
 
-    function _cleanOldPricingVectors(
-        bytes32 pricerId,
-        OnReTypes.Pricer storage pricer,
-        uint64 newStartTime,
-        uint64 currentTime
-    ) private {
+    function _cleanOldPricingVectors(bytes32 pricerId, Pricer storage pricer, uint64 newStartTime, uint64 currentTime)
+        private
+    {
         uint8 vectorCount = pricer.vectorCount;
         if (vectorCount < 2) return;
 
@@ -190,7 +202,7 @@ library LibOnRePricer {
             uint64 startTime = pricer.vectors[readIndex].startTime;
             bool evict = startTime < activeStartTime && startTime != previousStartTime;
             if (evict) {
-                emit IOnReAppEvents.PricingVectorEvicted(pricerId, startTime);
+                emit PricingVectorEvicted(pricerId, startTime);
             } else {
                 if (writeIndex != readIndex) pricer.vectors[writeIndex] = pricer.vectors[readIndex];
                 unchecked {
@@ -211,7 +223,7 @@ library LibOnRePricer {
         pricer.vectorCount = writeIndex;
     }
 
-    function _removePricingVectorAt(OnReTypes.Pricer storage pricer, uint8 vectorIndex) private {
+    function _removePricingVectorAt(Pricer storage pricer, uint8 vectorIndex) private {
         uint8 lastIndex = pricer.vectorCount - 1;
         for (uint8 i = vectorIndex; i < lastIndex;) {
             pricer.vectors[i] = pricer.vectors[i + 1];

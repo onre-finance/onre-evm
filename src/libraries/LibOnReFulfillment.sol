@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {
+    FulfillmentAmountExceedsRemainingError,
+    FulfillmentRequestAlreadyExistsError,
+    InvalidAmountError,
+    InvalidFlowQuoterError,
+    UnauthorizedError
+} from "../types/OnReAppErrors.sol";
+import {FulfillmentRequestCancelled, FulfillmentRequestFilled, FulfillmentRequested} from "../types/OnReAppEvents.sol";
+import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferDirection, OfferFlow} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReOffer} from "./LibOnReOffer.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
@@ -18,15 +24,14 @@ library LibOnReFulfillment {
         internal
         returns (bytes32 fulfillmentRequestId)
     {
-        OnReTypes.OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
+        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
         _requireWorkerOffer(offer);
-        if (inputAmount == 0) revert IOnReAppErrors.InvalidAmountError();
+        if (inputAmount == 0) revert InvalidAmountError();
 
         fulfillmentRequestId = OnReIds.fulfillmentRequestId(offerConfigId, msg.sender, requestId);
-        OnReTypes.FulfillmentRequest storage request =
-            LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
+        FulfillmentRequest storage request = LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
         if (request.exists) {
-            revert IOnReAppErrors.FulfillmentRequestAlreadyExistsError(fulfillmentRequestId);
+            revert FulfillmentRequestAlreadyExistsError(fulfillmentRequestId);
         }
 
         request.offerConfigId = offerConfigId;
@@ -36,16 +41,14 @@ library LibOnReFulfillment {
         request.exists = true;
 
         LibOnReVault.pullExactTokenAmount(offer.tokenIn, msg.sender, inputAmount);
-        emit IOnReAppEvents.FulfillmentRequested(
-            fulfillmentRequestId, offerConfigId, msg.sender, requestId, inputAmount
-        );
+        emit FulfillmentRequested(fulfillmentRequestId, offerConfigId, msg.sender, requestId, inputAmount);
     }
 
     function cancelFulfillmentRequest(bytes32 fulfillmentRequestId) internal {
-        OnReTypes.FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
+        FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
         address sender = msg.sender;
         if (sender != request.user && !LibOnReAccessControl.hasRole(LibOnReRoles.WORKER_ROLE, sender)) {
-            revert IOnReAppErrors.UnauthorizedError(sender);
+            revert UnauthorizedError(sender);
         }
 
         bytes32 offerConfigId = request.offerConfigId;
@@ -55,9 +58,7 @@ library LibOnReFulfillment {
         delete LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
 
         if (returnedAmount > 0) LibOnReVault.transferExactTokenAmount(tokenIn, user, returnedAmount);
-        emit IOnReAppEvents.FulfillmentRequestCancelled(
-            fulfillmentRequestId, offerConfigId, user, returnedAmount, sender
-        );
+        emit FulfillmentRequestCancelled(fulfillmentRequestId, offerConfigId, user, returnedAmount, sender);
     }
 
     function fulfillWorkerRequest(bytes32 fulfillmentRequestId, uint256 inputAmount)
@@ -65,16 +66,14 @@ library LibOnReFulfillment {
         returns (uint256 amountOut)
     {
         LibOnReAccessControl.checkRole(LibOnReRoles.WORKER_ROLE);
-        OnReTypes.FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
-        OnReTypes.OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(request.offerConfigId);
+        FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
+        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(request.offerConfigId);
         _requireWorkerOffer(offer);
-        if (inputAmount == 0) revert IOnReAppErrors.InvalidAmountError();
+        if (inputAmount == 0) revert InvalidAmountError();
 
         uint256 remainingAmount = request.inputAmount - request.fulfilledInputAmount;
         if (inputAmount > remainingAmount) {
-            revert IOnReAppErrors.FulfillmentAmountExceedsRemainingError(
-                fulfillmentRequestId, inputAmount, remainingAmount
-            );
+            revert FulfillmentAmountExceedsRemainingError(fulfillmentRequestId, inputAmount, remainingAmount);
         }
 
         bytes32 offerConfigId = request.offerConfigId;
@@ -87,9 +86,9 @@ library LibOnReFulfillment {
             request.fulfilledInputAmount = totalFulfilledInputAmount;
         }
 
-        OnReTypes.ExecutionAccounting memory accounting =
+        ExecutionAccounting memory accounting =
             LibOnReOffer.settleEscrowedWorkerInput(offerConfigId, offer, user, inputAmount);
-        emit IOnReAppEvents.FulfillmentRequestFilled(
+        emit FulfillmentRequestFilled(
             fulfillmentRequestId,
             offerConfigId,
             user,
@@ -103,9 +102,9 @@ library LibOnReFulfillment {
         return accounting.amountOut;
     }
 
-    function _requireWorkerOffer(OnReTypes.OfferConfig storage offer) private view {
-        if (offer.flow != OnReTypes.OfferFlow.Worker || offer.direction != OnReTypes.OfferDirection.OnReToAsset) {
-            revert IOnReAppErrors.InvalidFlowQuoterError();
+    function _requireWorkerOffer(OfferConfig storage offer) private view {
+        if (offer.flow != OfferFlow.Worker || offer.direction != OfferDirection.OnReToAsset) {
+            revert InvalidFlowQuoterError();
         }
     }
 }

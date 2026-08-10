@@ -1,0 +1,27 @@
+{
+  "name": "@onre/evm",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OnRe EVM diamond contracts, built and deployed with Gemforge",
+  "license": "MIT",
+  "scripts": {
+    "build": "gemforge build",
+    "test": "gemforge build && forge test -vvv",
+    "coverage": "gemforge build && forge coverage",
+    "deploy:local": "gemforge deploy local",
+    "deploy:testnet": "gemforge deploy testnet",
+    "deploy:mainnet": "gemforge deploy mainnet",
+    "query:testnet": "gemforge query testnet",
+    "query:mainnet": "gemforge query mainnet",
+    "verify:testnet": "gemforge verify testnet",
+    "verify:mainnet": "gemforge verify mainnet",
+    "devnet": "anvil"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.5",
+    "gemforge": "^2.18.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

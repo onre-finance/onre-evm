@@ -19,7 +19,6 @@ interface IOnReToken is IGetCCIPAdmin {
     event BurnAccessRevokedEvent(address indexed burner);
     event CCIPAdminTransferredEvent(address indexed previousAdmin, address indexed newAdmin);
 
-    error ZeroAddressError();
     error SenderNotMinterError(address sender);
     error SenderNotBurnerError(address sender);
 

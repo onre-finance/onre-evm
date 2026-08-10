@@ -2,9 +2,9 @@
 pragma solidity 0.8.35;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {InvalidAmountError, TokenNotRegisteredError} from "../types/OnReAppErrors.sol";
+import {MarketStats, OnReTokenConfig, Pricer, PricingVector} from "../types/OnReTypes.sol";
 import {LibOnRePricer} from "./LibOnRePricer.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
@@ -12,22 +12,22 @@ import {OnReMath} from "./OnReMath.sol";
 
 /// @notice Canonical token-market metrics derived from supply balances and the USD Pricer.
 library LibOnReMarketStats {
-    function marketStats(address onReToken) internal view returns (OnReTypes.MarketStats memory stats) {
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
-        if (config.decimals == 0) revert IOnReAppErrors.TokenNotRegisteredError(onReToken);
+    function marketStats(address onReToken) internal view returns (MarketStats memory stats) {
+        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        if (config.decimals == 0) revert TokenNotRegisteredError(onReToken);
 
         uint256 circulatingSupply_ = circulatingSupply(onReToken);
         bytes32 pricerId = OnReIds.usdPricerId(onReToken);
-        OnReTypes.Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
+        Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
         uint8 activeVectorIndex = LibOnRePricer.activePricingVectorIndex(pricerId, pricer);
-        OnReTypes.PricingVector storage activeVector = pricer.vectors[activeVectorIndex];
+        PricingVector storage activeVector = pricer.vectors[activeVectorIndex];
 
         uint256 apy = OnReMath.calculateApyFromApr(activeVector.apr);
         uint256 nav = LibOnRePricer.calculatePricingVectorPriceAt(activeVector, block.timestamp);
         int256 navAdjustment = _calculateNavAdjustment(pricer, activeVector, activeVectorIndex);
         uint256 tvl = OnReMath.calculateTvl(circulatingSupply_, nav, LibOnRePricer.PRICE_SCALE);
 
-        return OnReTypes.MarketStats({
+        return MarketStats({
             apy: apy,
             circulatingSupply: circulatingSupply_,
             nav: nav,
@@ -61,11 +61,11 @@ library LibOnReMarketStats {
         return OnReMath.calculateTvl(circulatingSupply(onReToken), nav, LibOnRePricer.PRICE_SCALE);
     }
 
-    function _calculateNavAdjustment(
-        OnReTypes.Pricer storage pricer,
-        OnReTypes.PricingVector storage activeVector,
-        uint8 activeVectorIndex
-    ) private view returns (int256) {
+    function _calculateNavAdjustment(Pricer storage pricer, PricingVector storage activeVector, uint8 activeVectorIndex)
+        private
+        view
+        returns (int256)
+    {
         uint256 currentPrice = LibOnRePricer.calculatePricingVectorPriceAt(activeVector, activeVector.startTime);
         if (activeVectorIndex == 0) return _toInt256(currentPrice);
 
@@ -76,7 +76,7 @@ library LibOnReMarketStats {
     }
 
     function _toInt256(uint256 value) private pure returns (int256) {
-        if (value > uint256(type(int256).max)) revert IOnReAppErrors.InvalidAmountError();
+        if (value > uint256(type(int256).max)) revert InvalidAmountError();
         // forge-lint: disable-next-line(unsafe-typecast)
         return int256(value);
     }

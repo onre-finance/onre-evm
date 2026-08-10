@@ -3,18 +3,23 @@ pragma solidity 0.8.35;
 
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
-import {IOnReAccessControl} from "../interfaces/IOnReAccessControl.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
-import {IDiamondCut} from "./interfaces/IDiamondCut.sol";
-import {IDiamondLoupe} from "./interfaces/IDiamondLoupe.sol";
-import {LibDiamond} from "./libraries/LibDiamond.sol";
-import {LibOnReStorage} from "./libraries/LibOnReStorage.sol";
+import {
+    ApproverAlreadyExistsError,
+    BothApproversFilledError,
+    NoChangeError,
+    ZeroAddressError
+} from "../types/OnReAppErrors.sol";
+import {ApproverAdded} from "../types/OnReAppEvents.sol";
+import {InitializeParams} from "../types/OnReTypes.sol";
+import {IDiamondCut} from "./contracts/interfaces/IDiamondCut.sol";
+import {IDiamondLoupe} from "./contracts/interfaces/IDiamondLoupe.sol";
+import {LibDiamond} from "./contracts/libraries/LibDiamond.sol";
+import {LibOnReStorage} from "./LibOnReStorage.sol";
 import {LibOnReAccessControl} from "../libraries/LibOnReAccessControl.sol";
+import {LibOnReRoles} from "../libraries/LibOnReRoles.sol";
 
-contract OnReDiamondInit is IOnReAppEvents, IOnReAppErrors {
-    function init(OnReTypes.InitializeParams calldata params) external {
+contract OnReDiamondInit {
+    function init(InitializeParams calldata params) external {
         LibOnReStorage.AppStorage storage s = LibOnReStorage.appStorage();
         if (s.initialized) {
             revert NoChangeError();
@@ -44,8 +49,22 @@ contract OnReDiamondInit is IOnReAppEvents, IOnReAppErrors {
         ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
         ds.supportedInterfaces[type(IAccessControl).interfaceId] = true;
-        ds.supportedInterfaces[type(IOnReAccessControl).interfaceId] = true;
         s.initialized = true;
+
+        _handOffBootstrapUpgrader(params.upgrader);
+    }
+
+    /// @notice Drops the deployer's temporary upgrade authority.
+    /// @dev `DiamondProxy` grants UPGRADER_ROLE to its deployer so the very
+    /// first `diamondCut` (the one carrying this initializer) can be signed by
+    /// the deployment wallet. `init` runs inside that cut via delegatecall, so
+    /// `msg.sender` is still that wallet. Once the configured upgrader holds
+    /// the role, the bootstrap grant has to go, or every deployment would
+    /// leave a hot key with permanent cut rights.
+    function _handOffBootstrapUpgrader(address upgrader) private {
+        if (msg.sender != upgrader) {
+            LibOnReAccessControl._revokeRole(LibOnReRoles.UPGRADER_ROLE, msg.sender);
+        }
     }
 
     function _addApprover(LibOnReStorage.AppStorage storage s, address approver) private {

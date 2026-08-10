@@ -8,6 +8,11 @@ The offer domain is documented in
 [`docs/OFFER_ARCHITECTURE.md`](docs/OFFER_ARCHITECTURE.md), including the
 Mermaid graph, deterministic IDs, compatibility matrix, and settlement rules.
 
+The diamond core lives in `src/diamond/contracts/`. That `contracts/`
+subdirectory is not decoration: Gemforge resolves the diamond library it
+generates against, so the layout has to match what its templates import. See
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
 ## Facets
 
 - `DiamondCutFacet` performs atomic add, replace, and remove upgrades.
@@ -46,11 +51,11 @@ The internal libraries follow the same responsibility boundaries:
 - `OnReMath` owns shared pure arithmetic; domain libraries add policy around
   those calculations rather than duplicating the formulas.
 
-Each application facet explicitly implements its matching domain interface
-(`IOnReConfig`, `IOnRePricer`, `IOnReQuoter`, and so on). This makes Solidity
-check the facet ABI against the selector source at compile time. `IOnReApp`
-only aggregates those domain interfaces for clients and integrations; it does
-not duplicate their function declarations.
+Each application facet declares its own external ABI. There is no hand-written
+domain interface layer: Gemforge parses the facet sources and generates
+`src/generated/IDiamondProxy.sol`, the aggregate client interface, from them.
+That interface is regenerated on every `gemforge build`, so it cannot drift from
+the deployed selector set.
 
 Each registered OnRe token has exactly one deterministic USD Pricer. Offers and
 MarketStats derive that Pricer from the OnRe token address; there is no mutable
@@ -66,10 +71,15 @@ This layout targets a fresh, not-yet-deployed Diamond. It is a breaking storage
 and ABI replacement for the earlier combined offer/redemption prototype. Do not
 install it over that prototype without a purpose-built migration initializer.
 
-Fresh deployment installs every initial selector and calls
-`OnReDiamondInit.init` in the same transaction. The runtime Diamond does not
+Fresh deployment is two transactions: `DiamondProxy`'s constructor installs
+`DiamondCutFacet` and `DiamondLoupeFacet`, then a single cut installs every
+application facet and calls `OnReDiamondInit.init`. The runtime Diamond does not
 expose a reusable initializer. Every later cut should include an initializer
 when storage migration or invariant restoration is required.
+
+The proxy constructor grants `UPGRADER_ROLE` to its deployer so that first cut
+can be signed; `OnReDiamondInit.init` revokes that grant once the configured
+upgrader holds the role, unless the deployer is the configured upgrader.
 
 Diamond cuts require `UPGRADER_ROLE`; there is no separate Diamond-owner
 authority. Production may assign that role to the boss or to a dedicated
@@ -119,20 +129,23 @@ Operational vault assets remain physically held by the Diamond.
 
 ## Deployment
 
-`script/DeployOnReDiamond.s.sol` reads:
+Deployments and upgrades run through [Gemforge](https://gemforge.xyz), driven by
+`gemforge.config.cjs`. `gemforge build` regenerates `src/generated/`, and
+`gemforge deploy <target>` diffs the compiled facet ABIs against the on-chain
+loupe and applies exactly the cuts that differ. Full workflow, environment
+variables, and the multisig upgrade path:
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-- `PRIVATE_KEY`;
-- `ONRE_BOSS`;
-- `ONRE_ADMIN`;
-- `ONRE_WORKER`;
-- `ONRE_UPGRADER`;
-- optional `ONRE_APPROVER_1`;
-- optional `ONRE_APPROVER_2`.
+Because cuts are derived from the facet ABIs, there is no selector manifest and
+no domain-interface layer to keep in sync. `src/generated/IDiamondProxy.sol` is
+the interface clients, integrations and tests bind to.
 
 Pricers, Quoters, FeeConfigs, vaults, and OfferConfigs are explicit
 post-deployment configuration transactions.
 
-`LibOnReSelectors` is the canonical fresh-deployment selector manifest. It
-derives each facet's selectors from that facet's domain interface, not from the
-aggregate `IOnReApp`. ERC-165 advertises only stable Diamond and access-control
-interfaces. The mutable application ABI is discovered through the loupe.
+ERC-165 advertises only interfaces with a stable, standardised id: `IERC165`,
+`IDiamondCut`, `IDiamondLoupe` and OpenZeppelin's `IAccessControl`. The
+application ABI — including the boss-transfer surface — is discovered through
+the loupe. A stored ERC-165 flag is a static bool and cannot track a selector
+set that a cut is free to change, so advertising a bespoke application id would
+be a claim the diamond cannot keep.

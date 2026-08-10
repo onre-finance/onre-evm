@@ -2,8 +2,8 @@
 pragma solidity 0.8.35;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {ApprovalMessage} from "../types/OnReTypes.sol";
 
 /// @notice EIP-712 approval verification for permissioned offer execution.
 library LibOnReApproval {
@@ -13,7 +13,7 @@ library LibOnReApproval {
     bytes32 private constant EIP712_NAME_HASH = keccak256("OnReApp");
     bytes32 private constant EIP712_VERSION_HASH = keccak256("1");
 
-    function isValidForUser(address user, OnReTypes.ApprovalMessage calldata approval, bytes calldata signature)
+    function isValidForUser(address user, ApprovalMessage calldata approval, bytes calldata signature)
         internal
         view
         returns (bool)
@@ -26,7 +26,7 @@ library LibOnReApproval {
             && (signer == LibOnReStorage.appStorage().approver1 || signer == LibOnReStorage.appStorage().approver2);
     }
 
-    function _approvalDigest(OnReTypes.ApprovalMessage calldata approval) private view returns (bytes32) {
+    function _approvalDigest(ApprovalMessage calldata approval) private view returns (bytes32) {
         bytes32 domainSeparator = keccak256(
             abi.encode(EIP712_DOMAIN_TYPEHASH, EIP712_NAME_HASH, EIP712_VERSION_HASH, block.chainid, address(this))
         );

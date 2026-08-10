@@ -2,9 +2,15 @@
 pragma solidity 0.8.35;
 
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {
+    ApproverAlreadyExistsError,
+    BothApproversFilledError,
+    NoChangeError,
+    NotApproverError,
+    ZeroAddressError
+} from "../types/OnReAppErrors.sol";
+import {ApproverAdded, ApproverRemoved, KillSwitchSet} from "../types/OnReAppEvents.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 
@@ -12,9 +18,9 @@ import {LibOnReRoles} from "./LibOnReRoles.sol";
 library LibOnReAppConfig {
     function addApprover(address approver) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        if (approver == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (approver == address(0)) revert ZeroAddressError();
         if (approver == LibOnReStorage.appStorage().approver1 || approver == LibOnReStorage.appStorage().approver2) {
-            revert IOnReAppErrors.ApproverAlreadyExistsError(approver);
+            revert ApproverAlreadyExistsError(approver);
         }
 
         if (LibOnReStorage.appStorage().approver1 == address(0)) {
@@ -22,23 +28,23 @@ library LibOnReAppConfig {
         } else if (LibOnReStorage.appStorage().approver2 == address(0)) {
             LibOnReStorage.appStorage().approver2 = approver;
         } else {
-            revert IOnReAppErrors.BothApproversFilledError();
+            revert BothApproversFilledError();
         }
-        emit IOnReAppEvents.ApproverAdded(approver);
+        emit ApproverAdded(approver);
     }
 
     function removeApprover(address approver) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        if (approver == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (approver == address(0)) revert ZeroAddressError();
 
         if (LibOnReStorage.appStorage().approver1 == approver) {
             LibOnReStorage.appStorage().approver1 = address(0);
         } else if (LibOnReStorage.appStorage().approver2 == approver) {
             LibOnReStorage.appStorage().approver2 = address(0);
         } else {
-            revert IOnReAppErrors.NotApproverError(approver);
+            revert NotApproverError(approver);
         }
-        emit IOnReAppEvents.ApproverRemoved(approver);
+        emit ApproverRemoved(approver);
     }
 
     function setKillSwitch(bool killed) internal {
@@ -52,8 +58,8 @@ library LibOnReAppConfig {
         } else {
             LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         }
-        if (LibOnReStorage.appStorage().isKilled == killed) revert IOnReAppErrors.NoChangeError();
+        if (LibOnReStorage.appStorage().isKilled == killed) revert NoChangeError();
         LibOnReStorage.appStorage().isKilled = killed;
-        emit IOnReAppEvents.KillSwitchSet(killed);
+        emit KillSwitchSet(killed);
     }
 }

@@ -2,10 +2,24 @@
 pragma solidity 0.8.35;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {LibOnReStorage} from "../diamond/libraries/LibOnReStorage.sol";
-import {IOnReAppErrors} from "../interfaces/IOnReAppErrors.sol";
-import {IOnReAppEvents} from "../interfaces/IOnReAppEvents.sol";
-import {OnReTypes} from "../types/OnReTypes.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {
+    ExcludedSupplyAddressAlreadyExistsError,
+    ExcludedSupplyAddressNotFoundError,
+    InvalidTokenError,
+    NoChangeError,
+    TokenAlreadyRegisteredError,
+    TooManyExcludedSupplyAddressesError,
+    ZeroAddressError
+} from "../types/OnReAppErrors.sol";
+import {
+    ExcludedSupplyAddressAdded,
+    ExcludedSupplyAddressRemoved,
+    OnReTokenEnabledSet,
+    OnReTokenInventorySourceUpdated,
+    OnReTokenRegistered
+} from "../types/OnReAppEvents.sol";
+import {OnReTokenConfig} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
@@ -17,69 +31,69 @@ library LibOnReConfig {
 
     function registerOnReToken(address onReToken, address inventorySource) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        if (onReToken == address(0) || inventorySource == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (onReToken == address(0) || inventorySource == address(0)) revert ZeroAddressError();
 
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
         if (config.enabled || config.decimals != 0) {
-            revert IOnReAppErrors.TokenAlreadyRegisteredError(onReToken);
+            revert TokenAlreadyRegisteredError(onReToken);
         }
 
         uint8 decimals = IERC20Metadata(onReToken).decimals();
-        if (decimals != ONRE_TOKEN_DECIMALS) revert IOnReAppErrors.InvalidTokenError();
+        if (decimals != ONRE_TOKEN_DECIMALS) revert InvalidTokenError();
 
         config.inventorySource = inventorySource;
         config.enabled = true;
         config.decimals = decimals;
-        emit IOnReAppEvents.OnReTokenRegistered(onReToken, inventorySource, decimals);
+        emit OnReTokenRegistered(onReToken, inventorySource, decimals);
     }
 
     function setOnReTokenEnabled(address onReToken, bool enabled) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
 
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
-        if (config.enabled == enabled) revert IOnReAppErrors.NoChangeError();
+        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        if (config.enabled == enabled) revert NoChangeError();
         config.enabled = enabled;
-        emit IOnReAppEvents.OnReTokenEnabledSet(onReToken, enabled);
+        emit OnReTokenEnabledSet(onReToken, enabled);
     }
 
     function setOnReTokenInventorySource(address onReToken, address inventorySource) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
-        if (inventorySource == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (inventorySource == address(0)) revert ZeroAddressError();
 
-        OnReTypes.OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
         address oldInventorySource = config.inventorySource;
-        if (oldInventorySource == inventorySource) revert IOnReAppErrors.NoChangeError();
+        if (oldInventorySource == inventorySource) revert NoChangeError();
         config.inventorySource = inventorySource;
-        emit IOnReAppEvents.OnReTokenInventorySourceUpdated(onReToken, oldInventorySource, inventorySource);
+        emit OnReTokenInventorySourceUpdated(onReToken, oldInventorySource, inventorySource);
     }
 
     function addExcludedSupplyAddress(address onReToken, address account) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
-        if (account == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (account == address(0)) revert ZeroAddressError();
         if (LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account] != 0) {
-            revert IOnReAppErrors.ExcludedSupplyAddressAlreadyExistsError(onReToken, account);
+            revert ExcludedSupplyAddressAlreadyExistsError(onReToken, account);
         }
 
         address[] storage accounts = LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
         if (accounts.length >= MAX_EXCLUDED_SUPPLY_ADDRESSES) {
-            revert IOnReAppErrors.TooManyExcludedSupplyAddressesError(onReToken);
+            revert TooManyExcludedSupplyAddressesError(onReToken);
         }
         accounts.push(account);
         LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account] = accounts.length;
-        emit IOnReAppEvents.ExcludedSupplyAddressAdded(onReToken, account);
+        emit ExcludedSupplyAddressAdded(onReToken, account);
     }
 
     function removeExcludedSupplyAddress(address onReToken, address account) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation.requireRegisteredOnReToken(onReToken);
-        if (account == address(0)) revert IOnReAppErrors.ZeroAddressError();
+        if (account == address(0)) revert ZeroAddressError();
 
         uint256 indexPlusOne = LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account];
         if (indexPlusOne == 0) {
-            revert IOnReAppErrors.ExcludedSupplyAddressNotFoundError(onReToken, account);
+            revert ExcludedSupplyAddressNotFoundError(onReToken, account);
         }
 
         address[] storage accounts = LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
@@ -92,6 +106,6 @@ library LibOnReConfig {
         }
         accounts.pop();
         delete LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account];
-        emit IOnReAppEvents.ExcludedSupplyAddressRemoved(onReToken, account);
+        emit ExcludedSupplyAddressRemoved(onReToken, account);
     }
 }

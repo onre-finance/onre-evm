@@ -6,9 +6,9 @@ This is the EVM form of the Solana account model. A `bytes32` deterministic ID
 replaces a PDA address, operational vault balances remain in Diamond custody,
 and facets are thin adapters over namespaced Diamond storage.
 
-Every application facet implements a domain-specific interface used by the
-deployment selector manifest. `IOnReApp` aggregates those interfaces for
-clients without redefining the facet functions.
+Every application facet declares its own external ABI. Gemforge generates the
+aggregate client interface, `src/generated/IDiamondProxy.sol`, from those facet
+sources, and derives deployment and upgrade cuts from the same ABIs.
 
 The implemented scope intentionally contains:
 

@@ -12,20 +12,16 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IOnReToken} from "./IOnReToken.sol";
 
 contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
-    address[] private _minters;
-    mapping(address account => bool allowed) public isMinter;
-    // 0 = not in the registry; n = stored at array index n - 1
-    mapping(address account => uint256 indexPlusOne) private _minterIndexPlusOne;
-
-    address[] private _burners;
-    mapping(address account => bool allowed) public isBurner;
-    // 0 = not in the registry; n = stored at array index n - 1
-    mapping(address account => uint256 indexPlusOne) private _burnerIndexPlusOne;
+    EnumerableSet.AddressSet private _minters;
+    EnumerableSet.AddressSet private _burners;
 
     address private _ccipAdmin;
 
@@ -82,27 +78,35 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     function getMinters() external view returns (address[] memory) {
-        return _minters;
+        return _minters.values();
     }
 
     function getBurners() external view returns (address[] memory) {
-        return _burners;
+        return _burners.values();
     }
 
     function minterAt(uint256 index) external view returns (address) {
-        return _minters[index];
+        return _minters.at(index);
     }
 
     function minterCount() external view returns (uint256) {
-        return _minters.length;
+        return _minters.length();
     }
 
     function burnerAt(uint256 index) external view returns (address) {
-        return _burners[index];
+        return _burners.at(index);
     }
 
     function burnerCount() external view returns (uint256) {
-        return _burners.length;
+        return _burners.length();
+    }
+
+    function isMinter(address account) external view returns (bool) {
+        return _minters.contains(account);
+    }
+
+    function isBurner(address account) external view returns (bool) {
+        return _burners.contains(account);
     }
 
     function grantMintRole(address account) public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -155,7 +159,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
 
     modifier onlyMinter() {
         address sender = msg.sender;
-        if (!isMinter[sender]) {
+        if (!_minters.contains(sender)) {
             revert SenderNotMinterError(sender);
         }
         _;
@@ -163,7 +167,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
 
     modifier onlyBurner() {
         address sender = msg.sender;
-        if (!isBurner[sender]) {
+        if (!_burners.contains(sender)) {
             revert SenderNotBurnerError(sender);
         }
         _;
@@ -176,34 +180,13 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         if (account == address(0)) {
             revert ZeroAddressError();
         }
-        if (isMinter[account]) {
-            return;
-        }
-
-        isMinter[account] = true;
-        _minterIndexPlusOne[account] = _minters.length + 1;
-        _minters.push(account);
+        if (!_minters.add(account)) return;
 
         emit MintAccessGrantedEvent(account);
     }
 
     function _removeMinter(address account) internal {
-        if (!isMinter[account]) {
-            return;
-        }
-
-        uint256 index = _minterIndexPlusOne[account] - 1;
-        uint256 lastIndex = _minters.length - 1;
-
-        if (index != lastIndex) {
-            address lastMinter = _minters[lastIndex];
-            _minters[index] = lastMinter;
-            _minterIndexPlusOne[lastMinter] = index + 1;
-        }
-
-        _minters.pop();
-        delete _minterIndexPlusOne[account];
-        isMinter[account] = false;
+        if (!_minters.remove(account)) return;
 
         emit MintAccessRevokedEvent(account);
     }
@@ -212,34 +195,13 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         if (account == address(0)) {
             revert ZeroAddressError();
         }
-        if (isBurner[account]) {
-            return;
-        }
-
-        isBurner[account] = true;
-        _burnerIndexPlusOne[account] = _burners.length + 1;
-        _burners.push(account);
+        if (!_burners.add(account)) return;
 
         emit BurnAccessGrantedEvent(account);
     }
 
     function _removeBurner(address account) internal {
-        if (!isBurner[account]) {
-            return;
-        }
-
-        uint256 index = _burnerIndexPlusOne[account] - 1;
-        uint256 lastIndex = _burners.length - 1;
-
-        if (index != lastIndex) {
-            address lastBurner = _burners[lastIndex];
-            _burners[index] = lastBurner;
-            _burnerIndexPlusOne[lastBurner] = index + 1;
-        }
-
-        _burners.pop();
-        delete _burnerIndexPlusOne[account];
-        isBurner[account] = false;
+        if (!_burners.remove(account)) return;
 
         emit BurnAccessRevokedEvent(account);
     }

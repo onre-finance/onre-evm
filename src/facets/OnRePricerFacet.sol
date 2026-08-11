@@ -21,8 +21,8 @@ contract OnRePricerFacet {
         LibOnRePricer.deleteAllPricingVectors(pricerId);
     }
 
-    function setPricerDisabled(bytes32 pricerId, bool disabled) external {
-        LibOnRePricer.setPricerDisabled(pricerId, disabled);
+    function setPricerEnabled(bytes32 pricerId, bool enabled) external {
+        LibOnRePricer.setPricerEnabled(pricerId, enabled);
     }
 
     function currentPrice(bytes32 pricerId) external view returns (uint256) {

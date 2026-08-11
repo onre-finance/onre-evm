@@ -38,8 +38,8 @@ contract OnReOfferFacet {
         );
     }
 
-    function setOfferConfigDisabled(bytes32 offerConfigId, bool disabled) external {
-        LibOnReOfferConfig.setOfferConfigDisabled(offerConfigId, disabled);
+    function setOfferConfigEnabled(bytes32 offerConfigId, bool enabled) external {
+        LibOnReOfferConfig.setOfferConfigEnabled(offerConfigId, enabled);
     }
 
     function takeOffer(TakeOfferParams calldata params) external returns (uint256 amountOut) {

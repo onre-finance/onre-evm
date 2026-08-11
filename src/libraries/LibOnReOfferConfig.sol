@@ -13,7 +13,7 @@ import {
     OfferConfigAlreadyExistsError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
-import {OfferConfigCreated, OfferConfigDisabledSet, OfferConfigReferencesUpdated} from "../types/OnReAppEvents.sol";
+import {OfferConfigCreated, OfferConfigEnabledSet, OfferConfigReferencesUpdated} from "../types/OnReAppEvents.sol";
 import {
     ConfigurableVaultKind,
     FeeConfig,
@@ -93,12 +93,13 @@ library LibOnReOfferConfig {
         emit OfferConfigReferencesUpdated(offerConfigId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId);
     }
 
-    function setOfferConfigDisabled(bytes32 offerConfigId, bool disabled) internal {
+    function setOfferConfigEnabled(bytes32 offerConfigId, bool enabled) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OfferConfig storage offer = LibOnReValidation.requireOfferConfig(offerConfigId);
+        bool disabled = !enabled;
         if (offer.disabled == disabled) revert NoChangeError();
         offer.disabled = disabled;
-        emit OfferConfigDisabledSet(offerConfigId, disabled);
+        emit OfferConfigEnabledSet(offerConfigId, enabled);
     }
 
     function _setOfferReferences(

@@ -18,10 +18,10 @@ event PricingVectorAdded(
 event PricingVectorDeleted(bytes32 indexed pricerId, uint64 startTime);
 event PricingVectorEvicted(bytes32 indexed pricerId, uint64 startTime);
 event AllPricingVectorsDeleted(bytes32 indexed pricerId, uint8 vectorsDeletedCount);
-event PricerDisabledSet(bytes32 indexed pricerId, bool disabled);
+event PricerEnabledSet(bytes32 indexed pricerId, bool enabled);
 
 event QuoterCreated(bytes32 indexed quoterId, QuoterKind indexed kind, uint64 indexed instanceId);
-event QuoterDisabledSet(bytes32 indexed quoterId, bool disabled);
+event QuoterEnabledSet(bytes32 indexed quoterId, bool enabled);
 
 event FeeConfigCreated(bytes32 indexed feeConfigId, uint64 indexed instanceId, uint16 basisPoints, bytes32 feeVaultId);
 event FeeConfigUpdated(bytes32 indexed feeConfigId, uint16 basisPoints, bytes32 feeVaultId);
@@ -45,7 +45,7 @@ event OfferConfigReferencesUpdated(
     bytes32 proceedsVaultId,
     bytes32 liquidityVaultId
 );
-event OfferConfigDisabledSet(bytes32 indexed offerConfigId, bool disabled);
+event OfferConfigEnabledSet(bytes32 indexed offerConfigId, bool enabled);
 event OfferExecuted(
     bytes32 indexed offerConfigId,
     address indexed user,

@@ -205,7 +205,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         assertNotEq(secondNavQuoterId, navQuoterId);
         assertEq(app.getQuoter(secondNavQuoterId).instanceId, 1);
 
-        app.setQuoterDisabled(secondNavQuoterId, true);
+        app.setQuoterEnabled(secondNavQuoterId, false);
         assertTrue(app.getQuoter(secondNavQuoterId).disabled);
         assertFalse(app.getQuoter(navQuoterId).disabled);
     }
@@ -678,11 +678,11 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         );
 
         vm.expectRevert(NoChangeError.selector);
-        app.setOfferConfigDisabled(permissionedOfferId, false);
+        app.setOfferConfigEnabled(permissionedOfferId, true);
         vm.expectRevert(NoChangeError.selector);
-        app.setPricerDisabled(pricerId, false);
+        app.setPricerEnabled(pricerId, true);
         vm.expectRevert(NoChangeError.selector);
-        app.setQuoterDisabled(navQuoterId, false);
+        app.setQuoterEnabled(navQuoterId, true);
         vm.expectRevert(NoChangeError.selector);
         app.setFeeConfigEnabled(feeConfigId, true);
 
@@ -842,13 +842,13 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(abi.encodeWithSelector(PricerNotFoundError.selector, missing));
         app.currentPrice(missing);
         vm.expectRevert(abi.encodeWithSelector(QuoterNotFoundError.selector, missing));
-        app.setQuoterDisabled(missing, true);
+        app.setQuoterEnabled(missing, false);
         vm.expectRevert(abi.encodeWithSelector(FeeConfigNotFoundError.selector, missing));
         app.updateFeeConfig(missing, 0, feeVaultId);
         vm.expectRevert(abi.encodeWithSelector(ConfigurableVaultNotFoundError.selector, missing));
         app.updateConfigurableVault(missing, vaultDestination, 0);
         vm.expectRevert(abi.encodeWithSelector(OfferConfigNotFoundError.selector, missing));
-        app.setOfferConfigDisabled(missing, true);
+        app.setOfferConfigEnabled(missing, false);
         vm.expectRevert(abi.encodeWithSelector(TokenNotRegisteredError.selector, address(usd)));
         app.marketStats(address(usd));
 
@@ -1055,20 +1055,20 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     }
 
     function test_DisabledComponentsAndKillSwitchStopExecution() public {
-        app.setPricerDisabled(pricerId, true);
+        app.setPricerEnabled(pricerId, false);
         vm.expectRevert(abi.encodeWithSelector(PricerDisabledError.selector, pricerId));
         app.previewExecution(permissionedOfferId, 1e6);
-        app.setPricerDisabled(pricerId, false);
+        app.setPricerEnabled(pricerId, true);
 
-        app.setQuoterDisabled(navQuoterId, true);
+        app.setQuoterEnabled(navQuoterId, false);
         vm.expectRevert(abi.encodeWithSelector(QuoterDisabledError.selector, navQuoterId));
         app.previewExecution(permissionedOfferId, 1e6);
-        app.setQuoterDisabled(navQuoterId, false);
+        app.setQuoterEnabled(navQuoterId, true);
 
-        app.setOfferConfigDisabled(permissionedOfferId, true);
+        app.setOfferConfigEnabled(permissionedOfferId, false);
         vm.expectRevert(abi.encodeWithSelector(OfferConfigDisabledError.selector, permissionedOfferId));
         app.previewExecution(permissionedOfferId, 1e6);
-        app.setOfferConfigDisabled(permissionedOfferId, false);
+        app.setOfferConfigEnabled(permissionedOfferId, true);
 
         app.setKillSwitch(true);
         vm.expectRevert(KilledError.selector);

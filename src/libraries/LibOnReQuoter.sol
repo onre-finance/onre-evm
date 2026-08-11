@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {InvalidAmountError, NoChangeError, QuoterAlreadyExistsError} from "../types/OnReAppErrors.sol";
-import {QuoterCreated, QuoterDisabledSet} from "../types/OnReAppEvents.sol";
+import {QuoterCreated, QuoterEnabledSet} from "../types/OnReAppEvents.sol";
 import {OfferConfig, OfferDirection, QuoteResult, Quoter, QuoterKind} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnRePricer} from "./LibOnRePricer.sol";
@@ -26,12 +26,13 @@ library LibOnReQuoter {
         emit QuoterCreated(quoterId, kind, quoterInstanceId);
     }
 
-    function setQuoterDisabled(bytes32 quoterId, bool disabled) internal {
+    function setQuoterEnabled(bytes32 quoterId, bool enabled) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Quoter storage quoter = LibOnReValidation.requireQuoter(quoterId);
+        bool disabled = !enabled;
         if (quoter.disabled == disabled) revert NoChangeError();
         quoter.disabled = disabled;
-        emit QuoterDisabledSet(quoterId, disabled);
+        emit QuoterEnabledSet(quoterId, enabled);
     }
 
     function quote(bytes32 offerConfigId, uint256 netInputAmount) internal view returns (QuoteResult memory result) {

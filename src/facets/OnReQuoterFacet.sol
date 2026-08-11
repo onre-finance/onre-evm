@@ -9,8 +9,8 @@ contract OnReQuoterFacet {
         return LibOnReQuoter.createQuoter(kind, quoterInstanceId);
     }
 
-    function setQuoterDisabled(bytes32 quoterId, bool disabled) external {
-        LibOnReQuoter.setQuoterDisabled(quoterId, disabled);
+    function setQuoterEnabled(bytes32 quoterId, bool enabled) external {
+        LibOnReQuoter.setQuoterEnabled(quoterId, enabled);
     }
 
     function quote(bytes32 offerConfigId, uint256 netInputAmount) external view returns (QuoteResult memory result) {

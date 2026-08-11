@@ -17,7 +17,7 @@ import {
 import {
     AllPricingVectorsDeleted,
     PricerCreated,
-    PricerDisabledSet,
+    PricerEnabledSet,
     PricingVectorAdded,
     PricingVectorDeleted,
     PricingVectorEvicted
@@ -122,12 +122,13 @@ library LibOnRePricer {
         emit AllPricingVectorsDeleted(pricerId, deletedCount);
     }
 
-    function setPricerDisabled(bytes32 pricerId, bool disabled) internal {
+    function setPricerEnabled(bytes32 pricerId, bool enabled) internal {
         LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+        bool disabled = !enabled;
         if (pricer.disabled == disabled) revert NoChangeError();
         pricer.disabled = disabled;
-        emit PricerDisabledSet(pricerId, disabled);
+        emit PricerEnabledSet(pricerId, enabled);
     }
 
     function currentPrice(bytes32 pricerId) internal view returns (uint256) {

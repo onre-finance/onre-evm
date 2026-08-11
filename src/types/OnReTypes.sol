@@ -54,9 +54,9 @@ struct PricingVector {
 }
 
 struct Pricer {
+    PricingVector[10] vectors;
     address onReToken;
     PricingDenomination denomination;
-    PricingVector[10] vectors;
     uint8 vectorCount;
     bool disabled;
     bool exists;
@@ -70,9 +70,9 @@ struct Quoter {
 }
 
 struct FeeConfig {
+    bytes32 feeVaultId;
     uint64 feeConfigId;
     uint16 basisPoints;
-    bytes32 feeVaultId;
     bool enabled;
     bool exists;
 }
@@ -87,17 +87,17 @@ struct ConfigurableVault {
 
 struct OfferConfig {
     address tokenIn;
-    address tokenOut;
     OfferFlow flow;
     OfferDirection direction;
-    bytes32 quoterId;
-    bytes32 feeConfigId;
-    bytes32 proceedsVaultId;
-    bytes32 liquidityVaultId;
     uint8 tokenInDecimals;
     uint8 tokenOutDecimals;
     bool disabled;
     bool exists;
+    bytes32 quoterId;
+    bytes32 feeConfigId;
+    bytes32 proceedsVaultId;
+    bytes32 liquidityVaultId;
+    address tokenOut;
 }
 
 struct MakeOfferConfigParams {
@@ -112,10 +112,10 @@ struct MakeOfferConfigParams {
 
 struct FulfillmentRequest {
     bytes32 offerConfigId;
-    uint64 requestId;
-    address user;
     uint256 inputAmount;
     uint256 fulfilledInputAmount;
+    uint64 requestId;
+    address user;
     bool exists;
 }
 

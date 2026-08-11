@@ -14,10 +14,6 @@ import {
 library LibOnReStorage {
     /// @custom:storage-location erc7201:onre.storage.App
     struct AppStorage {
-        bool initialized;
-        bool isKilled;
-        address approver1;
-        address approver2;
         mapping(address onReToken => OnReTokenConfig config) onReTokenConfigs;
         mapping(bytes32 pricerId => Pricer pricer) pricers;
         mapping(bytes32 quoterId => Quoter quoter) quoters;
@@ -28,6 +24,10 @@ library LibOnReStorage {
         mapping(bytes32 requestId => FulfillmentRequest request) fulfillmentRequests;
         mapping(address onReToken => address[] accounts) excludedSupplyAccounts;
         mapping(address onReToken => mapping(address account => uint256 indexPlusOne)) excludedSupplyIndexPlusOne;
+        bool initialized;
+        bool isKilled;
+        address approver1;
+        address approver2;
     }
 
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;

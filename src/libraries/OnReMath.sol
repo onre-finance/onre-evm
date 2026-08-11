@@ -64,22 +64,23 @@ library OnReMath {
             return basePrice;
         }
 
-        uint256 dailyIncrement = _mulDivHalfUp(INT_SCALE, apr, APR_SCALE * 365);
-        uint256 dailyFactor = INT_SCALE + dailyIncrement;
-        uint256 fullDays = elapsedTime / SECONDS_IN_DAY;
+        uint256 dailyRate = _mulDivHalfUp(apr, INT_SCALE, 365 * APR_SCALE);
+        uint256 dailyFactor = INT_SCALE + dailyRate;
+        uint256 elapsedDays = elapsedTime / SECONDS_IN_DAY;
         uint256 remainingSeconds = elapsedTime % SECONDS_IN_DAY;
 
-        uint256 fullDayFactor = _powFixed(dailyFactor, fullDays, INT_SCALE);
-        uint256 fullDayPrice = _mulDivHalfUp(basePrice, fullDayFactor, INT_SCALE);
+        uint256 compoundFactor = _powFixed(dailyFactor, elapsedDays, INT_SCALE);
+        uint256 compoundedPrice = _mulDivHalfUp(basePrice, compoundFactor, INT_SCALE);
 
         if (remainingSeconds == 0) {
-            return fullDayPrice;
+            return compoundedPrice;
         }
 
-        uint256 nextDayPrice = _mulDivHalfUp(fullDayPrice, dailyFactor, INT_SCALE);
-        uint256 dailyDelta = nextDayPrice - fullDayPrice;
+        uint256 nextDayPrice = _mulDivHalfUp(compoundedPrice, dailyFactor, INT_SCALE);
+        uint256 dailyDelta = nextDayPrice - compoundedPrice;
         uint256 partialDayDelta = _mulDivHalfUp(dailyDelta, remainingSeconds, SECONDS_IN_DAY);
-        return fullDayPrice + partialDayDelta;
+
+        return compoundedPrice + partialDayDelta;
     }
 
     function calculateStepPrice(
@@ -101,9 +102,9 @@ library OnReMath {
             return 0;
         }
 
-        uint256 dailyIncrement = _mulDivHalfUp(INT_SCALE, apr, APR_SCALE * 365);
-        uint256 compounded = _powFixed(INT_SCALE + dailyIncrement, 365, INT_SCALE);
-        return _mulDivHalfUp(compounded - INT_SCALE, APR_SCALE, INT_SCALE);
+        uint256 dailyRate = _mulDivHalfUp(apr, INT_SCALE, 365 * APR_SCALE);
+        uint256 compoundFactor = _powFixed(INT_SCALE + dailyRate, 365, INT_SCALE);
+        return _mulDivHalfUp(compoundFactor - INT_SCALE, APR_SCALE, INT_SCALE);
     }
 
     function calculateTvl(uint256 circulatingSupply, uint256 nav, uint256 priceScale) internal pure returns (uint256) {

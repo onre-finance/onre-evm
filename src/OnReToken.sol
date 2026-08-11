@@ -1,19 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
+import {IOnReToken} from "./IOnReToken.sol";
 import {ZeroAddressError} from "./types/OnReAppErrors.sol";
 import {InitializeParams} from "./types/OnReTypes.sol";
-import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
+import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {
     IERC20 as ChainlinkIERC20
 } from "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {IOnReToken} from "./IOnReToken.sol";
 
 contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -85,16 +85,8 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         return _burners.values();
     }
 
-    function minterAt(uint256 index) external view returns (address) {
-        return _minters.at(index);
-    }
-
     function minterCount() external view returns (uint256) {
         return _minters.length();
-    }
-
-    function burnerAt(uint256 index) external view returns (address) {
-        return _burners.at(index);
     }
 
     function burnerCount() external view returns (uint256) {

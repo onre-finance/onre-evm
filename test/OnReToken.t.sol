@@ -52,13 +52,11 @@ contract OnReTokenTest is Test {
 
         assertEq(minters.length, 1);
         assertEq(minters[0], minter);
-        assertEq(token.minterAt(0), minter);
         assertEq(token.minterCount(), 1);
         assertTrue(token.isMinter(minter));
 
         assertEq(burners.length, 1);
         assertEq(burners[0], burner);
-        assertEq(token.burnerAt(0), burner);
         assertEq(token.burnerCount(), 1);
         assertTrue(token.isBurner(burner));
     }
@@ -148,8 +146,6 @@ contract OnReTokenTest is Test {
         assertFalse(token.isBurner(burner));
         assertEq(token.minterCount(), 2);
         assertEq(token.burnerCount(), 2);
-        assertEq(token.minterAt(0), user);
-        assertEq(token.burnerAt(0), user);
     }
 
     function test_CcipPoolStyleBurnMintFlow() public {

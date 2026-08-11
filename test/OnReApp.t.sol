@@ -247,6 +247,20 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         );
     }
 
+    function test_OfferReferenceUpdateRejectsWrongFlowQuoter() public {
+        vm.expectRevert(InvalidFlowQuoterError.selector);
+        app.updateOfferConfigReferences(
+            permissionedOfferId, navPermissionlessQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
+        );
+        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, navQuoterId);
+
+        vm.expectRevert(InvalidFlowQuoterError.selector);
+        app.updateOfferConfigReferences(
+            permissionlessOfferId, navQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
+        );
+        assertEq(app.getOfferConfig(permissionlessOfferId).quoterId, navPermissionlessQuoterId);
+    }
+
     function test_PricerOwnsVectorsAndDrivesMarketStats() public {
         assertEq(app.currentPrice(pricerId), 1e9);
         PricingVector memory vector = app.getPricingVector(pricerId, 0);

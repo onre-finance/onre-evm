@@ -5,6 +5,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     InvalidDecimalsError,
+    InvalidFlowQuoterError,
     InvalidOfferDirectionError,
     InvalidTokenError,
     LiquidityVaultRequiredError,
@@ -18,10 +19,12 @@ import {
     FeeConfig,
     MakeOfferConfigParams,
     OfferConfig,
-    OfferDirection
+    OfferDirection,
+    OfferFlow,
+    Quoter,
+    QuoterKind
 } from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
-import {LibOnReQuoter} from "./LibOnReQuoter.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
@@ -107,7 +110,8 @@ library LibOnReOfferConfig {
         bytes32 liquidityVaultId
     ) private {
         LibOnReValidation.requirePricer(OnReIds.usdPricerId(_onReToken(offer)));
-        LibOnReValidation.requireQuoter(quoterId);
+        Quoter storage quoter = LibOnReValidation.requireQuoter(quoterId);
+        _validateFlowQuoter(offer, quoter.kind);
         FeeConfig storage feeConfig = LibOnReValidation.requireFeeConfig(feeConfigId);
         LibOnReValidation.requireVaultKind(feeConfig.feeVaultId, ConfigurableVaultKind.Fee);
         LibOnReValidation.requireVaultKind(proceedsVaultId, ConfigurableVaultKind.Proceeds);
@@ -122,7 +126,18 @@ library LibOnReOfferConfig {
         offer.feeConfigId = feeConfigId;
         offer.proceedsVaultId = proceedsVaultId;
         offer.liquidityVaultId = liquidityVaultId;
-        LibOnReQuoter.validateFlowQuoter(offerConfigId, offer);
+    }
+
+    function _validateFlowQuoter(OfferConfig storage offer, QuoterKind kind) private view {
+        if (offer.flow == OfferFlow.Permissionless) {
+            if (kind != QuoterKind.NavPermissionless) revert InvalidFlowQuoterError();
+            return;
+        }
+
+        if (kind != QuoterKind.Nav) revert InvalidFlowQuoterError();
+        if (offer.flow == OfferFlow.Worker && offer.direction != OfferDirection.OnReToAsset) {
+            revert InvalidOfferDirectionError();
+        }
     }
 
     function _deriveDirection(address tokenIn, address tokenOut) private view returns (OfferDirection) {

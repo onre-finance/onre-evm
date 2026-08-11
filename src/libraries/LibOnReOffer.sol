@@ -5,7 +5,6 @@ import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     InvalidAmountError,
     InvalidApprovalError,
-    LiquidityVaultRequiredError,
     MinimumAmountOutNotMetError,
     TakeOfferDeadlineExpiredError,
     WorkerOfferRequiresFulfillmentRequestError
@@ -14,7 +13,6 @@ import {OfferExecuted} from "../types/OnReAppEvents.sol";
 import {IOnReToken} from "../IOnReToken.sol";
 import {
     ConfigurableVault,
-    ConfigurableVaultKind,
     ExecutionAccounting,
     FeeConfig,
     OfferConfig,
@@ -62,10 +60,10 @@ library LibOnReOffer {
         returns (ExecutionAccounting memory accounting)
     {
         OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
-        return previewExecution(offerConfigId, offer, grossInputAmount);
+        return previewExecution(offer, grossInputAmount);
     }
 
-    function previewExecution(bytes32 offerConfigId, OfferConfig storage offer, uint256 grossInputAmount)
+    function previewExecution(OfferConfig storage offer, uint256 grossInputAmount)
         internal
         view
         returns (ExecutionAccounting memory accounting)
@@ -75,7 +73,7 @@ library LibOnReOffer {
         uint256 feeAmount = LibOnReFeeConfig.calculateFee(grossInputAmount, feeConfig);
         uint256 netInputAmount = grossInputAmount - feeAmount;
         if (netInputAmount == 0) revert InvalidAmountError();
-        QuoteResult memory quoteResult = LibOnReQuoter.quote(offerConfigId, offer, netInputAmount);
+        QuoteResult memory quoteResult = LibOnReQuoter.quote(offer, netInputAmount);
 
         return ExecutionAccounting({
             price: quoteResult.price,
@@ -94,7 +92,7 @@ library LibOnReOffer {
         address recipient,
         uint256 grossInputAmount
     ) internal returns (ExecutionAccounting memory accounting) {
-        accounting = previewExecution(offerConfigId, offer, grossInputAmount);
+        accounting = previewExecution(offer, grossInputAmount);
         _settleCollectedInput(offerConfigId, offer, recipient, accounting);
     }
 
@@ -104,7 +102,7 @@ library LibOnReOffer {
         uint256 grossInputAmount,
         uint256 minimumAmountOut
     ) private returns (uint256 amountOut) {
-        ExecutionAccounting memory accounting = previewExecution(offerConfigId, offer, grossInputAmount);
+        ExecutionAccounting memory accounting = previewExecution(offer, grossInputAmount);
         if (accounting.amountOut < minimumAmountOut) {
             revert MinimumAmountOutNotMetError(minimumAmountOut, accounting.amountOut);
         }
@@ -125,7 +123,7 @@ library LibOnReOffer {
         if (offer.direction == OfferDirection.AssetToOnRe) {
             _settleAssetToOnRe(offer, recipient, accounting);
         } else {
-            _settleOnReToAsset(offerConfigId, offer, recipient, accounting);
+            _settleOnReToAsset(offer, recipient, accounting);
         }
 
         emit OfferExecuted(
@@ -153,15 +151,9 @@ library LibOnReOffer {
         LibOnReVault.transferExactTokenAmountFrom(offer.tokenOut, inventorySource, recipient, accounting.amountOut);
     }
 
-    function _settleOnReToAsset(
-        bytes32 offerConfigId,
-        OfferConfig storage offer,
-        address recipient,
-        ExecutionAccounting memory accounting
-    ) private {
-        if (offer.liquidityVaultId == bytes32(0)) {
-            revert LiquidityVaultRequiredError(offerConfigId);
-        }
+    function _settleOnReToAsset(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
+        private
+    {
         IOnReToken(offer.tokenIn).burn(accounting.netInputAmount);
         LibOnReVault.consumeLiquidity(offer.liquidityVaultId, offer.tokenOut, recipient, accounting.amountOut);
     }
@@ -173,7 +165,7 @@ library LibOnReOffer {
     {
         if (offer.liquidityVaultId == bytes32(0) || netInputAmount == 0) return 0;
         ConfigurableVault storage liquidityVault =
-            LibOnReValidation.requireVaultKind(offer.liquidityVaultId, ConfigurableVaultKind.Liquidity);
+            LibOnReStorage.appStorage().configurableVaults[offer.liquidityVaultId];
         if (liquidityVault.refillTargetBps == 0) return 0;
 
         address onReToken = _onReToken(offer);

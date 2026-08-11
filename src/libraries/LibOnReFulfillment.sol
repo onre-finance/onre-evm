@@ -10,7 +10,7 @@ import {
     UnauthorizedError
 } from "../types/OnReAppErrors.sol";
 import {FulfillmentRequestCancelled, FulfillmentRequestFilled, FulfillmentRequested} from "../types/OnReAppEvents.sol";
-import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferDirection, OfferFlow} from "../types/OnReTypes.sol";
+import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferFlow} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReOffer} from "./LibOnReOffer.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
@@ -25,7 +25,7 @@ library LibOnReFulfillment {
         returns (bytes32 fulfillmentRequestId)
     {
         OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
-        _requireWorkerOffer(offer);
+        _requireWorkerFlow(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
         fulfillmentRequestId = OnReIds.fulfillmentRequestId(offerConfigId, msg.sender, requestId);
@@ -68,7 +68,7 @@ library LibOnReFulfillment {
         LibOnReAccessControl.checkRole(LibOnReRoles.WORKER_ROLE);
         FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
         OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(request.offerConfigId);
-        _requireWorkerOffer(offer);
+        _requireWorkerFlow(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
         uint256 remainingAmount = request.inputAmount - request.fulfilledInputAmount;
@@ -102,9 +102,7 @@ library LibOnReFulfillment {
         return accounting.amountOut;
     }
 
-    function _requireWorkerOffer(OfferConfig storage offer) private view {
-        if (offer.flow != OfferFlow.Worker || offer.direction != OfferDirection.OnReToAsset) {
-            revert InvalidFlowQuoterError();
-        }
+    function _requireWorkerFlow(OfferConfig storage offer) private view {
+        if (offer.flow != OfferFlow.Worker) revert InvalidFlowQuoterError();
     }
 }

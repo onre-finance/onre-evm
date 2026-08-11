@@ -2,7 +2,7 @@
 pragma solidity 0.8.35;
 
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
-import {VectorIndexOutOfBoundsError} from "../types/OnReAppErrors.sol";
+import {InvalidQuoterKindError, QuoterNotFoundError, VectorIndexOutOfBoundsError} from "../types/OnReAppErrors.sol";
 import {
     ConfigurableVault,
     FeeConfig,
@@ -11,7 +11,9 @@ import {
     OnReTokenConfig,
     Pricer,
     PricingVector,
-    Quoter
+    PropRfqQuoterState,
+    Quoter,
+    QuoterKind
 } from "../types/OnReTypes.sol";
 
 /// @notice Read helpers shared by the view facet.
@@ -34,6 +36,15 @@ library LibOnReView {
 
     function _getQuoter(bytes32 quoterId) internal view returns (Quoter memory) {
         return LibOnReStorage._appStorage().quoters[quoterId];
+    }
+
+    function _getPropRfqQuoter(bytes32 quoterId) internal view returns (PropRfqQuoterState memory) {
+        Quoter storage quoter = LibOnReStorage._appStorage().quoters[quoterId];
+        if (!quoter.exists) revert QuoterNotFoundError(quoterId);
+        if (quoter.kind != QuoterKind.PropRfq) {
+            revert InvalidQuoterKindError(quoterId, uint8(QuoterKind.PropRfq), uint8(quoter.kind));
+        }
+        return LibOnReStorage._appStorage().propRfqQuoterStates[quoterId];
     }
 
     function _getFeeConfig(bytes32 feeConfigId) internal view returns (FeeConfig memory) {

@@ -14,9 +14,9 @@ The implemented scope intentionally contains:
 
 - one pricing denomination: `Usd`;
 - three offer flows: `Permissioned`, `Permissionless`, and `Worker`;
-- two stateless quoter kinds: `Nav` and `NavPermissionless`;
+- two stateless quoter kinds, `Nav` and `NavPermissionless`, plus the stateful
+  proprietary request-for-quote kind, `PropRfq` (Prop RFQ);
 - no Buffer state or execution;
-- no Prop AMM state or execution;
 - no separate redemption-offer configuration.
 
 ## Domain graph
@@ -41,6 +41,7 @@ flowchart TB
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
         Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>disabled"]
         NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>disabled"]
+        PropRfq["<b>Prop RFQ Quoter</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
     end
 
     subgraph Configuration["Reusable offer configuration"]
@@ -69,6 +70,7 @@ flowchart TB
     OfferConfig -.->|"OnRe token from pair derives USD Pricer"| Pricer
     OfferConfig -->|"quoterId"| Nav
     OfferConfig -->|"quoterId"| NavPermissionless
+    OfferConfig -->|"quoterId"| PropRfq
     OfferConfig -->|"feeConfigId"| FeeConfig
     OfferConfig -->|"proceedsVaultId"| ProceedsVault
     OfferConfig -->|"liquidityVaultId"| LiquidityVault
@@ -84,6 +86,7 @@ flowchart TB
     Roles -.->|"DEFAULT_ADMIN_ROLE"| Pricer
     Roles -.->|"DEFAULT_ADMIN_ROLE"| Nav
     Roles -.->|"DEFAULT_ADMIN_ROLE"| NavPermissionless
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| PropRfq
     Roles -.->|"DEFAULT_ADMIN_ROLE"| FeeConfig
     Roles -.->|"DEFAULT_ADMIN_ROLE"| OfferConfig
     Roles -.->|"DEFAULT_ADMIN_ROLE"| TokenConfig
@@ -111,9 +114,16 @@ FulfillmentRequest = hash("onre.fulfillment_request", offerConfigId, user, reque
 
 For Quoters, `kind` selects the behavior family and `instanceId` selects one
 independently configurable instance within that family. Multiple `Nav`,
-`NavPermissionless`, or future `PropAmm` instances can therefore coexist.
+`NavPermissionless`, or `PropRfq` instances can therefore coexist.
 Kind-specific settings are stored under the resulting `quoterId`; mutable
 settings are not included in the identity hash.
+
+A `PropRfq` proprietary request-for-quote instance is immutably bound to one
+asset and one OnRe token.
+Multiple instances may use the same pair while keeping independent curve
+configuration and rolling pressure. The asset-to-OnRe and OnRe-to-asset
+permissionless `OfferConfig`s may reference the same instance, which makes buys
+relieve the sell pressure accumulated by that instance.
 
 There is exactly one `OfferConfig` for a directed pair and flow. Permissioned
 and permissionless routes for the same pair therefore cannot silently share an
@@ -138,11 +148,14 @@ cannot be redirected independently.
 | --- | --- | --- | --- |
 | `Permissioned` | either | `Nav` | `takeOffer`; valid approver signature required |
 | `Permissionless` | either | `NavPermissionless` | `takeOffer`; approval fields must be empty |
+| `Permissionless` | either | pair-matching `PropRfq` | `takeOffer`; approval fields must be empty |
 | `Worker` | `OnReToAsset` | `Nav` | create, partially fulfill, or cancel a `FulfillmentRequest` |
 
-The two quoter kinds currently use the same NAV arithmetic but remain separate
+The two NAV quoter kinds use the same arithmetic but remain separate
 dispatch families so permissionless quoting can evolve without changing
-permissioned or worker behavior.
+permissioned or worker behavior. `PropRfq` uses the same NAV result for buys.
+For sells it applies the configured liquidity, pressure, curve, and cadence
+dampening after the NAV result.
 
 `takeOffer` loads the flow, direction, and Quoter from the selected
 `OfferConfig`, then derives the single USD Pricer from the route's OnRe token.
@@ -168,9 +181,41 @@ Every fee is charged in the input token:
 
 ```text
 percentageFee = ceil(grossInput * basisPoints / 10_000)
-fee           = percentageFee
+PropRfq sell fee = max(percentageFee, minimumSellHaircutOnRe)
 netInput      = grossInput - fee
 ```
+
+The Prop RFQ configuration stored per quoter instance is:
+
+- curve peg haircut in basis points;
+- curve exponent scaled by `10_000`;
+- sell cadence threshold and maximum cadence wave;
+- rolling epoch duration;
+- dynamic-wall sensitivity;
+- minimum OnRe input haircut for sells.
+
+Each instance also stores current sell value, current buy value, previous net
+sell value, current sell count, and epoch start. Successful buys add their net
+asset input to buy value. Successful sells add the raw pre-curve asset output
+and increment the sell count. State is updated before external token calls and
+the entire update rolls back if settlement fails.
+
+For a Prop RFQ sell, the raw NAV output is first checked against actual
+Liquidity-vault balance. The configured Liquidity vault's TVL refill target, if
+nonzero, caps the hard-wall reserve:
+
+```text
+hardWallReserve   = min(actualLiquidity, TVL * refillTargetBps / 10_000)
+effectivePressure = decayedPreviousNetSells + currentNetSells + rawSellOutput
+dynamicWall       = actualLiquidity / (1 + sensitivity * effectivePressure / actualLiquidity)
+effectiveLiquidity = min(dynamicWall, hardWallReserve)
+utilization       = rawSellOutput / effectiveLiquidity
+haircut           = max(pegHaircut * utilization^exponent, cadenceTarget)
+amountOut         = rawSellOutput * max(0, 1 - haircut)
+```
+
+All curve operations use integer fixed-point arithmetic. The fractional-power
+approximation and cadence vectors match the corresponding Solana implementation.
 
 For `AssetToOnRe`, the Diamond pulls the input asset, accounts the fee in the
 Fee vault, refills the configured Liquidity vault up to its TVL target, accounts
@@ -205,7 +250,8 @@ Cancellation returns only the unfilled input.
 - `diamondCut` routing cannot be removed, so an upgrade cannot accidentally
   delete the only upgrade entry point; replacement remains available.
 - `OnRePricerFacet` configures USD Pricers and embedded vectors.
-- `OnReQuoterFacet` configures quoter instances and exposes quote previews.
+- `OnReQuoterFacet` configures NAV and pair-bound Prop RFQ instances and exposes
+  quote previews.
 - `OnReOfferFacet` delegates FeeConfig policy to `LibOnReFeeConfig`,
   OfferConfig lifecycle to `LibOnReOfferConfig`, and runtime execution to
   `LibOnReOffer`.

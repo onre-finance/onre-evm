@@ -18,7 +18,8 @@ enum OfferDirection {
 
 enum QuoterKind {
     Nav,
-    NavPermissionless
+    NavPermissionless,
+    PropRfq
 }
 
 enum ConfigurableVaultKind {
@@ -67,6 +68,27 @@ struct Quoter {
     uint64 instanceId;
     bool disabled;
     bool exists;
+}
+
+struct PropRfqQuoterConfig {
+    uint16 curvePegHaircutBps;
+    uint32 curveExponentScaled;
+    uint32 cadenceThreshold;
+    uint32 cadenceWaveScaled;
+    uint64 epochDurationSeconds;
+    uint32 wallSensitivityScaled;
+    uint256 minimumSellHaircutOnRe;
+}
+
+struct PropRfqQuoterState {
+    address assetToken;
+    address onReToken;
+    PropRfqQuoterConfig config;
+    uint256 currentSellValueStable;
+    uint256 currentBuyValueStable;
+    uint256 previousNetSellValueStable;
+    uint32 currentSellTradeCount;
+    uint64 epochStart;
 }
 
 struct FeeConfig {

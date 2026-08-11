@@ -7,6 +7,8 @@ import {ApprovalMessage} from "../types/OnReTypes.sol";
 
 /// @notice EIP-712 approval verification for permissioned offer execution.
 library LibOnReApproval {
+    // Approval confirms temporary KYC eligibility, not a specific action.
+    // Replay until expiry is intentional: approved users may perform any permissioned action.
     bytes32 private constant APPROVAL_TYPEHASH = keccak256("ApprovalMessage(address user,uint64 expiry)");
     bytes32 private constant EIP712_DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");

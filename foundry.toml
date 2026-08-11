@@ -19,7 +19,5 @@ ignore = ["src/generated/*.sol", "templates/*.sol"]
 [lint]
 # `lib/` is excluded by default; tests use Foundry's test_ naming convention.
 ignore = ["test/**"]
-# CCIP appears in Chainlink-mandated interface names (IGetCCIPAdmin.getCCIPAdmin).
-mixed_case_exceptions = ["ERC", "URI", "CCIP"]
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

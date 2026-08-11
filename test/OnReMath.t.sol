@@ -177,6 +177,22 @@ contract OnReMathTest is Test {
         }
     }
 
+    function test_VectorPriceCalculation() public view {
+        uint256 apr = APR_SCALE / 10;
+        uint256 basePrice = 1.086e9;
+        uint256 elapsedTime = 150 days;
+
+        uint256 price = math.calculateVectorPrice(apr, basePrice, elapsedTime);
+
+        assertEq(price, 1.131553518e9);
+    }
+
+    function test_VectorPriceCalculationRoundsHalfUp() public view {
+        uint256 price = math.calculateVectorPrice(APR_SCALE / 10, PRICE_SCALE, 1 days);
+
+        assertEq(price, 1_000_273_973);
+    }
+
     function testFuzz_ApyFromAprIsZeroOrAtLeastApr(uint64 rawApr) public view {
         uint256 apr = bound(uint256(rawApr), 0, APR_SCALE);
 

@@ -64,21 +64,21 @@ library OnReMath {
             return basePrice;
         }
 
-        uint256 dailyIncrement = _mulDivRound(INT_SCALE, apr, APR_SCALE * 365);
+        uint256 dailyIncrement = _mulDivHalfUp(INT_SCALE, apr, APR_SCALE * 365);
         uint256 dailyFactor = INT_SCALE + dailyIncrement;
         uint256 fullDays = elapsedTime / SECONDS_IN_DAY;
         uint256 remainingSeconds = elapsedTime % SECONDS_IN_DAY;
 
         uint256 fullDayFactor = _powFixed(dailyFactor, fullDays, INT_SCALE);
-        uint256 fullDayPrice = _mulDivRound(basePrice, fullDayFactor, INT_SCALE);
+        uint256 fullDayPrice = _mulDivHalfUp(basePrice, fullDayFactor, INT_SCALE);
 
         if (remainingSeconds == 0) {
             return fullDayPrice;
         }
 
-        uint256 nextDayPrice = _mulDivRound(fullDayPrice, dailyFactor, INT_SCALE);
+        uint256 nextDayPrice = _mulDivHalfUp(fullDayPrice, dailyFactor, INT_SCALE);
         uint256 dailyDelta = nextDayPrice - fullDayPrice;
-        uint256 partialDayDelta = _mulDivRound(dailyDelta, remainingSeconds, SECONDS_IN_DAY);
+        uint256 partialDayDelta = _mulDivHalfUp(dailyDelta, remainingSeconds, SECONDS_IN_DAY);
         return fullDayPrice + partialDayDelta;
     }
 
@@ -101,9 +101,9 @@ library OnReMath {
             return 0;
         }
 
-        uint256 dailyIncrement = _mulDivRound(INT_SCALE, apr, APR_SCALE * 365);
+        uint256 dailyIncrement = _mulDivHalfUp(INT_SCALE, apr, APR_SCALE * 365);
         uint256 compounded = _powFixed(INT_SCALE + dailyIncrement, 365, INT_SCALE);
-        return _mulDivRound(compounded - INT_SCALE, APR_SCALE, INT_SCALE);
+        return _mulDivHalfUp(compounded - INT_SCALE, APR_SCALE, INT_SCALE);
     }
 
     function calculateTvl(uint256 circulatingSupply, uint256 nav, uint256 priceScale) internal pure returns (uint256) {
@@ -139,18 +139,18 @@ library OnReMath {
         uint256 acc = scale;
         while (exp > 0) {
             if ((exp & 1) == 1) {
-                acc = _mulDivRound(acc, base, scale);
+                acc = _mulDivHalfUp(acc, base, scale);
             }
             exp >>= 1;
             if (exp > 0) {
-                base = _mulDivRound(base, base, scale);
+                base = _mulDivHalfUp(base, base, scale);
             }
         }
 
         return acc;
     }
 
-    function _mulDivRound(uint256 a, uint256 b, uint256 denominator) private pure returns (uint256) {
+    function _mulDivHalfUp(uint256 a, uint256 b, uint256 denominator) private pure returns (uint256) {
         uint256 result = Math.mulDiv(a, b, denominator);
         uint256 remainder = mulmod(a, b, denominator);
         uint256 halfDenominator = denominator / 2 + denominator % 2;

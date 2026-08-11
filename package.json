@@ -15,13 +15,20 @@
     "query:mainnet": "gemforge query mainnet",
     "verify:testnet": "gemforge verify testnet",
     "verify:mainnet": "gemforge verify mainnet",
-    "devnet": "anvil"
+    "devnet": "anvil",
+    "test:integration": "bash scripts/test-gemforge-integration.sh"
   },
   "devDependencies": {
-    "dotenv": "^16.4.5",
-    "gemforge": "^2.18.0"
+    "dotenv": "^16.6.1",
+    "gemforge": "2.18.0"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.15.4",
+  "pnpm": {
+    "patchedDependencies": {
+      "gemforge@2.18.0": "patches/gemforge@2.18.0.patch"
+    }
   }
 }

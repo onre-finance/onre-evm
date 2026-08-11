@@ -41,6 +41,11 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         app = _deployDiamondApp(params);
     }
 
+    function test_ProxyRejectsZeroBootstrapUpgrader() public {
+        vm.expectRevert(DiamondProxy.BootstrapUpgraderIsZero.selector);
+        new DiamondProxy(address(0));
+    }
+
     function test_AtomicDeploymentInstallsStandardAndApplicationFacets() public view {
         IDiamondLoupe loupe = IDiamondLoupe(address(app));
         assertEq(loupe.facetAddresses().length, 11);

@@ -73,6 +73,13 @@ module.exports = {
       '0x52ef6b2c', // DiamondLoupeFacet.facetAddresses()
       '0xadfca15e', // DiamondLoupeFacet.facetFunctionSelectors()
       '0x01ffc9a7', // DiamondLoupeFacet.supportsInterface()
+      // OnReDiamondInit permanently advertises IAccessControl through ERC-165.
+      // Prevent an omitted facet from making Gemforge remove that interface.
+      '0x91d14854', // OnReAccessControlFacet.hasRole(bytes32,address)
+      '0x248a9ca3', // OnReAccessControlFacet.getRoleAdmin(bytes32)
+      '0x2f2ff15d', // OnReAccessControlFacet.grantRole(bytes32,address)
+      '0xd547741f', // OnReAccessControlFacet.revokeRole(bytes32,address)
+      '0x36568abe', // OnReAccessControlFacet.renounceRole(bytes32,address)
     ],
   },
   hooks: {
@@ -133,13 +140,13 @@ module.exports = {
       // CREATE3 keeps the diamond at the same address on every chain. Set
       // ONRE_CREATE3_SALT to reuse a known address; omit it and Gemforge
       // randomises the salt on a fresh deployment.
-      create3Salt: process.env.ONRE_CREATE3_SALT,
+      ...(process.env.ONRE_CREATE3_SALT ? { create3Salt: process.env.ONRE_CREATE3_SALT } : {}),
     },
     mainnet: {
       network: 'mainnet',
       wallet: 'deployer',
       initArgs: [initArgs()],
-      create3Salt: process.env.ONRE_CREATE3_SALT,
+      ...(process.env.ONRE_CREATE3_SALT ? { create3Salt: process.env.ONRE_CREATE3_SALT } : {}),
       upgrades: {
         // Upgrade authority is held by a multisig, not by a hot deployer key.
         // Gemforge prints the diamondCut() calldata instead of sending it.

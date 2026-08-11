@@ -1,0 +1,26 @@
+diff --git a/build/shared/diamond.js b/build/shared/diamond.js
+index aa42e83..bd8c6dc 100644
+--- a/build/shared/diamond.js
++++ b/build/shared/diamond.js
+@@ -115,7 +115,7 @@ async function generateDiamondCut(bytecodeFetcher, coreFacets, deployedFacets,
+                 }
+                 else {
+                     trace(`[Remove] method [${f}] pointing to facet ${liveFunctions[f]}`);
+-                    todo.remove[ZeroAddress] = todo.remove[liveFunctions[f]] || [];
++                    todo.remove[ZeroAddress] = todo.remove[ZeroAddress] || [];
+                     todo.remove[ZeroAddress].push(f);
+                 }
+             }
+diff --git a/src/shared/diamond.ts b/src/shared/diamond.ts
+index e96f447..2c22229 100644
+--- a/src/shared/diamond.ts
++++ b/src/shared/diamond.ts
+@@ -168,7 +168,7 @@ export const generateDiamondCut = async (
+           trace(`[Will not remove] method [${f}] pointing to facet ${liveFunctions[f]} (PROTECTED)`)
+         } else {
+           trace(`[Remove] method [${f}] pointing to facet ${liveFunctions[f]}`)
+-          todo.remove[ZeroAddress] = todo.remove[liveFunctions[f]] || []
++          todo.remove[ZeroAddress] = todo.remove[ZeroAddress] || []
+           todo.remove[ZeroAddress].push(f)
+         }
+       }

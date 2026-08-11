@@ -9,14 +9,14 @@ with the facet set.
 
 ```bash
 cd evm
-npm ci                       # installs gemforge
+pnpm install --frozen-lockfile
 cp .env.example .env         # fill in the values
 
-npx gemforge build           # regenerates src/generated, then runs forge build
+pnpm build                   # regenerates src/generated, then runs forge build
 forge test
 
 anvil &                      # in another shell
-npx gemforge deploy local
+pnpm deploy:local
 ```
 
 ## Commands
@@ -35,7 +35,7 @@ Targets are `local`, `testnet` (Sepolia) and `mainnet`, defined in
 
 `gemforge build` must run before `forge test`: the test helper deploys through
 `src/generated/DiamondProxy.sol` and `src/generated/LibDiamondHelper.sol`, which
-are generated and git-ignored. `npm test` does both in order.
+are generated and git-ignored. `pnpm test` does both in order.
 
 ## What a fresh deployment does
 
@@ -67,15 +67,18 @@ cuts. It redeploys only the facets that actually changed.
 Because `foundry.toml` sets `bytecode_hash = "none"` and `cbor_metadata = false`,
 compiled bytecode is deterministic — a comment-only edit produces no cut.
 
-`diamond.protectedMethods` in `gemforge.config.cjs` lists the `diamondCut` and
-loupe selectors, which are never removed. `LibDiamond` independently refuses to
+`diamond.protectedMethods` in `gemforge.config.cjs` lists the `diamondCut`,
+loupe, and standard `IAccessControl` selectors, which Gemforge will never
+remove. Protecting `IAccessControl` keeps the static ERC-165 declaration
+truthful if the access-control facet is accidentally omitted from a build;
+replacing that facet remains possible. `LibDiamond` independently refuses to
 remove the `diamondCut` selector on-chain.
 
 The initializer does **not** re-run on an upgrade. When a cut needs storage
 migration, pass one explicitly:
 
 ```bash
-npx gemforge deploy mainnet \
+pnpm exec gemforge deploy mainnet \
   --upgrade-init-contract MyMigration --upgrade-init-method migrate
 ```
 
@@ -93,7 +96,7 @@ Tx data: 0x1f931c1c...
 
 Submit that calldata to the diamond address from the multisig.
 
-To review before deploying anything, run `npx gemforge deploy mainnet --dry`
+To review before deploying anything, run `pnpm exec gemforge deploy mainnet --dry`
 first — it resolves and prints the cuts without broadcasting.
 
 ## Why the diamond library is our own

@@ -20,7 +20,7 @@ library LibDiamond {
     /// @custom:storage-location erc7201:onre.storage.Diamond
     struct DiamondStorage {
         mapping(bytes4 selector => FacetAddressAndPosition data) selectorToFacetAndPosition;
-        mapping(address facet => FacetFunctionSelectors data) facetFunctionSelectors;
+        mapping(address facet => FacetFunctionSelectors data) facetToFunctionSelectors;
         address[] facetAddresses;
         mapping(bytes4 interfaceId => bool supported) supportedInterfaces;
     }
@@ -76,10 +76,10 @@ library LibDiamond {
         }
 
         DiamondStorage storage ds = diamondStorage();
-        uint256 selectorPosition = ds.facetFunctionSelectors[facet].functionSelectors.length;
+        uint256 selectorPosition = ds.facetToFunctionSelectors[facet].functionSelectors.length;
         if (selectorPosition == 0) {
             _enforceHasContractCode(facet);
-            ds.facetFunctionSelectors[facet].facetAddressPosition = _toUint32(ds.facetAddresses.length);
+            ds.facetToFunctionSelectors[facet].facetAddressPosition = _toUint32(ds.facetAddresses.length);
             ds.facetAddresses.push(facet);
         }
 
@@ -89,7 +89,7 @@ library LibDiamond {
             if (ds.selectorToFacetAndPosition[selector].facetAddress != address(0)) {
                 revert FunctionAlreadyExists(selector);
             }
-            ds.facetFunctionSelectors[facet].functionSelectors.push(selector);
+            ds.facetToFunctionSelectors[facet].functionSelectors.push(selector);
             ds.selectorToFacetAndPosition[selector] =
                 FacetAddressAndPosition({facetAddress: facet, functionSelectorPosition: _toUint32(selectorPosition)});
             unchecked {
@@ -108,10 +108,10 @@ library LibDiamond {
         }
 
         DiamondStorage storage ds = diamondStorage();
-        uint256 selectorPosition = ds.facetFunctionSelectors[facet].functionSelectors.length;
+        uint256 selectorPosition = ds.facetToFunctionSelectors[facet].functionSelectors.length;
         if (selectorPosition == 0) {
             _enforceHasContractCode(facet);
-            ds.facetFunctionSelectors[facet].facetAddressPosition = _toUint32(ds.facetAddresses.length);
+            ds.facetToFunctionSelectors[facet].facetAddressPosition = _toUint32(ds.facetAddresses.length);
             ds.facetAddresses.push(facet);
         }
 
@@ -126,7 +126,7 @@ library LibDiamond {
                 revert FunctionAlreadyUsesFacet(selector, facet);
             }
             _removeFunction(oldFacet, selector);
-            ds.facetFunctionSelectors[facet].functionSelectors.push(selector);
+            ds.facetToFunctionSelectors[facet].functionSelectors.push(selector);
             ds.selectorToFacetAndPosition[selector] =
                 FacetAddressAndPosition({facetAddress: facet, functionSelectorPosition: _toUint32(selectorPosition)});
             unchecked {
@@ -169,7 +169,7 @@ library LibDiamond {
 
         DiamondStorage storage ds = diamondStorage();
         uint256 selectorPosition = ds.selectorToFacetAndPosition[selector].functionSelectorPosition;
-        bytes4[] storage facetSelectors = ds.facetFunctionSelectors[facet].functionSelectors;
+        bytes4[] storage facetSelectors = ds.facetToFunctionSelectors[facet].functionSelectors;
         uint256 lastSelectorPosition = facetSelectors.length - 1;
         if (selectorPosition != lastSelectorPosition) {
             bytes4 lastSelector = facetSelectors[lastSelectorPosition];
@@ -180,15 +180,15 @@ library LibDiamond {
         delete ds.selectorToFacetAndPosition[selector];
 
         if (lastSelectorPosition == 0) {
-            uint256 facetPosition = ds.facetFunctionSelectors[facet].facetAddressPosition;
+            uint256 facetPosition = ds.facetToFunctionSelectors[facet].facetAddressPosition;
             uint256 lastFacetPosition = ds.facetAddresses.length - 1;
             if (facetPosition != lastFacetPosition) {
                 address lastFacet = ds.facetAddresses[lastFacetPosition];
                 ds.facetAddresses[facetPosition] = lastFacet;
-                ds.facetFunctionSelectors[lastFacet].facetAddressPosition = _toUint32(facetPosition);
+                ds.facetToFunctionSelectors[lastFacet].facetAddressPosition = _toUint32(facetPosition);
             }
             ds.facetAddresses.pop();
-            delete ds.facetFunctionSelectors[facet].facetAddressPosition;
+            delete ds.facetToFunctionSelectors[facet].facetAddressPosition;
         }
     }
 

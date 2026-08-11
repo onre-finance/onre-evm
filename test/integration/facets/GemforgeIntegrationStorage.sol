@@ -9,9 +9,8 @@ library GemforgeIntegrationStorage {
     }
 
     function store() internal pure returns (Layout storage state) {
-        bytes32 location = STORAGE_LOCATION;
         assembly {
-            state.slot := location
+            state.slot := STORAGE_LOCATION
         }
     }
 }

@@ -40,9 +40,8 @@ library LibDiamond {
         0xe7a65135aebfc21c80a162a36674f54347f18e2d3a36aad28796c9ad8e262e00;
 
     function diamondStorage() internal pure returns (DiamondStorage storage ds) {
-        bytes32 location = DIAMOND_STORAGE_LOCATION;
         assembly ("memory-safe") {
-            ds.slot := location
+            ds.slot := DIAMOND_STORAGE_LOCATION
         }
     }
 

@@ -5,13 +5,13 @@ address used by token inventory multisigs, users, and integrations. Its fallback
 delegates each function selector to an installed facet.
 
 The offer domain is documented in
-[`docs/OFFER_ARCHITECTURE.md`](docs/OFFER_ARCHITECTURE.md), including the
+[`docs/OFFER_ARCHITECTURE.md`](OFFER_ARCHITECTURE.md), including the
 Mermaid graph, deterministic IDs, compatibility matrix, and settlement rules.
 
 The diamond core lives in `src/diamond/contracts/`. That `contracts/`
 subdirectory is not decoration: Gemforge resolves the diamond library it
 generates against, so the layout has to match what its templates import. See
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+[`docs/DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ## Facets
 
@@ -134,7 +134,7 @@ Deployments and upgrades run through [Gemforge](https://gemforge.xyz), driven by
 `gemforge deploy <target>` diffs the compiled facet ABIs against the on-chain
 loupe and applies exactly the cuts that differ. Full workflow, environment
 variables, and the multisig upgrade path:
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+[`docs/DEPLOYMENT.md`](DEPLOYMENT.md).
 
 Because cuts are derived from the facet ABIs, there is no selector manifest and
 no domain-interface layer to keep in sync. `src/generated/IDiamondProxy.sol` is

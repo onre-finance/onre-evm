@@ -32,8 +32,10 @@ library LibOnReAccessControl {
         0xc22d749a08533429f9f6342546255c4b448fe8fd084608530dff3c1a7e045100;
 
     function accessControlStorage() internal pure returns (AccessControlStorage storage s) {
+        bytes32 position = ACCESS_CONTROL_STORAGE_POSITION;
+        // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
-            s.slot := ACCESS_CONTROL_STORAGE_POSITION
+            s.slot := position
         }
     }
 

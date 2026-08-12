@@ -18,6 +18,7 @@ contract Diamond {
             revert FunctionNotFound(msg.sig);
         }
 
+        // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
             calldatacopy(0, 0, calldatasize())
             let result := delegatecall(gas(), facet, 0, calldatasize(), 0, 0)

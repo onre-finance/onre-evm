@@ -33,8 +33,10 @@ library LibOnReStorage {
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;
 
     function appStorage() internal pure returns (AppStorage storage s) {
+        bytes32 location = APP_STORAGE_LOCATION;
+        // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
-            s.slot := APP_STORAGE_LOCATION
+            s.slot := location
         }
     }
 }

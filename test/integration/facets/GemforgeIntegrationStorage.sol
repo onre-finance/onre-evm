@@ -9,8 +9,10 @@ library GemforgeIntegrationStorage {
     }
 
     function store() internal pure returns (Layout storage state) {
+        bytes32 location = STORAGE_LOCATION;
+        // solhint-disable-next-line no-inline-assembly
         assembly {
-            state.slot := STORAGE_LOCATION
+            state.slot := location
         }
     }
 }

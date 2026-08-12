@@ -86,7 +86,9 @@ module.exports = {
     preBuild: '',
     postBuild: '',
     preDeploy: '',
-    postDeploy: '',
+    // Deployment records are saved before this hook runs, so verification
+    // includes the proxy, core facets, application facets, and initializer.
+    postDeploy: 'bash hooks/verify-gemforge-deployment.sh',
   },
   wallets: {
     // Anvil's first default account.
@@ -112,8 +114,11 @@ module.exports = {
       rpcUrl: () => process.env.SEPOLIA_RPC_URL,
       contractVerification: {
         foundry: {
+          // Gemforge passes this to `forge verify-contract --verifier-api-key`.
           apiKey: () => process.env.ETHERSCAN_API_KEY,
-          apiUrl: 'https://api-sepolia.etherscan.io/api',
+          apiUrl: 'https://api.etherscan.io/v2/api?chainid=84532',
+          verifier: 'etherscan',
+          chainId: 84532,
         },
       },
     },
@@ -121,8 +126,11 @@ module.exports = {
       rpcUrl: () => process.env.MAINNET_RPC_URL,
       contractVerification: {
         foundry: {
+          // Gemforge passes this to `forge verify-contract --verifier-api-key`.
           apiKey: () => process.env.ETHERSCAN_API_KEY,
-          apiUrl: 'https://api.etherscan.io/api',
+          apiUrl: 'https://api.etherscan.io/v2/api?chainid=1',
+          verifier: 'etherscan',
+          chainId: 1,
         },
       },
     },
@@ -141,6 +149,11 @@ module.exports = {
       // ONRE_CREATE3_SALT to reuse a known address; omit it and Gemforge
       // randomises the salt on a fresh deployment.
       ...(process.env.ONRE_CREATE3_SALT ? { create3Salt: process.env.ONRE_CREATE3_SALT } : {}),
+      upgrades: {
+        // Upgrade authority is held by a multisig, not by a hot deployer key.
+        // Gemforge prints the diamondCut() calldata instead of sending it.
+        manualCut: true,
+      },
     },
     mainnet: {
       network: 'mainnet',

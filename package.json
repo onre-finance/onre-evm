@@ -20,7 +20,8 @@
   },
   "devDependencies": {
     "dotenv": "^16.6.1",
-    "gemforge": "2.18.0"
+    "gemforge": "2.18.0",
+    "solhint": "^6.2.3"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -89,15 +89,15 @@ struct OfferConfig {
     address tokenIn;
     OfferFlow flow;
     OfferDirection direction;
-    uint8 tokenInDecimals;
-    uint8 tokenOutDecimals;
-    bool disabled;
-    bool exists;
     bytes32 quoterId;
     bytes32 feeConfigId;
     bytes32 proceedsVaultId;
     bytes32 liquidityVaultId;
     address tokenOut;
+    uint8 tokenOutDecimals;
+    uint8 tokenInDecimals;
+    bool disabled;
+    bool exists;
 }
 
 struct MakeOfferConfigParams {

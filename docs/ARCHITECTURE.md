@@ -20,7 +20,10 @@ generates against, so the layout has to match what its templates import. See
 - `OnReAccessControlFacet` exposes the OpenZeppelin `IAccessControl` role API.
 - `OnReConfigFacet` implements token and application administration.
 - `OnRePricerFacet` implements the reusable USD Pricer and pricing vectors.
-- `OnReQuoterFacet` implements reusable `Nav` and `NavPermissionless` dispatch.
+- `OnReQuoterFacet` implements reusable `Nav`, `NavPermissionless`, and
+  pair-bound stateful `PropRfq` dispatch. Every quoter kind uses the same
+  creation entrypoint; kind-specific state is applied through typed
+  configuration functions.
 - `OnReOfferFacet` implements FeeConfigs, OfferConfigs, and flow-dispatched
   `takeOffer` execution.
 - `OnReFulfillmentFacet` implements escrowed worker requests and partial fills.
@@ -45,6 +48,9 @@ The internal libraries follow the same responsibility boundaries:
 - `LibOnReFeeConfig` owns reusable fee policy and fee calculation.
 - `LibOnReOfferConfig` owns pair-and-flow configuration and reference
   validation.
+- `LibOnRePropRfq` owns proprietary request-for-quote (Prop RFQ) configuration
+  validation, rolling buy/sell pressure, the dynamic liquidity wall, and
+  curve/cadence sell dampening.
 - `LibOnReApproval` owns EIP-712 approval verification.
 - `LibOnReOffer` owns direct and worker settlement against validated
   configuration.
@@ -113,8 +119,10 @@ Anyone may deposit or trigger withdrawal. Withdrawal can only send to the
 configured destination, amount zero means the full logical balance, and
 fee-on-transfer assets are rejected by exact balance accounting.
 
-Buffer and Prop AMM are out of scope. They have no facets, storage, enum
-variants, or deployment configuration in this implementation.
+Buffer remains out of scope. Prop RFQ is implemented as a quoter kind rather
+than a separate facet. Each instance is bound to one asset/OnRe pair, stores its
+own configuration and rolling pressure, and can be shared by both directed
+permissionless OfferConfigs for that pair.
 
 ## OnRe token inventory
 

@@ -118,6 +118,12 @@ independently configurable instance within that family. Multiple `Nav`,
 Kind-specific settings are stored under the resulting `quoterId`; mutable
 settings are not included in the identity hash.
 
+Every kind is first created through `createQuoter(kind, instanceId)`. Quoter
+kinds with additional state then expose a typed configuration function. For
+`PropRfq`, `configurePropRfqQuoter` binds the pair on its first call and updates
+only the mutable curve, cadence, and wall settings on later calls. An
+unconfigured `PropRfq` cannot be assigned to an OfferConfig.
+
 A `PropRfq` proprietary request-for-quote instance is immutably bound to one
 asset and one OnRe token.
 Multiple instances may use the same pair while keeping independent curve

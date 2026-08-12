@@ -2,11 +2,20 @@
 pragma solidity 0.8.35;
 
 import {LibOnReQuoter} from "../libraries/LibOnReQuoter.sol";
-import {QuoteResult, QuoterKind} from "../types/OnReTypes.sol";
+import {PropRfqQuoterConfig, QuoteResult, QuoterKind} from "../types/OnReTypes.sol";
 
 contract OnReQuoterFacet {
     function createQuoter(QuoterKind kind, uint64 quoterInstanceId) external returns (bytes32 quoterId) {
         quoterId = LibOnReQuoter._createQuoter(kind, quoterInstanceId);
+    }
+
+    function configurePropRfqQuoter(
+        bytes32 quoterId,
+        address assetToken,
+        address onReToken,
+        PropRfqQuoterConfig calldata config
+    ) external {
+        LibOnReQuoter.configurePropRfqQuoter(quoterId, assetToken, onReToken, config);
     }
 
     function setQuoterEnabled(bytes32 quoterId, bool enabled) external {

@@ -71,24 +71,24 @@ struct Quoter {
 }
 
 struct PropRfqQuoterConfig {
-    uint16 curvePegHaircutBps;
+    uint256 minimumSellHaircutOnRe;
+    uint64 epochDurationSeconds;
     uint32 curveExponentScaled;
     uint32 cadenceThreshold;
     uint32 cadenceWaveScaled;
-    uint64 epochDurationSeconds;
     uint32 wallSensitivityScaled;
-    uint256 minimumSellHaircutOnRe;
+    uint16 curvePegHaircutBps;
 }
 
 struct PropRfqQuoterState {
-    address assetToken;
-    address onReToken;
-    PropRfqQuoterConfig config;
     uint256 currentSellValueStable;
     uint256 currentBuyValueStable;
     uint256 previousNetSellValueStable;
-    uint32 currentSellTradeCount;
+    PropRfqQuoterConfig config;
+    address onReToken;
     uint64 epochStart;
+    uint32 currentSellTradeCount;
+    address assetToken;
 }
 
 struct FeeConfig {

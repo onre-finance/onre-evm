@@ -25,6 +25,7 @@ import {
     QuoterKind
 } from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
+import {LibOnRePropRfq} from "./LibOnRePropRfq.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
@@ -112,7 +113,7 @@ library LibOnReOfferConfig {
     ) private {
         LibOnReValidation._requirePricer(OnReIds._usdPricerId(_onReToken(offer)));
         Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
-        _validateFlowQuoter(offer, quoter.kind);
+        _validateFlowQuoter(offer, quoterId, quoter);
         FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
         LibOnReValidation._requireVaultKind(feeConfig.feeVaultId, ConfigurableVaultKind.Fee);
         LibOnReValidation._requireVaultKind(proceedsVaultId, ConfigurableVaultKind.Proceeds);
@@ -129,13 +130,20 @@ library LibOnReOfferConfig {
         offer.liquidityVaultId = liquidityVaultId;
     }
 
-    function _validateFlowQuoter(OfferConfig storage offer, QuoterKind kind) private view {
+    function _validateFlowQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter) private view {
         if (offer.flow == OfferFlow.Permissionless) {
-            if (kind != QuoterKind.NavPermissionless) revert InvalidFlowQuoterError();
+            if (quoter.kind != QuoterKind.NavPermissionless && quoter.kind != QuoterKind.PropRfq) {
+                revert InvalidFlowQuoterError();
+            }
+            if (quoter.kind == QuoterKind.PropRfq) {
+                LibOnRePropRfq._validatePair(
+                    quoterId, LibOnReStorage._appStorage().propRfqQuoterStates[quoterId], offer
+                );
+            }
             return;
         }
 
-        if (kind != QuoterKind.Nav) revert InvalidFlowQuoterError();
+        if (quoter.kind != QuoterKind.Nav) revert InvalidFlowQuoterError();
         if (offer.flow == OfferFlow.Worker && offer.direction != OfferDirection.OnReToAsset) {
             revert InvalidOfferDirectionError();
         }

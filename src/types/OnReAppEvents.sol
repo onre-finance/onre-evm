@@ -22,6 +22,18 @@ event PricerEnabledSet(bytes32 indexed pricerId, bool enabled);
 
 event QuoterCreated(bytes32 indexed quoterId, QuoterKind indexed kind, uint64 indexed instanceId);
 event QuoterEnabledSet(bytes32 indexed quoterId, bool enabled);
+event PropRfqQuoterConfigured(
+    bytes32 indexed quoterId,
+    address indexed assetToken,
+    address indexed onReToken,
+    uint16 curvePegHaircutBps,
+    uint32 curveExponentScaled,
+    uint32 cadenceThreshold,
+    uint32 cadenceWaveScaled,
+    uint64 epochDurationSeconds,
+    uint32 wallSensitivityScaled,
+    uint256 minimumSellHaircutOnRe
+);
 
 event FeeConfigCreated(bytes32 indexed feeConfigId, uint64 indexed instanceId, uint16 basisPoints, bytes32 feeVaultId);
 event FeeConfigUpdated(bytes32 indexed feeConfigId, uint16 basisPoints, bytes32 feeVaultId);

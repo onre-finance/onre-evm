@@ -8,7 +8,7 @@ import {
     InvalidAmountError,
     InvalidBasisPointsError,
     InvalidPropRfqPairError,
-    OfferConfigNotFoundError
+    PropRfqConfigurationRequiredError
 } from "../types/OnReAppErrors.sol";
 import {
     ConfigurableVault,
@@ -61,12 +61,10 @@ library LibOnRePropRfq {
         }
     }
 
-    function configure(PropRfqQuoterState storage state, PropRfqQuoterConfig memory config) internal {
-        validateConfig(config);
-        state.config = config;
-    }
-
     function validatePair(bytes32 quoterId, PropRfqQuoterState storage state, OfferConfig storage offer) internal view {
+        if (state.assetToken == address(0) || state.onReToken == address(0)) {
+            revert PropRfqConfigurationRequiredError();
+        }
         bool isBuy = offer.tokenIn == state.assetToken && offer.tokenOut == state.onReToken;
         bool isSell = offer.tokenIn == state.onReToken && offer.tokenOut == state.assetToken;
         if (!isBuy && !isSell) {
@@ -87,14 +85,13 @@ library LibOnRePropRfq {
         return minimumFee;
     }
 
-    function quoteSell(
-        bytes32 offerConfigId,
-        PropRfqQuoterState storage state,
-        OfferConfig storage offer,
-        uint256 rawAmountOut
-    ) internal view returns (uint256) {
-        uint256 actualLiquidity = LibOnReStorage.appStorage()
-        .configurableVaultBalances[offer.liquidityVaultId][offer.tokenOut];
+    function quoteSell(PropRfqQuoterState storage state, OfferConfig storage offer, uint256 rawAmountOut)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 actualLiquidity =
+            LibOnReStorage.appStorage().configurableVaultBalances[offer.liquidityVaultId][offer.tokenOut];
         if (rawAmountOut > actualLiquidity) {
             revert InsufficientLiquidityError(offer.liquidityVaultId, offer.tokenOut, actualLiquidity, rawAmountOut);
         }
@@ -118,9 +115,6 @@ library LibOnRePropRfq {
         uint256 haircut = baseHaircut > cadenceTarget ? baseHaircut : cadenceTarget;
         uint256 liquidityFactor = haircut >= HARD_WALL_SCALE ? 0 : HARD_WALL_SCALE - haircut;
 
-        // Keep the route identifier live in this branch so future refactors cannot
-        // silently detach hard-wall failures from the selected offer.
-        if (offerConfigId == bytes32(0)) revert OfferConfigNotFoundError(offerConfigId);
         return Math.mulDiv(rawAmountOut, liquidityFactor, HARD_WALL_SCALE);
     }
 
@@ -132,7 +126,7 @@ library LibOnRePropRfq {
     function recordSell(PropRfqQuoterState storage state, uint256 sellValueStable) internal {
         _rollVolumeTracker(state, block.timestamp);
         state.currentSellValueStable += sellValueStable;
-        state.currentSellTradeCount += 1;
+        ++state.currentSellTradeCount;
     }
 
     function _hardWallReserve(PropRfqQuoterState storage state, OfferConfig storage offer, uint256 actualLiquidity)
@@ -314,7 +308,7 @@ library LibOnRePropRfq {
         int256 fractionalPart = log2ValueQ - integerPart * q;
         if (fractionalPart < 0) {
             fractionalPart += q;
-            integerPart -= 1;
+            --integerPart;
         }
 
         // The normalization above guarantees fractionalPart is in [0, Q).

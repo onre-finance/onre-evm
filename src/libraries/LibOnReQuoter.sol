@@ -4,11 +4,13 @@ pragma solidity 0.8.35;
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     InvalidAmountError,
+    InvalidOfferDirectionError,
     InvalidPropRfqPairError,
     InvalidQuoterKindError,
     InvalidTokenError,
     NoChangeError,
     QuoterAlreadyExistsError,
+    UnsupportedQuoterKindError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
 import {PropRfqQuoterConfigured, QuoterCreated, QuoterEnabledSet} from "../types/OnReAppEvents.sol";
@@ -85,42 +87,41 @@ library LibOnReQuoter {
         emit QuoterEnabledSet(quoterId, enabled);
     }
 
-    function _quote(OfferConfig storage offer, uint256 netInputAmount)
-        internal
-        view
-        returns (QuoteResult memory result)
-    {
+    function _quote(OfferConfig storage offer, uint256 netInputAmount) internal view returns (QuoteResult memory) {
         Quoter storage quoter = LibOnReValidation._requireExecutableQuoter(offer.quoterId);
-
-        address onReToken = offer.direction == OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
+        QuoterKind kind = quoter.kind;
+        address onReToken = LibOnReValidation._offerOnReToken(offer);
         uint256 price = LibOnRePricer._currentPrice(OnReIds._usdPricerId(onReToken));
-        uint256 amountOut;
-        if (quoter.kind == QuoterKind.Nav) {
-            amountOut = _quoteNav(offer, netInputAmount, price);
-        } else if (quoter.kind == QuoterKind.NavPermissionless) {
-            amountOut = _quoteNavPermissionless(offer, netInputAmount, price);
-        } else {
-            uint256 rawAmountOut = _quoteByDirection(offer, netInputAmount, price);
-            amountOut = offer.direction == OfferDirection.OnReToAsset
-                ? LibOnRePropRfq._quoteSell(
-                    LibOnReStorage._appStorage().propRfqQuoterStates[offer.quoterId], offer, rawAmountOut
-                )
-                : rawAmountOut;
+
+        if (kind == QuoterKind.Nav) {
+            return _quoteNav(offer, netInputAmount, price);
         }
-        if (amountOut == 0) revert InvalidAmountError();
-        result = QuoteResult({price: price, amountOut: amountOut});
+        if (kind == QuoterKind.NavPermissionless) {
+            return _quoteNavPermissionless(offer, netInputAmount, price);
+        }
+        if (kind == QuoterKind.PropRfq) {
+            return _quotePropRfq(offer, netInputAmount, price);
+        }
+
+        revert UnsupportedQuoterKindError(offer.quoterId, uint8(kind));
     }
 
     function _recordExecution(OfferConfig storage offer, uint256 netInputAmount, uint256 price) internal {
         Quoter storage quoter = LibOnReStorage._appStorage().quoters[offer.quoterId];
-        if (quoter.kind != QuoterKind.PropRfq) return;
+        QuoterKind kind = quoter.kind;
+        if (kind == QuoterKind.Nav || kind == QuoterKind.NavPermissionless) return;
+        if (kind != QuoterKind.PropRfq) revert UnsupportedQuoterKindError(offer.quoterId, uint8(kind));
 
         PropRfqQuoterState storage state = LibOnReStorage._appStorage().propRfqQuoterStates[offer.quoterId];
         if (offer.direction == OfferDirection.AssetToOnRe) {
             LibOnRePropRfq._recordBuy(state, netInputAmount);
-        } else {
-            LibOnRePropRfq._recordSell(state, _quoteByDirection(offer, netInputAmount, price));
+            return;
         }
+        if (offer.direction == OfferDirection.OnReToAsset) {
+            LibOnRePropRfq._recordSell(state, _quoteByDirection(offer, netInputAmount, price));
+            return;
+        }
+        revert InvalidOfferDirectionError();
     }
 
     function _emitPropRfqConfigured(bytes32 quoterId, PropRfqQuoterState storage state) private {
@@ -141,18 +142,40 @@ library LibOnReQuoter {
     function _quoteNav(OfferConfig storage offer, uint256 netInputAmount, uint256 price)
         private
         view
-        returns (uint256)
+        returns (QuoteResult memory)
     {
-        return _quoteByDirection(offer, netInputAmount, price);
+        uint256 amountOut = _quoteByDirection(offer, netInputAmount, price);
+        return _quoteResult(price, amountOut);
     }
 
     function _quoteNavPermissionless(OfferConfig storage offer, uint256 netInputAmount, uint256 price)
         private
         view
-        returns (uint256)
+        returns (QuoteResult memory)
     {
         // Kept as a distinct dispatch branch so permissionless policy can evolve independently.
-        return _quoteByDirection(offer, netInputAmount, price);
+        uint256 amountOut = _quoteByDirection(offer, netInputAmount, price);
+        return _quoteResult(price, amountOut);
+    }
+
+    function _quotePropRfq(OfferConfig storage offer, uint256 netInputAmount, uint256 price)
+        private
+        view
+        returns (QuoteResult memory)
+    {
+        uint256 rawAmountOut = _quoteByDirection(offer, netInputAmount, price);
+        if (offer.direction == OfferDirection.AssetToOnRe) return _quoteResult(price, rawAmountOut);
+        if (offer.direction == OfferDirection.OnReToAsset) {
+            PropRfqQuoterState storage state = LibOnReStorage._appStorage().propRfqQuoterStates[offer.quoterId];
+            uint256 amountOut = LibOnRePropRfq._quoteSell(state, offer, rawAmountOut);
+            return _quoteResult(price, amountOut);
+        }
+        revert InvalidOfferDirectionError();
+    }
+
+    function _quoteResult(uint256 price, uint256 amountOut) private pure returns (QuoteResult memory) {
+        if (amountOut == 0) revert InvalidAmountError();
+        return QuoteResult({price: price, amountOut: amountOut});
     }
 
     function _quoteByDirection(OfferConfig storage offer, uint256 netInputAmount, uint256 price)
@@ -164,8 +187,11 @@ library LibOnReQuoter {
             return
                 OnReMath._calculateTokenOutAmount(netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals);
         }
-        return OnReMath._calculateRedemptionAssetOutAmount(
-            netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals
-        );
+        if (offer.direction == OfferDirection.OnReToAsset) {
+            return OnReMath._calculateRedemptionAssetOutAmount(
+                netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals
+            );
+        }
+        revert InvalidOfferDirectionError();
     }
 }

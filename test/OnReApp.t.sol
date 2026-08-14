@@ -227,8 +227,8 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.configurePropRfqQuoter(firstId, address(usd), address(onReToken), firstConfig);
         app.configurePropRfqQuoter(secondId, address(usd), address(onReToken), secondConfig);
 
-        assertEq(firstId, OnReIds.quoterId(QuoterKind.PropRfq, 0));
-        assertEq(secondId, OnReIds.quoterId(QuoterKind.PropRfq, 1));
+        assertEq(firstId, OnReIds._quoterId(QuoterKind.PropRfq, 0));
+        assertEq(secondId, OnReIds._quoterId(QuoterKind.PropRfq, 1));
         assertNotEq(firstId, secondId);
 
         PropRfqQuoterState memory first = app.getPropRfqQuoter(firstId);
@@ -269,7 +269,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
     function test_PropRfqQuoterRequiresDedicatedConfigurationAndValidPairTokens() public {
         bytes32 propRfqId = app.createQuoter(QuoterKind.PropRfq, 0);
-        assertEq(propRfqId, OnReIds.quoterId(QuoterKind.PropRfq, 0));
+        assertEq(propRfqId, OnReIds._quoterId(QuoterKind.PropRfq, 0));
         assertTrue(app.getQuoter(propRfqId).exists);
         assertEq(app.getPropRfqQuoter(propRfqId).assetToken, address(0));
 
@@ -403,7 +403,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         MockUsd alternativeUsd = new MockUsd();
         bytes32 expectedOfferId =
-            OnReIds.offerConfigId(address(alternativeUsd), address(onReToken), OfferFlow.Permissionless);
+            OnReIds._offerConfigId(address(alternativeUsd), address(onReToken), OfferFlow.Permissionless);
         vm.expectRevert(
             abi.encodeWithSelector(
                 InvalidPropRfqPairError.selector, propRfqId, address(alternativeUsd), address(onReToken)
@@ -918,7 +918,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     function test_FeeConfigMinimumAppendPreservesMainStorageLayout() public {
         uint64 legacyInstanceId = 77;
         uint16 legacyBasisPoints = 250;
-        bytes32 legacyFeeConfigId = OnReIds.feeConfigId(legacyInstanceId);
+        bytes32 legacyFeeConfigId = OnReIds._feeConfigId(legacyInstanceId);
         bytes32 feeConfigsMappingSlot = bytes32(uint256(APP_STORAGE_LOCATION) + 3);
         bytes32 legacyFeeConfigSlot = keccak256(abi.encode(legacyFeeConfigId, feeConfigsMappingSlot));
         uint256 packedMainFields =

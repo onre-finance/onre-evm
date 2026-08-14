@@ -8,6 +8,7 @@ import {
     FeeConfigNotFoundError,
     FulfillmentRequestNotFoundError,
     InvalidConfigurableVaultKindError,
+    InvalidOfferDirectionError,
     InvalidTokenError,
     KilledError,
     OfferConfigDisabledError,
@@ -112,11 +113,15 @@ library LibOnReValidation {
         }
         offerConfig = _requireOfferConfig(offerConfigId);
         if (offerConfig.disabled) revert OfferConfigDisabledError(offerConfigId);
-        address onReToken =
-            offerConfig.direction == OfferDirection.AssetToOnRe ? offerConfig.tokenOut : offerConfig.tokenIn;
-        _requireExecutablePricer(OnReIds._usdPricerId(onReToken));
+        _requireExecutablePricer(OnReIds._usdPricerId(_offerOnReToken(offerConfig)));
         _requireExecutableQuoter(offerConfig.quoterId);
         _requireExecutableFeeConfig(offerConfig.feeConfigId);
+    }
+
+    function _offerOnReToken(OfferConfig storage offerConfig) internal view returns (address) {
+        if (offerConfig.direction == OfferDirection.AssetToOnRe) return offerConfig.tokenOut;
+        if (offerConfig.direction == OfferDirection.OnReToAsset) return offerConfig.tokenIn;
+        revert InvalidOfferDirectionError();
     }
 
     function _requireFulfillmentRequest(bytes32 fulfillmentRequestId)

@@ -11,6 +11,7 @@ import {
     LiquidityVaultRequiredError,
     NoChangeError,
     OfferConfigAlreadyExistsError,
+    UnsupportedOfferFlowError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
 import {OfferConfigCreated, OfferConfigEnabledSet, OfferConfigReferencesUpdated} from "../types/OnReAppEvents.sol";
@@ -111,7 +112,7 @@ library LibOnReOfferConfig {
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) private {
-        LibOnReValidation._requirePricer(OnReIds._usdPricerId(_onReToken(offer)));
+        LibOnReValidation._requirePricer(OnReIds._usdPricerId(LibOnReValidation._offerOnReToken(offer)));
         Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
         _validateFlowQuoter(offer, quoterId, quoter);
         FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
@@ -131,22 +132,40 @@ library LibOnReOfferConfig {
     }
 
     function _validateFlowQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter) private view {
-        if (offer.flow == OfferFlow.Permissionless) {
-            if (quoter.kind != QuoterKind.NavPermissionless && quoter.kind != QuoterKind.PropRfq) {
-                revert InvalidFlowQuoterError();
-            }
-            if (quoter.kind == QuoterKind.PropRfq) {
-                LibOnRePropRfq._validatePair(
-                    quoterId, LibOnReStorage._appStorage().propRfqQuoterStates[quoterId], offer
-                );
-            }
+        if (offer.flow == OfferFlow.Permissioned) {
+            _validateNavQuoter(quoter);
             return;
         }
-
-        if (quoter.kind != QuoterKind.Nav) revert InvalidFlowQuoterError();
-        if (offer.flow == OfferFlow.Worker && offer.direction != OfferDirection.OnReToAsset) {
-            revert InvalidOfferDirectionError();
+        if (offer.flow == OfferFlow.Permissionless) {
+            _validatePermissionlessQuoter(offer, quoterId, quoter);
+            return;
         }
+        if (offer.flow == OfferFlow.Worker) {
+            _validateWorkerQuoter(offer, quoter);
+            return;
+        }
+        revert UnsupportedOfferFlowError(uint8(offer.flow));
+    }
+
+    function _validateNavQuoter(Quoter storage quoter) private view {
+        if (quoter.kind != QuoterKind.Nav) revert InvalidFlowQuoterError();
+    }
+
+    function _validatePermissionlessQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter)
+        private
+        view
+    {
+        if (quoter.kind == QuoterKind.NavPermissionless) return;
+        if (quoter.kind == QuoterKind.PropRfq) {
+            LibOnRePropRfq._validatePair(quoterId, LibOnReStorage._appStorage().propRfqQuoterStates[quoterId], offer);
+            return;
+        }
+        revert InvalidFlowQuoterError();
+    }
+
+    function _validateWorkerQuoter(OfferConfig storage offer, Quoter storage quoter) private view {
+        _validateNavQuoter(quoter);
+        if (offer.direction != OfferDirection.OnReToAsset) revert InvalidOfferDirectionError();
     }
 
     function _deriveDirection(address tokenIn, address tokenOut) private view returns (OfferDirection) {
@@ -156,9 +175,5 @@ library LibOnReOfferConfig {
         address onReToken = inputIsOnRe ? tokenIn : tokenOut;
         LibOnReValidation._requireEnabledOnReToken(onReToken);
         return inputIsOnRe ? OfferDirection.OnReToAsset : OfferDirection.AssetToOnRe;
-    }
-
-    function _onReToken(OfferConfig storage offer) private view returns (address) {
-        return offer.direction == OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
     }
 }

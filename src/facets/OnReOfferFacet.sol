@@ -13,8 +13,7 @@ contract OnReOfferFacet {
         uint256 minimumFeeAmount,
         bytes32 feeVaultId
     ) external returns (bytes32 feeConfigId) {
-        feeConfigId =
-            LibOnReFeeConfig._createFeeConfig(feeConfigInstanceId, basisPoints, minimumFeeAmount, feeVaultId);
+        feeConfigId = LibOnReFeeConfig._createFeeConfig(feeConfigInstanceId, basisPoints, minimumFeeAmount, feeVaultId);
     }
 
     function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, uint256 minimumFeeAmount, bytes32 feeVaultId)

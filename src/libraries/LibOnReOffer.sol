@@ -5,8 +5,10 @@ import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     InvalidAmountError,
     InvalidApprovalError,
+    InvalidOfferDirectionError,
     MinimumAmountOutNotMetError,
     TakeOfferDeadlineExpiredError,
+    UnsupportedOfferFlowError,
     WorkerOfferRequiresFulfillmentRequestError
 } from "../types/OnReAppErrors.sol";
 import {OfferExecuted} from "../types/OnReAppEvents.sol";
@@ -39,17 +41,7 @@ library LibOnReOffer {
             revert TakeOfferDeadlineExpiredError(params.deadline);
         }
 
-        if (offer.flow == OfferFlow.Permissioned) {
-            if (!LibOnReApproval._isValidForUser(msg.sender, params.approval, params.signature)) {
-                revert InvalidApprovalError();
-            }
-        } else if (offer.flow == OfferFlow.Permissionless) {
-            if (params.approval.user != address(0) || params.approval.expiry != 0 || params.signature.length != 0) {
-                revert InvalidApprovalError();
-            }
-        } else {
-            revert WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
-        }
+        _validateTakeOfferFlow(params, offer.flow);
 
         amountOut =
             _executeCollectedFromUser(params.offerConfigId, offer, params.grossInputAmount, params.minimumAmountOut);
@@ -125,8 +117,10 @@ library LibOnReOffer {
 
         if (offer.direction == OfferDirection.AssetToOnRe) {
             _settleAssetToOnRe(offer, recipient, accounting);
-        } else {
+        } else if (offer.direction == OfferDirection.OnReToAsset) {
             _settleOnReToAsset(offer, recipient, accounting);
+        } else {
+            revert InvalidOfferDirectionError();
         }
 
         emit OfferExecuted(
@@ -171,7 +165,7 @@ library LibOnReOffer {
             LibOnReStorage._appStorage().configurableVaults[offer.liquidityVaultId];
         if (liquidityVault.refillTargetBps == 0) return 0;
 
-        address onReToken = _onReToken(offer);
+        address onReToken = LibOnReValidation._offerOnReToken(offer);
         uint256 tvl = LibOnReMarketStats._currentTvl(onReToken);
         return OnReMath._calculateRedemptionVaultRefillAmount(
             tvl,
@@ -184,7 +178,20 @@ library LibOnReOffer {
         );
     }
 
-    function _onReToken(OfferConfig storage offer) private view returns (address) {
-        return offer.direction == OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
+    function _validateTakeOfferFlow(TakeOfferParams calldata params, OfferFlow flow) private view {
+        if (flow == OfferFlow.Permissioned) {
+            if (!LibOnReApproval._isValidForUser(msg.sender, params.approval, params.signature)) {
+                revert InvalidApprovalError();
+            }
+            return;
+        }
+        if (flow == OfferFlow.Permissionless) {
+            if (params.approval.user != address(0) || params.approval.expiry != 0 || params.signature.length != 0) {
+                revert InvalidApprovalError();
+            }
+            return;
+        }
+        if (flow == OfferFlow.Worker) revert WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
+        revert UnsupportedOfferFlowError(uint8(flow));
     }
 }

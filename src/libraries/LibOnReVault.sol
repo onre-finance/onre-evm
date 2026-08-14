@@ -15,6 +15,7 @@ import {
     KilledError,
     MissingConfigurableVaultDestinationError,
     NoChangeError,
+    UnsupportedConfigurableVaultKindError,
     ZeroAddressError,
     ZeroBalanceError
 } from "../types/OnReAppErrors.sol";
@@ -88,6 +89,8 @@ library LibOnReVault {
         ConfigurableVault storage vault = LibOnReValidation._requireConfigurableVault(vaultId);
         if (vault.kind == ConfigurableVaultKind.Liquidity) {
             LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        } else if (vault.kind != ConfigurableVaultKind.Fee && vault.kind != ConfigurableVaultKind.Proceeds) {
+            revert UnsupportedConfigurableVaultKindError(uint8(vault.kind));
         }
         address destination = vault.withdrawalDestination;
         if (destination == address(0)) {
@@ -154,9 +157,12 @@ library LibOnReVault {
 
     function _validateRefillTarget(ConfigurableVaultKind kind, uint16 refillTargetBps) private pure {
         if (refillTargetBps > MAX_BASIS_POINTS) revert InvalidBasisPointsError();
-        if (kind != ConfigurableVaultKind.Liquidity && refillTargetBps != 0) {
-            revert InvalidBasisPointsError();
+        if (kind == ConfigurableVaultKind.Liquidity) return;
+        if (kind == ConfigurableVaultKind.Fee || kind == ConfigurableVaultKind.Proceeds) {
+            if (refillTargetBps != 0) revert InvalidBasisPointsError();
+            return;
         }
+        revert UnsupportedConfigurableVaultKindError(uint8(kind));
     }
 
     function _requireExactBalanceDeltas(

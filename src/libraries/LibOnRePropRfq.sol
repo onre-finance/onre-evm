@@ -66,7 +66,7 @@ library LibOnRePropRfq {
         returns (uint256)
     {
         uint256 actualLiquidity =
-            LibOnReStorage.appStorage().configurableVaultBalances[offer.liquidityVaultId][offer.tokenOut];
+            LibOnReStorage._appStorage().configurableVaultBalances[offer.liquidityVaultId][offer.tokenOut];
         if (rawAmountOut > actualLiquidity) {
             revert InsufficientLiquidityError(offer.liquidityVaultId, offer.tokenOut, actualLiquidity, rawAmountOut);
         }
@@ -110,11 +110,11 @@ library LibOnRePropRfq {
         view
         returns (uint256)
     {
-        ConfigurableVault storage vault = LibOnReStorage.appStorage().configurableVaults[offer.liquidityVaultId];
+        ConfigurableVault storage vault = LibOnReStorage._appStorage().configurableVaults[offer.liquidityVaultId];
         if (vault.refillTargetBps == 0) return actualLiquidity;
 
-        uint256 tvl = LibOnReMarketStats.currentTvl(state.onReToken);
-        uint8 onReDecimals = LibOnReStorage.appStorage().onReTokenConfigs[state.onReToken].decimals;
+        uint256 tvl = LibOnReMarketStats._currentTvl(state.onReToken);
+        uint8 onReDecimals = LibOnReStorage._appStorage().onReTokenConfigs[state.onReToken].decimals;
         uint256 targetReserve = Math.mulDiv(
             tvl, uint256(vault.refillTargetBps) * 10 ** offer.tokenOutDecimals, MAX_BASIS_POINTS * 10 ** onReDecimals
         );

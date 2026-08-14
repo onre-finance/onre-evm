@@ -39,7 +39,7 @@ library LibDiamond {
     bytes32 internal constant DIAMOND_STORAGE_LOCATION =
         0xe7a65135aebfc21c80a162a36674f54347f18e2d3a36aad28796c9ad8e262e00;
 
-    function diamondStorage() internal pure returns (DiamondStorage storage ds) {
+    function _diamondStorage() internal pure returns (DiamondStorage storage ds) {
         bytes32 location = DIAMOND_STORAGE_LOCATION;
         // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
@@ -47,7 +47,7 @@ library LibDiamond {
         }
     }
 
-    function diamondCut(IDiamondCut.FacetCut[] memory cut, address init, bytes memory initCalldata) internal {
+    function _diamondCut(IDiamondCut.FacetCut[] memory cut, address init, bytes memory initCalldata) internal {
         uint256 cutLength = cut.length;
         for (uint256 i = 0; i < cutLength;) {
             IDiamondCut.FacetCut memory facetCut = cut[i];
@@ -77,7 +77,7 @@ library LibDiamond {
             revert FacetAddressIsZero();
         }
 
-        DiamondStorage storage ds = diamondStorage();
+        DiamondStorage storage ds = _diamondStorage();
         uint256 selectorPosition = ds.facetToFunctionSelectors[facet].functionSelectors.length;
         if (selectorPosition == 0) {
             _enforceHasContractCode(facet);
@@ -109,7 +109,7 @@ library LibDiamond {
             revert FacetAddressIsZero();
         }
 
-        DiamondStorage storage ds = diamondStorage();
+        DiamondStorage storage ds = _diamondStorage();
         uint256 selectorPosition = ds.facetToFunctionSelectors[facet].functionSelectors.length;
         if (selectorPosition == 0) {
             _enforceHasContractCode(facet);
@@ -146,7 +146,7 @@ library LibDiamond {
             revert RemoveFacetAddressMustBeZero(facet);
         }
 
-        DiamondStorage storage ds = diamondStorage();
+        DiamondStorage storage ds = _diamondStorage();
         uint256 selectorLength = selectors.length;
         for (uint256 i = 0; i < selectorLength;) {
             bytes4 selector = selectors[i];
@@ -169,7 +169,7 @@ library LibDiamond {
             revert FunctionIsImmutable(selector);
         }
 
-        DiamondStorage storage ds = diamondStorage();
+        DiamondStorage storage ds = _diamondStorage();
         uint256 selectorPosition = ds.selectorToFacetAndPosition[selector].functionSelectorPosition;
         bytes4[] storage facetSelectors = ds.facetToFunctionSelectors[facet].functionSelectors;
         uint256 lastSelectorPosition = facetSelectors.length - 1;

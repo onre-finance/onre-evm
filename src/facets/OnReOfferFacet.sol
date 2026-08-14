@@ -11,19 +11,19 @@ contract OnReOfferFacet {
         external
         returns (bytes32 feeConfigId)
     {
-        return LibOnReFeeConfig.createFeeConfig(feeConfigInstanceId, basisPoints, feeVaultId);
+        feeConfigId = LibOnReFeeConfig._createFeeConfig(feeConfigInstanceId, basisPoints, feeVaultId);
     }
 
     function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) external {
-        LibOnReFeeConfig.updateFeeConfig(feeConfigId, basisPoints, feeVaultId);
+        LibOnReFeeConfig._updateFeeConfig(feeConfigId, basisPoints, feeVaultId);
     }
 
     function setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) external {
-        LibOnReFeeConfig.setFeeConfigEnabled(feeConfigId, enabled);
+        LibOnReFeeConfig._setFeeConfigEnabled(feeConfigId, enabled);
     }
 
     function makeOfferConfig(MakeOfferConfigParams calldata params) external returns (bytes32 offerConfigId) {
-        return LibOnReOfferConfig.makeOfferConfig(params);
+        offerConfigId = LibOnReOfferConfig._makeOfferConfig(params);
     }
 
     function updateOfferConfigReferences(
@@ -33,17 +33,17 @@ contract OnReOfferFacet {
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) external {
-        LibOnReOfferConfig.updateOfferConfigReferences(
+        LibOnReOfferConfig._updateOfferConfigReferences(
             offerConfigId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
     }
 
     function setOfferConfigEnabled(bytes32 offerConfigId, bool enabled) external {
-        LibOnReOfferConfig.setOfferConfigEnabled(offerConfigId, enabled);
+        LibOnReOfferConfig._setOfferConfigEnabled(offerConfigId, enabled);
     }
 
     function takeOffer(TakeOfferParams calldata params) external returns (uint256 amountOut) {
-        return LibOnReOffer.takeOffer(params);
+        amountOut = LibOnReOffer._takeOffer(params);
     }
 
     function previewExecution(bytes32 offerConfigId, uint256 grossInputAmount)
@@ -51,6 +51,6 @@ contract OnReOfferFacet {
         view
         returns (ExecutionAccounting memory accounting)
     {
-        return LibOnReOffer.previewExecution(offerConfigId, grossInputAmount);
+        accounting = LibOnReOffer._previewExecution(offerConfigId, grossInputAmount);
     }
 }

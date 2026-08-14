@@ -14,10 +14,10 @@ import {OnReMath} from "./OnReMath.sol";
 
 /// @notice Reusable stateless NAV amount-out dispatch.
 library LibOnReQuoter {
-    function createQuoter(QuoterKind kind, uint64 quoterInstanceId) internal returns (bytes32 quoterId) {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        quoterId = OnReIds.quoterId(kind, quoterInstanceId);
-        Quoter storage quoter = LibOnReStorage.appStorage().quoters[quoterId];
+    function _createQuoter(QuoterKind kind, uint64 quoterInstanceId) internal returns (bytes32 quoterId) {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        quoterId = OnReIds._quoterId(kind, quoterInstanceId);
+        Quoter storage quoter = LibOnReStorage._appStorage().quoters[quoterId];
         if (quoter.exists) revert QuoterAlreadyExistsError(quoterId);
 
         quoter.kind = kind;
@@ -26,37 +26,37 @@ library LibOnReQuoter {
         emit QuoterCreated(quoterId, kind, quoterInstanceId);
     }
 
-    function setQuoterEnabled(bytes32 quoterId, bool enabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        Quoter storage quoter = LibOnReValidation.requireQuoter(quoterId);
+    function _setQuoterEnabled(bytes32 quoterId, bool enabled) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
         bool disabled = !enabled;
         if (quoter.disabled == disabled) revert NoChangeError();
         quoter.disabled = disabled;
         emit QuoterEnabledSet(quoterId, enabled);
     }
 
-    function quote(bytes32 offerConfigId, uint256 netInputAmount) internal view returns (QuoteResult memory result) {
+    function _quote(bytes32 offerConfigId, uint256 netInputAmount) internal view returns (QuoteResult memory result) {
         if (netInputAmount == 0) revert InvalidAmountError();
-        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
-        return quote(offer, netInputAmount);
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
+        result = _quote(offer, netInputAmount);
     }
 
-    function quote(OfferConfig storage offer, uint256 netInputAmount)
+    function _quote(OfferConfig storage offer, uint256 netInputAmount)
         internal
         view
         returns (QuoteResult memory result)
     {
-        Quoter storage quoter = LibOnReValidation.requireExecutableQuoter(offer.quoterId);
+        Quoter storage quoter = LibOnReValidation._requireExecutableQuoter(offer.quoterId);
 
         address onReToken = offer.direction == OfferDirection.AssetToOnRe ? offer.tokenOut : offer.tokenIn;
-        uint256 price = LibOnRePricer.currentPrice(OnReIds.usdPricerId(onReToken));
+        uint256 price = LibOnRePricer._currentPrice(OnReIds._usdPricerId(onReToken));
         uint256 amountOut;
         if (quoter.kind == QuoterKind.Nav) {
             amountOut = _quoteNav(offer, netInputAmount, price);
         } else {
             amountOut = _quoteNavPermissionless(offer, netInputAmount, price);
         }
-        return QuoteResult({price: price, amountOut: amountOut});
+        result = QuoteResult({price: price, amountOut: amountOut});
     }
 
     function _quoteNav(OfferConfig storage offer, uint256 netInputAmount, uint256 price)
@@ -83,9 +83,9 @@ library LibOnReQuoter {
     {
         if (offer.direction == OfferDirection.AssetToOnRe) {
             return
-                OnReMath.calculateTokenOutAmount(netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals);
+                OnReMath._calculateTokenOutAmount(netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals);
         }
-        return OnReMath.calculateRedemptionAssetOutAmount(
+        return OnReMath._calculateRedemptionAssetOutAmount(
             netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals
         );
     }

@@ -31,7 +31,7 @@ library LibOnReAccessControl {
     bytes32 internal constant ACCESS_CONTROL_STORAGE_POSITION =
         0xc22d749a08533429f9f6342546255c4b448fe8fd084608530dff3c1a7e045100;
 
-    function accessControlStorage() internal pure returns (AccessControlStorage storage s) {
+    function _accessControlStorage() internal pure returns (AccessControlStorage storage s) {
         bytes32 position = ACCESS_CONTROL_STORAGE_POSITION;
         // solhint-disable-next-line no-inline-assembly
         assembly ("memory-safe") {
@@ -39,68 +39,68 @@ library LibOnReAccessControl {
         }
     }
 
-    function hasRole(bytes32 role, address account) internal view returns (bool) {
-        return accessControlStorage().roles[role].hasRole[account];
+    function _hasRole(bytes32 role, address account) internal view returns (bool) {
+        return _accessControlStorage().roles[role].hasRole[account];
     }
 
-    function checkRole(bytes32 role) internal view {
-        checkRole(role, msg.sender);
+    function _checkRole(bytes32 role) internal view {
+        _checkRole(role, msg.sender);
     }
 
-    function checkRole(bytes32 role, address account) internal view {
-        if (!hasRole(role, account)) {
+    function _checkRole(bytes32 role, address account) internal view {
+        if (!_hasRole(role, account)) {
             revert IAccessControl.AccessControlUnauthorizedAccount(account, role);
         }
     }
 
-    function getRoleAdmin(bytes32 role) internal view returns (bytes32) {
-        return accessControlStorage().roles[role].adminRole;
+    function _getRoleAdmin(bytes32 role) internal view returns (bytes32) {
+        return _accessControlStorage().roles[role].adminRole;
     }
 
-    function boss() internal view returns (address) {
-        return accessControlStorage().boss;
+    function _boss() internal view returns (address) {
+        return _accessControlStorage().boss;
     }
 
-    function pendingBoss() internal view returns (address) {
-        return accessControlStorage().pendingBoss;
+    function _pendingBoss() internal view returns (address) {
+        return _accessControlStorage().pendingBoss;
     }
 
-    function grantRole(bytes32 role, address account) internal {
+    function _grantRole(bytes32 role, address account) internal {
         _requireSupportedRole(role);
         _requireNonBossRole(role);
-        checkRole(getRoleAdmin(role));
-        _grantRole(role, account);
+        _checkRole(_getRoleAdmin(role));
+        _grantRoleUnchecked(role, account);
     }
 
-    function revokeRole(bytes32 role, address account) internal {
+    function _revokeRole(bytes32 role, address account) internal {
         _requireSupportedRole(role);
         _requireNonBossRole(role);
-        checkRole(getRoleAdmin(role));
-        _revokeRole(role, account);
+        _checkRole(_getRoleAdmin(role));
+        _revokeRoleUnchecked(role, account);
     }
 
-    function renounceRole(bytes32 role, address callerConfirmation) internal {
+    function _renounceRole(bytes32 role, address callerConfirmation) internal {
         _requireSupportedRole(role);
         _requireNonBossRole(role);
         if (callerConfirmation != msg.sender) {
             revert IAccessControl.AccessControlBadConfirmation();
         }
-        _revokeRole(role, callerConfirmation);
+        _revokeRoleUnchecked(role, callerConfirmation);
     }
 
-    function initialize(address initialBoss, address admin, address worker, address upgrader) internal {
-        accessControlStorage().boss = initialBoss;
-        _grantRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, initialBoss);
-        _grantRole(LibOnReRoles.ADMIN_ROLE, admin);
-        _grantRole(LibOnReRoles.WORKER_ROLE, worker);
-        _grantRole(LibOnReRoles.UPGRADER_ROLE, upgrader);
+    function _initialize(address initialBoss, address admin, address worker, address upgrader) internal {
+        _accessControlStorage().boss = initialBoss;
+        _grantRoleUnchecked(LibOnReRoles.DEFAULT_ADMIN_ROLE, initialBoss);
+        _grantRoleUnchecked(LibOnReRoles.ADMIN_ROLE, admin);
+        _grantRoleUnchecked(LibOnReRoles.WORKER_ROLE, worker);
+        _grantRoleUnchecked(LibOnReRoles.UPGRADER_ROLE, upgrader);
     }
 
-    function beginBossTransfer(address newBoss) internal {
-        checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _beginBossTransfer(address newBoss) internal {
+        _checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (newBoss == address(0)) revert ZeroAddressError();
 
-        AccessControlStorage storage s = accessControlStorage();
+        AccessControlStorage storage s = _accessControlStorage();
         if (newBoss == s.boss || newBoss == s.pendingBoss) revert NoChangeError();
 
         address previousPendingBoss = s.pendingBoss;
@@ -111,10 +111,10 @@ library LibOnReAccessControl {
         emit BossTransferStarted(s.boss, newBoss);
     }
 
-    function cancelBossTransfer() internal {
-        checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _cancelBossTransfer() internal {
+        _checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
 
-        AccessControlStorage storage s = accessControlStorage();
+        AccessControlStorage storage s = _accessControlStorage();
         address cancelledPendingBoss = s.pendingBoss;
         if (cancelledPendingBoss == address(0)) revert NoChangeError();
 
@@ -122,21 +122,21 @@ library LibOnReAccessControl {
         emit BossTransferCancelled(s.boss, cancelledPendingBoss);
     }
 
-    function acceptBossTransfer() internal {
-        AccessControlStorage storage s = accessControlStorage();
+    function _acceptBossTransfer() internal {
+        AccessControlStorage storage s = _accessControlStorage();
         address newBoss = s.pendingBoss;
         if (msg.sender != newBoss) revert NotPendingBossError(msg.sender);
 
         address previousBoss = s.boss;
         s.pendingBoss = address(0);
         s.boss = newBoss;
-        _revokeRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, previousBoss);
-        _grantRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, newBoss);
+        _revokeRoleUnchecked(LibOnReRoles.DEFAULT_ADMIN_ROLE, previousBoss);
+        _grantRoleUnchecked(LibOnReRoles.DEFAULT_ADMIN_ROLE, newBoss);
         emit BossTransferred(previousBoss, newBoss);
     }
 
     function _requireSupportedRole(bytes32 role) private pure {
-        if (!LibOnReRoles.isSupportedRole(role)) revert UnsupportedRoleError(role);
+        if (!LibOnReRoles._isSupportedRole(role)) revert UnsupportedRoleError(role);
     }
 
     function _requireNonBossRole(bytes32 role) private pure {
@@ -145,21 +145,21 @@ library LibOnReAccessControl {
         }
     }
 
-    function _grantRole(bytes32 role, address account) internal returns (bool granted) {
-        AccessControlStorage storage s = accessControlStorage();
+    function _grantRoleUnchecked(bytes32 role, address account) internal returns (bool granted) {
+        AccessControlStorage storage s = _accessControlStorage();
         if (!s.roles[role].hasRole[account]) {
             s.roles[role].hasRole[account] = true;
             emit IAccessControl.RoleGranted(role, account, msg.sender);
-            return true;
+            granted = true;
         }
     }
 
-    function _revokeRole(bytes32 role, address account) internal returns (bool revoked) {
-        AccessControlStorage storage s = accessControlStorage();
+    function _revokeRoleUnchecked(bytes32 role, address account) internal returns (bool revoked) {
+        AccessControlStorage storage s = _accessControlStorage();
         if (s.roles[role].hasRole[account]) {
             s.roles[role].hasRole[account] = false;
             emit IAccessControl.RoleRevoked(role, account, msg.sender);
-            return true;
+            revoked = true;
         }
     }
 }

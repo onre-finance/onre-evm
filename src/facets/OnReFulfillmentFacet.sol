@@ -8,17 +8,17 @@ contract OnReFulfillmentFacet {
         external
         returns (bytes32 fulfillmentRequestId)
     {
-        return LibOnReFulfillment.createFulfillmentRequest(offerConfigId, requestId, inputAmount);
+        fulfillmentRequestId = LibOnReFulfillment._createFulfillmentRequest(offerConfigId, requestId, inputAmount);
     }
 
     function cancelFulfillmentRequest(bytes32 fulfillmentRequestId) external {
-        LibOnReFulfillment.cancelFulfillmentRequest(fulfillmentRequestId);
+        LibOnReFulfillment._cancelFulfillmentRequest(fulfillmentRequestId);
     }
 
     function fulfillWorkerRequest(bytes32 fulfillmentRequestId, uint256 inputAmount)
         external
         returns (uint256 amountOut)
     {
-        return LibOnReFulfillment.fulfillWorkerRequest(fulfillmentRequestId, inputAmount);
+        amountOut = LibOnReFulfillment._fulfillWorkerRequest(fulfillmentRequestId, inputAmount);
     }
 }

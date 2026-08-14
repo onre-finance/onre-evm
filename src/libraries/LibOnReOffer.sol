@@ -33,14 +33,14 @@ import {OnReMath} from "./OnReMath.sol";
 library LibOnReOffer {
     uint16 internal constant MAX_BASIS_POINTS = 10_000;
 
-    function takeOffer(TakeOfferParams calldata params) internal returns (uint256 amountOut) {
-        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(params.offerConfigId);
+    function _takeOffer(TakeOfferParams calldata params) internal returns (uint256 amountOut) {
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(params.offerConfigId);
         if (block.timestamp > params.deadline) {
             revert TakeOfferDeadlineExpiredError(params.deadline);
         }
 
         if (offer.flow == OfferFlow.Permissioned) {
-            if (!LibOnReApproval.isValidForUser(msg.sender, params.approval, params.signature)) {
+            if (!LibOnReApproval._isValidForUser(msg.sender, params.approval, params.signature)) {
                 revert InvalidApprovalError();
             }
         } else if (offer.flow == OfferFlow.Permissionless) {
@@ -51,31 +51,32 @@ library LibOnReOffer {
             revert WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
         }
 
-        return _executeCollectedFromUser(params.offerConfigId, offer, params.grossInputAmount, params.minimumAmountOut);
+        amountOut =
+            _executeCollectedFromUser(params.offerConfigId, offer, params.grossInputAmount, params.minimumAmountOut);
     }
 
-    function previewExecution(bytes32 offerConfigId, uint256 grossInputAmount)
+    function _previewExecution(bytes32 offerConfigId, uint256 grossInputAmount)
         internal
         view
         returns (ExecutionAccounting memory accounting)
     {
-        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
-        return previewExecution(offer, grossInputAmount);
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
+        accounting = _previewExecution(offer, grossInputAmount);
     }
 
-    function previewExecution(OfferConfig storage offer, uint256 grossInputAmount)
+    function _previewExecution(OfferConfig storage offer, uint256 grossInputAmount)
         internal
         view
         returns (ExecutionAccounting memory accounting)
     {
         if (grossInputAmount == 0) revert InvalidAmountError();
-        FeeConfig storage feeConfig = LibOnReValidation.requireExecutableFeeConfig(offer.feeConfigId);
-        uint256 feeAmount = LibOnReFeeConfig.calculateFee(grossInputAmount, feeConfig);
+        FeeConfig storage feeConfig = LibOnReValidation._requireExecutableFeeConfig(offer.feeConfigId);
+        uint256 feeAmount = LibOnReFeeConfig._calculateFee(grossInputAmount, feeConfig);
         uint256 netInputAmount = grossInputAmount - feeAmount;
         if (netInputAmount == 0) revert InvalidAmountError();
-        QuoteResult memory quoteResult = LibOnReQuoter.quote(offer, netInputAmount);
+        QuoteResult memory quoteResult = LibOnReQuoter._quote(offer, netInputAmount);
 
-        return ExecutionAccounting({
+        accounting = ExecutionAccounting({
             price: quoteResult.price,
             grossInputAmount: grossInputAmount,
             feeAmount: feeAmount,
@@ -86,13 +87,13 @@ library LibOnReOffer {
         });
     }
 
-    function settleEscrowedWorkerInput(
+    function _settleEscrowedWorkerInput(
         bytes32 offerConfigId,
         OfferConfig storage offer,
         address recipient,
         uint256 grossInputAmount
     ) internal returns (ExecutionAccounting memory accounting) {
-        accounting = previewExecution(offer, grossInputAmount);
+        accounting = _previewExecution(offer, grossInputAmount);
         _settleCollectedInput(offerConfigId, offer, recipient, accounting);
     }
 
@@ -102,13 +103,13 @@ library LibOnReOffer {
         uint256 grossInputAmount,
         uint256 minimumAmountOut
     ) private returns (uint256 amountOut) {
-        ExecutionAccounting memory accounting = previewExecution(offer, grossInputAmount);
+        ExecutionAccounting memory accounting = _previewExecution(offer, grossInputAmount);
         if (accounting.amountOut < minimumAmountOut) {
             revert MinimumAmountOutNotMetError(minimumAmountOut, accounting.amountOut);
         }
-        LibOnReVault.pullExactTokenAmount(offer.tokenIn, msg.sender, grossInputAmount);
+        LibOnReVault._pullExactTokenAmount(offer.tokenIn, msg.sender, grossInputAmount);
         _settleCollectedInput(offerConfigId, offer, msg.sender, accounting);
-        return accounting.amountOut;
+        amountOut = accounting.amountOut;
     }
 
     function _settleCollectedInput(
@@ -117,8 +118,8 @@ library LibOnReOffer {
         address recipient,
         ExecutionAccounting memory accounting
     ) private {
-        FeeConfig storage feeConfig = LibOnReValidation.requireExecutableFeeConfig(offer.feeConfigId);
-        LibOnReVault.accrue(feeConfig.feeVaultId, offer.tokenIn, accounting.feeAmount);
+        FeeConfig storage feeConfig = LibOnReValidation._requireExecutableFeeConfig(offer.feeConfigId);
+        LibOnReVault._accrue(feeConfig.feeVaultId, offer.tokenIn, accounting.feeAmount);
 
         if (offer.direction == OfferDirection.AssetToOnRe) {
             _settleAssetToOnRe(offer, recipient, accounting);
@@ -145,17 +146,17 @@ library LibOnReOffer {
     {
         accounting.liquidityRefillAmount = _calculateLiquidityRefill(offer, accounting.netInputAmount);
         accounting.proceedsAmount = accounting.netInputAmount - accounting.liquidityRefillAmount;
-        LibOnReVault.accrue(offer.liquidityVaultId, offer.tokenIn, accounting.liquidityRefillAmount);
-        LibOnReVault.accrue(offer.proceedsVaultId, offer.tokenIn, accounting.proceedsAmount);
-        address inventorySource = LibOnReStorage.appStorage().onReTokenConfigs[offer.tokenOut].inventorySource;
-        LibOnReVault.transferExactTokenAmountFrom(offer.tokenOut, inventorySource, recipient, accounting.amountOut);
+        LibOnReVault._accrue(offer.liquidityVaultId, offer.tokenIn, accounting.liquidityRefillAmount);
+        LibOnReVault._accrue(offer.proceedsVaultId, offer.tokenIn, accounting.proceedsAmount);
+        address inventorySource = LibOnReStorage._appStorage().onReTokenConfigs[offer.tokenOut].inventorySource;
+        LibOnReVault._transferExactTokenAmountFrom(offer.tokenOut, inventorySource, recipient, accounting.amountOut);
     }
 
     function _settleOnReToAsset(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
         private
     {
         IOnReToken(offer.tokenIn).burn(accounting.netInputAmount);
-        LibOnReVault.consumeLiquidity(offer.liquidityVaultId, offer.tokenOut, recipient, accounting.amountOut);
+        LibOnReVault._consumeLiquidity(offer.liquidityVaultId, offer.tokenOut, recipient, accounting.amountOut);
     }
 
     function _calculateLiquidityRefill(OfferConfig storage offer, uint256 netInputAmount)
@@ -165,18 +166,18 @@ library LibOnReOffer {
     {
         if (offer.liquidityVaultId == bytes32(0) || netInputAmount == 0) return 0;
         ConfigurableVault storage liquidityVault =
-            LibOnReStorage.appStorage().configurableVaults[offer.liquidityVaultId];
+            LibOnReStorage._appStorage().configurableVaults[offer.liquidityVaultId];
         if (liquidityVault.refillTargetBps == 0) return 0;
 
         address onReToken = _onReToken(offer);
-        uint256 tvl = LibOnReMarketStats.currentTvl(onReToken);
-        return OnReMath.calculateRedemptionVaultRefillAmount(
+        uint256 tvl = LibOnReMarketStats._currentTvl(onReToken);
+        return OnReMath._calculateRedemptionVaultRefillAmount(
             tvl,
             liquidityVault.refillTargetBps,
             MAX_BASIS_POINTS,
             offer.tokenInDecimals,
-            LibOnReStorage.appStorage().onReTokenConfigs[onReToken].decimals,
-            LibOnReVault.balance(offer.liquidityVaultId, offer.tokenIn),
+            LibOnReStorage._appStorage().onReTokenConfigs[onReToken].decimals,
+            LibOnReVault._balance(offer.liquidityVaultId, offer.tokenIn),
             netInputAmount
         );
     }

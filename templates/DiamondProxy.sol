@@ -33,13 +33,13 @@ contract DiamondProxy is Diamond {
     if (bootstrapUpgrader == address(0)) {
       revert BootstrapUpgraderIsZero();
     }
-    LibOnReAccessControl._grantRole(LibOnReRoles.UPGRADER_ROLE, bootstrapUpgrader);
+    LibOnReAccessControl._grantRoleUnchecked(LibOnReRoles.UPGRADER_ROLE, bootstrapUpgrader);
 
     _initCoreFacets();
 
     // Only the standard, immutable interfaces are advertised here. The
     // application-level ids are registered by `OnReDiamondInit.init`.
-    LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+    LibDiamond.DiamondStorage storage ds = LibDiamond._diamondStorage();
     ds.supportedInterfaces[type(IERC165).interfaceId] = true;
     ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
     ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
@@ -70,6 +70,6 @@ contract DiamondProxy is Diamond {
       functionSelectors: f1
     });
 
-    LibDiamond.diamondCut(cut, address(0), "");
+    LibDiamond._diamondCut(cut, address(0), "");
   }
 }

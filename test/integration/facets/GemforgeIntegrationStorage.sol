@@ -8,7 +8,7 @@ library GemforgeIntegrationStorage {
         uint256 value;
     }
 
-    function store() internal pure returns (Layout storage state) {
+    function _store() internal pure returns (Layout storage state) {
         bytes32 location = STORAGE_LOCATION;
         // solhint-disable-next-line no-inline-assembly
         assembly {

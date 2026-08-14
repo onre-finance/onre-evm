@@ -10,7 +10,7 @@ library OnReMath {
     uint256 internal constant SECONDS_IN_DAY = 86_400;
     uint8 internal constant MAX_TOKEN_DECIMALS = 18;
 
-    function calculateFee(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
+    function _calculateFee(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
         internal
         pure
         returns (uint256)
@@ -18,24 +18,23 @@ library OnReMath {
         return Math.mulDiv(amount, feeBasisPoints, maxBasisPoints, Math.Rounding.Ceil);
     }
 
-    function calculateFees(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
+    function _calculateFees(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
         internal
         pure
         returns (uint256 feeAmount, uint256 netAmount)
     {
-        feeAmount = calculateFee(amount, feeBasisPoints, maxBasisPoints);
+        feeAmount = _calculateFee(amount, feeBasisPoints, maxBasisPoints);
         netAmount = amount - feeAmount;
     }
 
-    function calculateTokenOutAmount(
+    function _calculateTokenOutAmount(
         uint256 tokenInAmount,
         uint256 price,
         uint8 tokenInDecimals,
         uint8 tokenOutDecimals
     ) internal pure returns (uint256) {
         if (tokenOutDecimals >= tokenInDecimals) {
-            uint256 decimalMultiplier =
-                10 ** (uint256(tokenOutDecimals) - uint256(tokenInDecimals) + PRICE_DECIMALS);
+            uint256 decimalMultiplier = 10 ** (uint256(tokenOutDecimals) - uint256(tokenInDecimals) + PRICE_DECIMALS);
             return Math.mulDiv(tokenInAmount, decimalMultiplier, price);
         }
 
@@ -43,7 +42,7 @@ library OnReMath {
         return Math.mulDiv(tokenInAmount, 10 ** PRICE_DECIMALS, price * decimalDivisor);
     }
 
-    function calculateRedemptionAssetOutAmount(
+    function _calculateRedemptionAssetOutAmount(
         uint256 onReTokenNetAmount,
         uint256 price,
         uint8 onReTokenDecimals,
@@ -59,7 +58,11 @@ library OnReMath {
         return Math.mulDiv(onReTokenNetAmount, price, decimalDivisor);
     }
 
-    function calculateVectorPrice(uint256 apr, uint256 basePrice, uint256 elapsedTime) internal pure returns (uint256) {
+    function _calculateVectorPrice(uint256 apr, uint256 basePrice, uint256 elapsedTime)
+        internal
+        pure
+        returns (uint256)
+    {
         if (apr == 0 || elapsedTime == 0) {
             return basePrice;
         }
@@ -83,7 +86,7 @@ library OnReMath {
         return compoundedPrice + partialDayDelta;
     }
 
-    function calculateStepPrice(
+    function _calculateStepPrice(
         uint256 apr,
         uint256 basePrice,
         uint64 baseTime,
@@ -94,10 +97,10 @@ library OnReMath {
         uint256 currentStep = elapsedSinceStart / priceFixDuration;
         uint256 stepEndTime = (currentStep + 1) * priceFixDuration;
 
-        return calculateVectorPrice(apr, basePrice, stepEndTime);
+        return _calculateVectorPrice(apr, basePrice, stepEndTime);
     }
 
-    function calculateApyFromApr(uint256 apr) internal pure returns (uint256) {
+    function _calculateApyFromApr(uint256 apr) internal pure returns (uint256) {
         if (apr == 0) {
             return 0;
         }
@@ -107,11 +110,11 @@ library OnReMath {
         return _mulDivHalfUp(compoundFactor - INT_SCALE, APR_SCALE, INT_SCALE);
     }
 
-    function calculateTvl(uint256 circulatingSupply, uint256 nav, uint256 priceScale) internal pure returns (uint256) {
+    function _calculateTvl(uint256 circulatingSupply, uint256 nav, uint256 priceScale) internal pure returns (uint256) {
         return Math.mulDiv(circulatingSupply, nav, priceScale);
     }
 
-    function calculateRedemptionVaultRefillAmount(
+    function _calculateRedemptionVaultRefillAmount(
         uint256 tvl,
         uint16 vaultTargetBps,
         uint16 maxBasisPoints,

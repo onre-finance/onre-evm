@@ -36,17 +36,17 @@ library LibOnReVault {
 
     uint16 private constant MAX_BASIS_POINTS = 10_000;
 
-    function createConfigurableVault(
+    function _createConfigurableVault(
         ConfigurableVaultKind kind,
         uint64 vaultInstanceId,
         address withdrawalDestination,
         uint16 refillTargetBps
     ) internal returns (bytes32 vaultId) {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateRefillTarget(kind, refillTargetBps);
 
-        vaultId = OnReIds.configurableVaultId(kind, vaultInstanceId);
-        ConfigurableVault storage vault = LibOnReStorage.appStorage().configurableVaults[vaultId];
+        vaultId = OnReIds._configurableVaultId(kind, vaultInstanceId);
+        ConfigurableVault storage vault = LibOnReStorage._appStorage().configurableVaults[vaultId];
         if (vault.exists) revert ConfigurableVaultAlreadyExistsError(vaultId);
 
         vault.kind = kind;
@@ -57,9 +57,9 @@ library LibOnReVault {
         emit ConfigurableVaultCreated(vaultId, kind, vaultInstanceId, withdrawalDestination, refillTargetBps);
     }
 
-    function updateConfigurableVault(bytes32 vaultId, address withdrawalDestination, uint16 refillTargetBps) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        ConfigurableVault storage vault = LibOnReValidation.requireConfigurableVault(vaultId);
+    function _updateConfigurableVault(bytes32 vaultId, address withdrawalDestination, uint16 refillTargetBps) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        ConfigurableVault storage vault = LibOnReValidation._requireConfigurableVault(vaultId);
         _validateRefillTarget(vault.kind, refillTargetBps);
         if (vault.withdrawalDestination == withdrawalDestination && vault.refillTargetBps == refillTargetBps) {
             revert NoChangeError();
@@ -70,47 +70,47 @@ library LibOnReVault {
         emit ConfigurableVaultUpdated(vaultId, withdrawalDestination, refillTargetBps);
     }
 
-    function depositConfigurableVault(bytes32 vaultId, address token, uint256 amount) internal {
-        LibOnReValidation.requireConfigurableVault(vaultId);
+    function _depositConfigurableVault(bytes32 vaultId, address token, uint256 amount) internal {
+        LibOnReValidation._requireConfigurableVault(vaultId);
         if (token == address(0)) revert ZeroAddressError();
         if (amount == 0) revert InvalidAmountError();
 
-        pullExactTokenAmount(token, msg.sender, amount);
-        accrue(vaultId, token, amount);
+        _pullExactTokenAmount(token, msg.sender, amount);
+        _accrue(vaultId, token, amount);
     }
 
-    function withdrawConfigurableVault(bytes32 vaultId, address token, uint256 amount)
+    function _withdrawConfigurableVault(bytes32 vaultId, address token, uint256 amount)
         internal
         returns (uint256 withdrawnAmount)
     {
-        if (LibOnReStorage.appStorage().isKilled) revert KilledError();
+        if (LibOnReStorage._appStorage().isKilled) revert KilledError();
         if (token == address(0)) revert ZeroAddressError();
-        ConfigurableVault storage vault = LibOnReValidation.requireConfigurableVault(vaultId);
+        ConfigurableVault storage vault = LibOnReValidation._requireConfigurableVault(vaultId);
         if (vault.kind == ConfigurableVaultKind.Liquidity) {
-            LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+            LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         }
         address destination = vault.withdrawalDestination;
         if (destination == address(0)) {
             revert MissingConfigurableVaultDestinationError(vaultId);
         }
 
-        uint256 availableAmount = balance(vaultId, token);
+        uint256 availableAmount = _balance(vaultId, token);
         withdrawnAmount = amount == 0 ? availableAmount : amount;
         if (withdrawnAmount == 0) revert ZeroBalanceError();
         if (withdrawnAmount > availableAmount) {
             revert InsufficientBalanceError(availableAmount, withdrawnAmount);
         }
 
-        LibOnReStorage.appStorage().configurableVaultBalances[vaultId][token] = availableAmount - withdrawnAmount;
-        transferExactTokenAmount(token, destination, withdrawnAmount);
+        LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = availableAmount - withdrawnAmount;
+        _transferExactTokenAmount(token, destination, withdrawnAmount);
         emit ConfigurableVaultWithdrawn(vaultId, token, destination, withdrawnAmount);
     }
 
-    function pullExactTokenAmount(address token, address from, uint256 amount) internal {
-        transferExactTokenAmountFrom(token, from, address(this), amount);
+    function _pullExactTokenAmount(address token, address from, uint256 amount) internal {
+        _transferExactTokenAmountFrom(token, from, address(this), amount);
     }
 
-    function transferExactTokenAmountFrom(address token, address from, address recipient, uint256 amount) internal {
+    function _transferExactTokenAmountFrom(address token, address from, address recipient, uint256 amount) internal {
         IERC20 tokenContract = IERC20(token);
         uint256 senderBalanceBefore = tokenContract.balanceOf(from);
         uint256 recipientBalanceBefore = tokenContract.balanceOf(recipient);
@@ -120,7 +120,7 @@ library LibOnReVault {
         );
     }
 
-    function transferExactTokenAmount(address token, address recipient, uint256 amount) internal {
+    function _transferExactTokenAmount(address token, address recipient, uint256 amount) internal {
         IERC20 tokenContract = IERC20(token);
         uint256 senderBalanceBefore = tokenContract.balanceOf(address(this));
         uint256 recipientBalanceBefore = tokenContract.balanceOf(recipient);
@@ -130,26 +130,26 @@ library LibOnReVault {
         );
     }
 
-    function accrue(bytes32 vaultId, address token, uint256 amount) internal {
+    function _accrue(bytes32 vaultId, address token, uint256 amount) internal {
         if (amount == 0) return;
-        LibOnReValidation.requireConfigurableVault(vaultId);
-        uint256 newBalance = balance(vaultId, token) + amount;
-        LibOnReStorage.appStorage().configurableVaultBalances[vaultId][token] = newBalance;
+        LibOnReValidation._requireConfigurableVault(vaultId);
+        uint256 newBalance = _balance(vaultId, token) + amount;
+        LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = newBalance;
         emit ConfigurableVaultAccrued(vaultId, token, amount, newBalance);
     }
 
-    function consumeLiquidity(bytes32 vaultId, address token, address recipient, uint256 amount) internal {
-        LibOnReValidation.requireVaultKind(vaultId, ConfigurableVaultKind.Liquidity);
-        uint256 availableAmount = balance(vaultId, token);
+    function _consumeLiquidity(bytes32 vaultId, address token, address recipient, uint256 amount) internal {
+        LibOnReValidation._requireVaultKind(vaultId, ConfigurableVaultKind.Liquidity);
+        uint256 availableAmount = _balance(vaultId, token);
         if (availableAmount < amount) {
             revert InsufficientLiquidityError(vaultId, token, availableAmount, amount);
         }
-        LibOnReStorage.appStorage().configurableVaultBalances[vaultId][token] = availableAmount - amount;
-        transferExactTokenAmount(token, recipient, amount);
+        LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = availableAmount - amount;
+        _transferExactTokenAmount(token, recipient, amount);
     }
 
-    function balance(bytes32 vaultId, address token) internal view returns (uint256) {
-        return LibOnReStorage.appStorage().configurableVaultBalances[vaultId][token];
+    function _balance(bytes32 vaultId, address token) internal view returns (uint256) {
+        return LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token];
     }
 
     function _validateRefillTarget(ConfigurableVaultKind kind, uint16 refillTargetBps) private pure {

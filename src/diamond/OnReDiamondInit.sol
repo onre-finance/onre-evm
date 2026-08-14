@@ -20,7 +20,7 @@ import {LibOnReRoles} from "../libraries/LibOnReRoles.sol";
 
 contract OnReDiamondInit {
     function init(InitializeParams calldata params) external {
-        LibOnReStorage.AppStorage storage s = LibOnReStorage.appStorage();
+        LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
         if (s.initialized) {
             revert NoChangeError();
         }
@@ -34,7 +34,7 @@ contract OnReDiamondInit {
             revert BothApproversFilledError();
         }
 
-        LibOnReAccessControl.initialize(params.boss, params.admin, params.worker, params.upgrader);
+        LibOnReAccessControl._initialize(params.boss, params.admin, params.worker, params.upgrader);
 
         uint256 approverLength = params.approvers.length;
         for (uint256 i = 0; i < approverLength;) {
@@ -44,7 +44,7 @@ contract OnReDiamondInit {
             }
         }
 
-        LibDiamond.DiamondStorage storage ds = LibDiamond.diamondStorage();
+        LibDiamond.DiamondStorage storage ds = LibDiamond._diamondStorage();
         ds.supportedInterfaces[type(IERC165).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
@@ -63,7 +63,7 @@ contract OnReDiamondInit {
     /// leave a hot key with permanent cut rights.
     function _handOffBootstrapUpgrader(address upgrader) private {
         if (msg.sender != upgrader) {
-            LibOnReAccessControl._revokeRole(LibOnReRoles.UPGRADER_ROLE, msg.sender);
+            LibOnReAccessControl._revokeRoleUnchecked(LibOnReRoles.UPGRADER_ROLE, msg.sender);
         }
     }
 

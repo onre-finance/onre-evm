@@ -34,12 +34,12 @@ library LibOnRePricer {
     uint8 internal constant MAX_VECTORS = 10;
     uint256 internal constant PRICE_SCALE = 1e9;
 
-    function createPricer(address onReToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation.requireEnabledOnReToken(onReToken);
+    function _createPricer(address onReToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReValidation._requireEnabledOnReToken(onReToken);
 
-        pricerId = OnReIds.pricerId(onReToken, denomination);
-        Pricer storage pricer = LibOnReStorage.appStorage().pricers[pricerId];
+        pricerId = OnReIds._pricerId(onReToken, denomination);
+        Pricer storage pricer = LibOnReStorage._appStorage().pricers[pricerId];
         if (pricer.exists) revert PricerAlreadyExistsError(pricerId);
 
         pricer.onReToken = onReToken;
@@ -48,9 +48,9 @@ library LibOnRePricer {
         emit PricerCreated(pricerId, onReToken, denomination);
     }
 
-    function addPricingVector(bytes32 pricerId, PricingVector calldata vector) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+    function _addPricingVector(bytes32 pricerId, PricingVector calldata vector) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         if (vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0) {
             revert InvalidAmountError();
         }
@@ -83,14 +83,14 @@ library LibOnRePricer {
         );
     }
 
-    function deletePricingVector(bytes32 pricerId, uint64 startTime) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _deletePricingVector(bytes32 pricerId, uint64 startTime) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         // forge-lint: disable-next-line(block-timestamp)
         if (startTime <= block.timestamp) {
             revert VectorStartTimeInPastError(startTime, uint64(block.timestamp));
         }
 
-        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+        Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         uint8 vectorCount = pricer.vectorCount;
         uint8 vectorIndex = type(uint8).max;
         for (uint8 i; i < vectorCount;) {
@@ -108,9 +108,9 @@ library LibOnRePricer {
         emit PricingVectorDeleted(pricerId, startTime);
     }
 
-    function deleteAllPricingVectors(bytes32 pricerId) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+    function _deleteAllPricingVectors(bytes32 pricerId) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         uint8 deletedCount = pricer.vectorCount;
         for (uint8 i; i < deletedCount;) {
             delete pricer.vectors[i];
@@ -122,29 +122,29 @@ library LibOnRePricer {
         emit AllPricingVectorsDeleted(pricerId, deletedCount);
     }
 
-    function setPricerEnabled(bytes32 pricerId, bool enabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        Pricer storage pricer = LibOnReValidation.requirePricer(pricerId);
+    function _setPricerEnabled(bytes32 pricerId, bool enabled) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         bool disabled = !enabled;
         if (pricer.disabled == disabled) revert NoChangeError();
         pricer.disabled = disabled;
         emit PricerEnabledSet(pricerId, enabled);
     }
 
-    function currentPrice(bytes32 pricerId) internal view returns (uint256) {
-        Pricer storage pricer = LibOnReValidation.requireExecutablePricer(pricerId);
-        return calculatePricingVectorPriceAt(activePricingVector(pricerId, pricer), block.timestamp);
+    function _currentPrice(bytes32 pricerId) internal view returns (uint256) {
+        Pricer storage pricer = LibOnReValidation._requireExecutablePricer(pricerId);
+        return _calculatePricingVectorPriceAt(_activePricingVector(pricerId, pricer), block.timestamp);
     }
 
-    function activePricingVector(bytes32 pricerId, Pricer storage pricer)
+    function _activePricingVector(bytes32 pricerId, Pricer storage pricer)
         internal
         view
         returns (PricingVector storage)
     {
-        return pricer.vectors[activePricingVectorIndex(pricerId, pricer)];
+        return pricer.vectors[_activePricingVectorIndex(pricerId, pricer)];
     }
 
-    function activePricingVectorIndex(bytes32 pricerId, Pricer storage pricer) internal view returns (uint8) {
+    function _activePricingVectorIndex(bytes32 pricerId, Pricer storage pricer) internal view returns (uint8) {
         for (uint8 i = pricer.vectorCount; i > 0;) {
             unchecked {
                 --i;
@@ -155,12 +155,12 @@ library LibOnRePricer {
         revert NoActiveVectorError(pricerId);
     }
 
-    function calculatePricingVectorPriceAt(PricingVector storage vector, uint256 timestamp)
+    function _calculatePricingVectorPriceAt(PricingVector storage vector, uint256 timestamp)
         internal
         view
         returns (uint256)
     {
-        return OnReMath.calculateStepPrice(
+        return OnReMath._calculateStepPrice(
             vector.apr, vector.basePrice, vector.baseTime, vector.priceFixDuration, timestamp
         );
     }

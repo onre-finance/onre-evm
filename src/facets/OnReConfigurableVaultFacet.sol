@@ -11,25 +11,25 @@ contract OnReConfigurableVaultFacet {
         address withdrawalDestination,
         uint16 refillTargetBps
     ) external returns (bytes32 vaultId) {
-        return LibOnReVault.createConfigurableVault(kind, vaultInstanceId, withdrawalDestination, refillTargetBps);
+        vaultId = LibOnReVault._createConfigurableVault(kind, vaultInstanceId, withdrawalDestination, refillTargetBps);
     }
 
     function updateConfigurableVault(bytes32 vaultId, address withdrawalDestination, uint16 refillTargetBps) external {
-        LibOnReVault.updateConfigurableVault(vaultId, withdrawalDestination, refillTargetBps);
+        LibOnReVault._updateConfigurableVault(vaultId, withdrawalDestination, refillTargetBps);
     }
 
     function depositConfigurableVault(bytes32 vaultId, address token, uint256 amount) external {
-        LibOnReVault.depositConfigurableVault(vaultId, token, amount);
+        LibOnReVault._depositConfigurableVault(vaultId, token, amount);
     }
 
     function withdrawConfigurableVault(bytes32 vaultId, address token, uint256 amount)
         external
         returns (uint256 withdrawnAmount)
     {
-        return LibOnReVault.withdrawConfigurableVault(vaultId, token, amount);
+        withdrawnAmount = LibOnReVault._withdrawConfigurableVault(vaultId, token, amount);
     }
 
     function configurableVaultBalance(bytes32 vaultId, address token) external view returns (uint256) {
-        return LibOnReVault.balance(vaultId, token);
+        return LibOnReVault._balance(vaultId, token);
     }
 }

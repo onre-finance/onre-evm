@@ -228,7 +228,7 @@ contract OnReMathFuzzHarness {
         pure
         returns (uint256 feeAmount, uint256 netAmount)
     {
-        return OnReMath.calculateFees(amount, feeBasisPoints, maxBasisPoints);
+        (feeAmount, netAmount) = OnReMath._calculateFees(amount, feeBasisPoints, maxBasisPoints);
     }
 
     function calculateTokenOutAmount(
@@ -237,7 +237,7 @@ contract OnReMathFuzzHarness {
         uint8 tokenInDecimals,
         uint8 tokenOutDecimals
     ) external pure returns (uint256) {
-        return OnReMath.calculateTokenOutAmount(tokenInAmount, price, tokenInDecimals, tokenOutDecimals);
+        return OnReMath._calculateTokenOutAmount(tokenInAmount, price, tokenInDecimals, tokenOutDecimals);
     }
 
     function calculateRedemptionAssetOutAmount(
@@ -246,19 +246,19 @@ contract OnReMathFuzzHarness {
         uint8 onReTokenDecimals,
         uint8 assetDecimals
     ) external pure returns (uint256) {
-        return OnReMath.calculateRedemptionAssetOutAmount(onReTokenNetAmount, price, onReTokenDecimals, assetDecimals);
+        return OnReMath._calculateRedemptionAssetOutAmount(onReTokenNetAmount, price, onReTokenDecimals, assetDecimals);
     }
 
     function calculateVectorPrice(uint256 apr, uint256 basePrice, uint256 elapsedTime) external pure returns (uint256) {
-        return OnReMath.calculateVectorPrice(apr, basePrice, elapsedTime);
+        return OnReMath._calculateVectorPrice(apr, basePrice, elapsedTime);
     }
 
     function calculateApyFromApr(uint256 apr) external pure returns (uint256) {
-        return OnReMath.calculateApyFromApr(apr);
+        return OnReMath._calculateApyFromApr(apr);
     }
 
     function calculateTvl(uint256 circulatingSupply, uint256 nav, uint256 priceScale) external pure returns (uint256) {
-        return OnReMath.calculateTvl(circulatingSupply, nav, priceScale);
+        return OnReMath._calculateTvl(circulatingSupply, nav, priceScale);
     }
 
     function calculateRedemptionVaultRefillAmount(
@@ -270,7 +270,7 @@ contract OnReMathFuzzHarness {
         uint256 currentRedemptionVaultBalance,
         uint256 assetNetAmount
     ) external pure returns (uint256) {
-        return OnReMath.calculateRedemptionVaultRefillAmount(
+        return OnReMath._calculateRedemptionVaultRefillAmount(
             tvl,
             vaultTargetBps,
             maxBasisPoints,

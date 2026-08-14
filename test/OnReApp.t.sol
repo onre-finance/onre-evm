@@ -179,7 +179,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         assertEq(tokenConfig.inventorySource, inventorySource);
 
         Pricer memory pricer = app.getPricer(pricerId);
-        assertEq(pricerId, OnReIds.pricerId(address(onReToken), PricingDenomination.Usd));
+        assertEq(pricerId, OnReIds._pricerId(address(onReToken), PricingDenomination.Usd));
         assertEq(pricer.onReToken, address(onReToken));
         assertEq(uint8(pricer.denomination), uint8(PricingDenomination.Usd));
         assertEq(pricer.vectorCount, 1);
@@ -201,7 +201,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     function test_QuoterIdentitySupportsIndependentInstancesOfTheSameKind() public {
         bytes32 secondNavQuoterId = app.createQuoter(QuoterKind.Nav, 1);
 
-        assertEq(secondNavQuoterId, OnReIds.quoterId(QuoterKind.Nav, 1));
+        assertEq(secondNavQuoterId, OnReIds._quoterId(QuoterKind.Nav, 1));
         assertNotEq(secondNavQuoterId, navQuoterId);
         assertEq(app.getQuoter(secondNavQuoterId).instanceId, 1);
 
@@ -211,11 +211,11 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     }
 
     function test_OfferIdentityIncludesDirectedPairAndFlow() public view {
-        assertEq(permissionedOfferId, OnReIds.offerConfigId(address(usd), address(onReToken), OfferFlow.Permissioned));
+        assertEq(permissionedOfferId, OnReIds._offerConfigId(address(usd), address(onReToken), OfferFlow.Permissioned));
         assertEq(
-            permissionlessOfferId, OnReIds.offerConfigId(address(usd), address(onReToken), OfferFlow.Permissionless)
+            permissionlessOfferId, OnReIds._offerConfigId(address(usd), address(onReToken), OfferFlow.Permissionless)
         );
-        assertEq(workerOfferId, OnReIds.offerConfigId(address(onReToken), address(usd), OfferFlow.Worker));
+        assertEq(workerOfferId, OnReIds._offerConfigId(address(onReToken), address(usd), OfferFlow.Worker));
         assertTrue(permissionedOfferId != permissionlessOfferId);
 
         OfferConfig memory permissioned = app.getOfferConfig(permissionedOfferId);
@@ -426,7 +426,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
 
         vm.prank(user);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 7, 100e9);
-        assertEq(requestKey, OnReIds.fulfillmentRequestId(workerOfferId, user, 7));
+        assertEq(requestKey, OnReIds._fulfillmentRequestId(workerOfferId, user, 7));
         assertEq(onReToken.balanceOf(address(app)), 100e9);
 
         vm.prank(worker);
@@ -689,7 +689,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(
             abi.encodeWithSelector(
                 LiquidityVaultRequiredError.selector,
-                OnReIds.offerConfigId(address(onReToken), address(usd), OfferFlow.Permissionless)
+                OnReIds._offerConfigId(address(onReToken), address(usd), OfferFlow.Permissionless)
             )
         );
         _makeOffer(

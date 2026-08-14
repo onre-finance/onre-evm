@@ -13,7 +13,7 @@ contract Diamond {
     error FunctionNotFound(bytes4 selector);
 
     fallback() external payable {
-        address facet = LibDiamond.diamondStorage().selectorToFacetAndPosition[msg.sig].facetAddress;
+        address facet = LibDiamond._diamondStorage().selectorToFacetAndPosition[msg.sig].facetAddress;
         if (facet == address(0)) {
             revert FunctionNotFound(msg.sig);
         }

@@ -29,11 +29,11 @@ library LibOnReConfig {
     uint8 internal constant ONRE_TOKEN_DECIMALS = 9;
     uint8 internal constant MAX_EXCLUDED_SUPPLY_ADDRESSES = 20;
 
-    function registerOnReToken(address onReToken, address inventorySource) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _registerOnReToken(address onReToken, address inventorySource) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (onReToken == address(0) || inventorySource == address(0)) revert ZeroAddressError();
 
-        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
         if (config.enabled || config.decimals != 0) {
             revert TokenAlreadyRegisteredError(onReToken);
         }
@@ -47,65 +47,65 @@ library LibOnReConfig {
         emit OnReTokenRegistered(onReToken, inventorySource, decimals);
     }
 
-    function setOnReTokenEnabled(address onReToken, bool enabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation.requireRegisteredOnReToken(onReToken);
+    function _setOnReTokenEnabled(address onReToken, bool enabled) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReValidation._requireRegisteredOnReToken(onReToken);
 
-        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
         if (config.enabled == enabled) revert NoChangeError();
         config.enabled = enabled;
         emit OnReTokenEnabledSet(onReToken, enabled);
     }
 
-    function setOnReTokenInventorySource(address onReToken, address inventorySource) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation.requireRegisteredOnReToken(onReToken);
+    function _setOnReTokenInventorySource(address onReToken, address inventorySource) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReValidation._requireRegisteredOnReToken(onReToken);
         if (inventorySource == address(0)) revert ZeroAddressError();
 
-        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[onReToken];
+        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
         address oldInventorySource = config.inventorySource;
         if (oldInventorySource == inventorySource) revert NoChangeError();
         config.inventorySource = inventorySource;
         emit OnReTokenInventorySourceUpdated(onReToken, oldInventorySource, inventorySource);
     }
 
-    function addExcludedSupplyAddress(address onReToken, address account) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation.requireRegisteredOnReToken(onReToken);
+    function _addExcludedSupplyAddress(address onReToken, address account) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReValidation._requireRegisteredOnReToken(onReToken);
         if (account == address(0)) revert ZeroAddressError();
-        if (LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account] != 0) {
+        if (LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account] != 0) {
             revert ExcludedSupplyAddressAlreadyExistsError(onReToken, account);
         }
 
-        address[] storage accounts = LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
+        address[] storage accounts = LibOnReStorage._appStorage().excludedSupplyAccounts[onReToken];
         if (accounts.length >= MAX_EXCLUDED_SUPPLY_ADDRESSES) {
             revert TooManyExcludedSupplyAddressesError(onReToken);
         }
         accounts.push(account);
-        LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account] = accounts.length;
+        LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account] = accounts.length;
         emit ExcludedSupplyAddressAdded(onReToken, account);
     }
 
-    function removeExcludedSupplyAddress(address onReToken, address account) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation.requireRegisteredOnReToken(onReToken);
+    function _removeExcludedSupplyAddress(address onReToken, address account) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReValidation._requireRegisteredOnReToken(onReToken);
         if (account == address(0)) revert ZeroAddressError();
 
-        uint256 indexPlusOne = LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account];
+        uint256 indexPlusOne = LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account];
         if (indexPlusOne == 0) {
             revert ExcludedSupplyAddressNotFoundError(onReToken, account);
         }
 
-        address[] storage accounts = LibOnReStorage.appStorage().excludedSupplyAccounts[onReToken];
+        address[] storage accounts = LibOnReStorage._appStorage().excludedSupplyAccounts[onReToken];
         uint256 index = indexPlusOne - 1;
         uint256 lastIndex = accounts.length - 1;
         if (index != lastIndex) {
             address lastAccount = accounts[lastIndex];
             accounts[index] = lastAccount;
-            LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][lastAccount] = index + 1;
+            LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][lastAccount] = index + 1;
         }
         accounts.pop();
-        delete LibOnReStorage.appStorage().excludedSupplyIndexPlusOne[onReToken][account];
+        delete LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account];
         emit ExcludedSupplyAddressRemoved(onReToken, account);
     }
 }

@@ -6,34 +6,34 @@ import {LibOnReAppConfig} from "../libraries/LibOnReAppConfig.sol";
 
 contract OnReConfigFacet {
     function registerOnReToken(address onReToken, address inventorySource) external {
-        LibOnReConfig.registerOnReToken(onReToken, inventorySource);
+        LibOnReConfig._registerOnReToken(onReToken, inventorySource);
     }
 
     function setOnReTokenEnabled(address onReToken, bool enabled) external {
-        LibOnReConfig.setOnReTokenEnabled(onReToken, enabled);
+        LibOnReConfig._setOnReTokenEnabled(onReToken, enabled);
     }
 
     function setOnReTokenInventorySource(address onReToken, address inventorySource) external {
-        LibOnReConfig.setOnReTokenInventorySource(onReToken, inventorySource);
+        LibOnReConfig._setOnReTokenInventorySource(onReToken, inventorySource);
     }
 
     function addExcludedSupplyAddress(address onReToken, address account) external {
-        LibOnReConfig.addExcludedSupplyAddress(onReToken, account);
+        LibOnReConfig._addExcludedSupplyAddress(onReToken, account);
     }
 
     function removeExcludedSupplyAddress(address onReToken, address account) external {
-        LibOnReConfig.removeExcludedSupplyAddress(onReToken, account);
+        LibOnReConfig._removeExcludedSupplyAddress(onReToken, account);
     }
 
     function addApprover(address approver) external {
-        LibOnReAppConfig.addApprover(approver);
+        LibOnReAppConfig._addApprover(approver);
     }
 
     function removeApprover(address approver) external {
-        LibOnReAppConfig.removeApprover(approver);
+        LibOnReAppConfig._removeApprover(approver);
     }
 
     function setKillSwitch(bool killed) external {
-        LibOnReAppConfig.setKillSwitch(killed);
+        LibOnReAppConfig._setKillSwitch(killed);
     }
 }

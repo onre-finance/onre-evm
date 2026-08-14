@@ -5,11 +5,11 @@ import {GemforgeIntegrationStorage} from "./GemforgeIntegrationStorage.sol";
 
 contract GemforgeIntegrationFacetV2 {
     function setIntegrationValue(uint256 value) external {
-        GemforgeIntegrationStorage.store().value = value;
+        GemforgeIntegrationStorage._store().value = value;
     }
 
     function integrationValue() external view returns (uint256) {
-        return GemforgeIntegrationStorage.store().value;
+        return GemforgeIntegrationStorage._store().value;
     }
 
     function integrationVersion() external pure returns (uint256) {

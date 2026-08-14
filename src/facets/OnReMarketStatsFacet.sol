@@ -8,6 +8,6 @@ import {MarketStats} from "../types/OnReTypes.sol";
 ///         calculation model can evolve without replacing settlement code.
 contract OnReMarketStatsFacet {
     function marketStats(address onReToken) external view returns (MarketStats memory stats) {
-        return LibOnReMarketStats.marketStats(onReToken);
+        stats = LibOnReMarketStats._marketStats(onReToken);
     }
 }

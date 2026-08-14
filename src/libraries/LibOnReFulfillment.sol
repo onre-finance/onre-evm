@@ -20,16 +20,16 @@ import {OnReIds} from "./OnReIds.sol";
 
 /// @notice Escrowed worker requests that execute against reverse-pair Worker OfferConfigs.
 library LibOnReFulfillment {
-    function createFulfillmentRequest(bytes32 offerConfigId, uint64 requestId, uint256 inputAmount)
+    function _createFulfillmentRequest(bytes32 offerConfigId, uint64 requestId, uint256 inputAmount)
         internal
         returns (bytes32 fulfillmentRequestId)
     {
-        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(offerConfigId);
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
         _requireWorkerFlow(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
-        fulfillmentRequestId = OnReIds.fulfillmentRequestId(offerConfigId, msg.sender, requestId);
-        FulfillmentRequest storage request = LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
+        fulfillmentRequestId = OnReIds._fulfillmentRequestId(offerConfigId, msg.sender, requestId);
+        FulfillmentRequest storage request = LibOnReStorage._appStorage().fulfillmentRequests[fulfillmentRequestId];
         if (request.exists) {
             revert FulfillmentRequestAlreadyExistsError(fulfillmentRequestId);
         }
@@ -40,34 +40,34 @@ library LibOnReFulfillment {
         request.inputAmount = inputAmount;
         request.exists = true;
 
-        LibOnReVault.pullExactTokenAmount(offer.tokenIn, msg.sender, inputAmount);
+        LibOnReVault._pullExactTokenAmount(offer.tokenIn, msg.sender, inputAmount);
         emit FulfillmentRequested(fulfillmentRequestId, offerConfigId, msg.sender, requestId, inputAmount);
     }
 
-    function cancelFulfillmentRequest(bytes32 fulfillmentRequestId) internal {
-        FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
+    function _cancelFulfillmentRequest(bytes32 fulfillmentRequestId) internal {
+        FulfillmentRequest storage request = LibOnReValidation._requireFulfillmentRequest(fulfillmentRequestId);
         address sender = msg.sender;
-        if (sender != request.user && !LibOnReAccessControl.hasRole(LibOnReRoles.WORKER_ROLE, sender)) {
+        if (sender != request.user && !LibOnReAccessControl._hasRole(LibOnReRoles.WORKER_ROLE, sender)) {
             revert UnauthorizedError(sender);
         }
 
         bytes32 offerConfigId = request.offerConfigId;
         address user = request.user;
         uint256 returnedAmount = request.inputAmount - request.fulfilledInputAmount;
-        address tokenIn = LibOnReValidation.requireOfferConfig(offerConfigId).tokenIn;
-        delete LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
+        address tokenIn = LibOnReValidation._requireOfferConfig(offerConfigId).tokenIn;
+        delete LibOnReStorage._appStorage().fulfillmentRequests[fulfillmentRequestId];
 
-        if (returnedAmount > 0) LibOnReVault.transferExactTokenAmount(tokenIn, user, returnedAmount);
+        if (returnedAmount > 0) LibOnReVault._transferExactTokenAmount(tokenIn, user, returnedAmount);
         emit FulfillmentRequestCancelled(fulfillmentRequestId, offerConfigId, user, returnedAmount, sender);
     }
 
-    function fulfillWorkerRequest(bytes32 fulfillmentRequestId, uint256 inputAmount)
+    function _fulfillWorkerRequest(bytes32 fulfillmentRequestId, uint256 inputAmount)
         internal
         returns (uint256 amountOut)
     {
-        LibOnReAccessControl.checkRole(LibOnReRoles.WORKER_ROLE);
-        FulfillmentRequest storage request = LibOnReValidation.requireFulfillmentRequest(fulfillmentRequestId);
-        OfferConfig storage offer = LibOnReValidation.requireExecutableOfferConfig(request.offerConfigId);
+        LibOnReAccessControl._checkRole(LibOnReRoles.WORKER_ROLE);
+        FulfillmentRequest storage request = LibOnReValidation._requireFulfillmentRequest(fulfillmentRequestId);
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(request.offerConfigId);
         _requireWorkerFlow(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
@@ -81,13 +81,13 @@ library LibOnReFulfillment {
         uint256 totalFulfilledInputAmount = request.fulfilledInputAmount + inputAmount;
         bool fullyFulfilled = totalFulfilledInputAmount == request.inputAmount;
         if (fullyFulfilled) {
-            delete LibOnReStorage.appStorage().fulfillmentRequests[fulfillmentRequestId];
+            delete LibOnReStorage._appStorage().fulfillmentRequests[fulfillmentRequestId];
         } else {
             request.fulfilledInputAmount = totalFulfilledInputAmount;
         }
 
         ExecutionAccounting memory accounting =
-            LibOnReOffer.settleEscrowedWorkerInput(offerConfigId, offer, user, inputAmount);
+            LibOnReOffer._settleEscrowedWorkerInput(offerConfigId, offer, user, inputAmount);
         emit FulfillmentRequestFilled(
             fulfillmentRequestId,
             offerConfigId,
@@ -99,7 +99,7 @@ library LibOnReFulfillment {
             accounting.price,
             fullyFulfilled
         );
-        return accounting.amountOut;
+        amountOut = accounting.amountOut;
     }
 
     function _requireWorkerFlow(OfferConfig storage offer) private view {

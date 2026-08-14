@@ -16,15 +16,15 @@ library LibOnReFeeConfig {
     uint16 internal constant MAX_BASIS_POINTS = 10_000;
     uint16 internal constant MAX_ALLOWED_FEE_BPS = 1_000;
 
-    function createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, bytes32 feeVaultId)
+    function _createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, bytes32 feeVaultId)
         internal
         returns (bytes32 feeConfigId)
     {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateFeePolicy(basisPoints, feeVaultId);
 
-        feeConfigId = OnReIds.feeConfigId(feeConfigInstanceId);
-        FeeConfig storage feeConfig = LibOnReStorage.appStorage().feeConfigs[feeConfigId];
+        feeConfigId = OnReIds._feeConfigId(feeConfigInstanceId);
+        FeeConfig storage feeConfig = LibOnReStorage._appStorage().feeConfigs[feeConfigId];
         if (feeConfig.exists) revert FeeConfigAlreadyExistsError(feeConfigId);
 
         feeConfig.feeConfigId = feeConfigInstanceId;
@@ -35,10 +35,10 @@ library LibOnReFeeConfig {
         emit FeeConfigCreated(feeConfigId, feeConfigInstanceId, basisPoints, feeVaultId);
     }
 
-    function updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateFeePolicy(basisPoints, feeVaultId);
-        FeeConfig storage feeConfig = LibOnReValidation.requireFeeConfig(feeConfigId);
+        FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
         if (feeConfig.basisPoints == basisPoints && feeConfig.feeVaultId == feeVaultId) {
             revert NoChangeError();
         }
@@ -48,24 +48,24 @@ library LibOnReFeeConfig {
         emit FeeConfigUpdated(feeConfigId, basisPoints, feeVaultId);
     }
 
-    function setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        FeeConfig storage feeConfig = LibOnReValidation.requireFeeConfig(feeConfigId);
+    function _setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
         if (feeConfig.enabled == enabled) revert NoChangeError();
         feeConfig.enabled = enabled;
         emit FeeConfigEnabledSet(feeConfigId, enabled);
     }
 
-    function calculateFee(uint256 grossInputAmount, FeeConfig storage feeConfig)
+    function _calculateFee(uint256 grossInputAmount, FeeConfig storage feeConfig)
         internal
         view
         returns (uint256 feeAmount)
     {
-        return OnReMath.calculateFee(grossInputAmount, feeConfig.basisPoints, MAX_BASIS_POINTS);
+        feeAmount = OnReMath._calculateFee(grossInputAmount, feeConfig.basisPoints, MAX_BASIS_POINTS);
     }
 
     function _validateFeePolicy(uint16 basisPoints, bytes32 feeVaultId) private view {
         if (basisPoints > MAX_ALLOWED_FEE_BPS) revert InvalidFeeError();
-        LibOnReValidation.requireVaultKind(feeVaultId, ConfigurableVaultKind.Fee);
+        LibOnReValidation._requireVaultKind(feeVaultId, ConfigurableVaultKind.Fee);
     }
 }

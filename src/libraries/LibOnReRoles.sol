@@ -8,7 +8,7 @@ library LibOnReRoles {
     bytes32 internal constant WORKER_ROLE = keccak256("ONRE_WORKER_ROLE");
     bytes32 internal constant UPGRADER_ROLE = keccak256("ONRE_UPGRADER_ROLE");
 
-    function isSupportedRole(bytes32 role) internal pure returns (bool) {
+    function _isSupportedRole(bytes32 role) internal pure returns (bool) {
         return role == DEFAULT_ADMIN_ROLE || role == ADMIN_ROLE || role == WORKER_ROLE || role == UPGRADER_ROLE;
     }
 }

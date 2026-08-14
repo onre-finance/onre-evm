@@ -8,43 +8,43 @@ import {LibOnReRoles} from "../libraries/LibOnReRoles.sol";
 
 contract OnReAccessControlFacet is IAccessControl {
     function hasRole(bytes32 role, address account) external view override returns (bool) {
-        return LibOnReAccessControl.hasRole(role, account);
+        return LibOnReAccessControl._hasRole(role, account);
     }
 
     function getRoleAdmin(bytes32 role) external view override returns (bytes32) {
-        return LibOnReAccessControl.getRoleAdmin(role);
+        return LibOnReAccessControl._getRoleAdmin(role);
     }
 
     function grantRole(bytes32 role, address account) external override {
-        LibOnReAccessControl.grantRole(role, account);
+        LibOnReAccessControl._grantRole(role, account);
     }
 
     function revokeRole(bytes32 role, address account) external override {
-        LibOnReAccessControl.revokeRole(role, account);
+        LibOnReAccessControl._revokeRole(role, account);
     }
 
     function renounceRole(bytes32 role, address callerConfirmation) external override {
-        LibOnReAccessControl.renounceRole(role, callerConfirmation);
+        LibOnReAccessControl._renounceRole(role, callerConfirmation);
     }
 
     function boss() external view returns (address) {
-        return LibOnReAccessControl.boss();
+        return LibOnReAccessControl._boss();
     }
 
     function pendingBoss() external view returns (address) {
-        return LibOnReAccessControl.pendingBoss();
+        return LibOnReAccessControl._pendingBoss();
     }
 
     function beginBossTransfer(address newBoss) external {
-        LibOnReAccessControl.beginBossTransfer(newBoss);
+        LibOnReAccessControl._beginBossTransfer(newBoss);
     }
 
     function cancelBossTransfer() external {
-        LibOnReAccessControl.cancelBossTransfer();
+        LibOnReAccessControl._cancelBossTransfer();
     }
 
     function acceptBossTransfer() external {
-        LibOnReAccessControl.acceptBossTransfer();
+        LibOnReAccessControl._acceptBossTransfer();
     }
 
     function DEFAULT_ADMIN_ROLE() external pure returns (bytes32) {

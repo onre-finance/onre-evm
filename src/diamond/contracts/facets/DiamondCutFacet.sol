@@ -8,7 +8,7 @@ import {LibOnReRoles} from "../../../libraries/LibOnReRoles.sol";
 
 contract DiamondCutFacet is IDiamondCut {
     function diamondCut(FacetCut[] calldata cut, address init, bytes calldata initCalldata) external override {
-        LibOnReAccessControl.checkRole(LibOnReRoles.UPGRADER_ROLE);
-        LibDiamond.diamondCut(cut, init, initCalldata);
+        LibOnReAccessControl._checkRole(LibOnReRoles.UPGRADER_ROLE);
+        LibDiamond._diamondCut(cut, init, initCalldata);
     }
 }

@@ -16,50 +16,50 @@ import {LibOnReRoles} from "./LibOnReRoles.sol";
 
 /// @notice Permissioned-offer approvers and application emergency control.
 library LibOnReAppConfig {
-    function addApprover(address approver) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _addApprover(address approver) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (approver == address(0)) revert ZeroAddressError();
-        if (approver == LibOnReStorage.appStorage().approver1 || approver == LibOnReStorage.appStorage().approver2) {
+        if (approver == LibOnReStorage._appStorage().approver1 || approver == LibOnReStorage._appStorage().approver2) {
             revert ApproverAlreadyExistsError(approver);
         }
 
-        if (LibOnReStorage.appStorage().approver1 == address(0)) {
-            LibOnReStorage.appStorage().approver1 = approver;
-        } else if (LibOnReStorage.appStorage().approver2 == address(0)) {
-            LibOnReStorage.appStorage().approver2 = approver;
+        if (LibOnReStorage._appStorage().approver1 == address(0)) {
+            LibOnReStorage._appStorage().approver1 = approver;
+        } else if (LibOnReStorage._appStorage().approver2 == address(0)) {
+            LibOnReStorage._appStorage().approver2 = approver;
         } else {
             revert BothApproversFilledError();
         }
         emit ApproverAdded(approver);
     }
 
-    function removeApprover(address approver) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _removeApprover(address approver) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (approver == address(0)) revert ZeroAddressError();
 
-        if (LibOnReStorage.appStorage().approver1 == approver) {
-            LibOnReStorage.appStorage().approver1 = address(0);
-        } else if (LibOnReStorage.appStorage().approver2 == approver) {
-            LibOnReStorage.appStorage().approver2 = address(0);
+        if (LibOnReStorage._appStorage().approver1 == approver) {
+            LibOnReStorage._appStorage().approver1 = address(0);
+        } else if (LibOnReStorage._appStorage().approver2 == approver) {
+            LibOnReStorage._appStorage().approver2 = address(0);
         } else {
             revert NotApproverError(approver);
         }
         emit ApproverRemoved(approver);
     }
 
-    function setKillSwitch(bool killed) internal {
+    function _setKillSwitch(bool killed) internal {
         if (killed) {
             if (
-                !LibOnReAccessControl.hasRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, msg.sender)
-                    && !LibOnReAccessControl.hasRole(LibOnReRoles.ADMIN_ROLE, msg.sender)
+                !LibOnReAccessControl._hasRole(LibOnReRoles.DEFAULT_ADMIN_ROLE, msg.sender)
+                    && !LibOnReAccessControl._hasRole(LibOnReRoles.ADMIN_ROLE, msg.sender)
             ) {
                 revert IAccessControl.AccessControlUnauthorizedAccount(msg.sender, LibOnReRoles.ADMIN_ROLE);
             }
         } else {
-            LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+            LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         }
-        if (LibOnReStorage.appStorage().isKilled == killed) revert NoChangeError();
-        LibOnReStorage.appStorage().isKilled = killed;
+        if (LibOnReStorage._appStorage().isKilled == killed) revert NoChangeError();
+        LibOnReStorage._appStorage().isKilled = killed;
         emit KillSwitchSet(killed);
     }
 }

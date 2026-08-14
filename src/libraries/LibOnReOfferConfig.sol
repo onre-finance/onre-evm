@@ -32,8 +32,8 @@ import {OnReMath} from "./OnReMath.sol";
 
 /// @notice Pair-and-flow offer configuration and reference validation.
 library LibOnReOfferConfig {
-    function makeOfferConfig(MakeOfferConfigParams calldata params) internal returns (bytes32 offerConfigId) {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+    function _makeOfferConfig(MakeOfferConfigParams calldata params) internal returns (bytes32 offerConfigId) {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (params.tokenIn == address(0) || params.tokenOut == address(0)) {
             revert ZeroAddressError();
         }
@@ -46,8 +46,8 @@ library LibOnReOfferConfig {
             revert InvalidDecimalsError();
         }
 
-        offerConfigId = OnReIds.offerConfigId(params.tokenIn, params.tokenOut, params.flow);
-        OfferConfig storage offer = LibOnReStorage.appStorage().offerConfigs[offerConfigId];
+        offerConfigId = OnReIds._offerConfigId(params.tokenIn, params.tokenOut, params.flow);
+        OfferConfig storage offer = LibOnReStorage._appStorage().offerConfigs[offerConfigId];
         if (offer.exists) revert OfferConfigAlreadyExistsError(offerConfigId);
 
         offer.tokenIn = params.tokenIn;
@@ -74,15 +74,15 @@ library LibOnReOfferConfig {
         );
     }
 
-    function updateOfferConfigReferences(
+    function _updateOfferConfigReferences(
         bytes32 offerConfigId,
         bytes32 quoterId,
         bytes32 feeConfigId,
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        OfferConfig storage offer = LibOnReValidation.requireOfferConfig(offerConfigId);
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        OfferConfig storage offer = LibOnReValidation._requireOfferConfig(offerConfigId);
         if (
             offer.quoterId == quoterId && offer.feeConfigId == feeConfigId && offer.proceedsVaultId == proceedsVaultId
                 && offer.liquidityVaultId == liquidityVaultId
@@ -93,9 +93,9 @@ library LibOnReOfferConfig {
         emit OfferConfigReferencesUpdated(offerConfigId, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId);
     }
 
-    function setOfferConfigEnabled(bytes32 offerConfigId, bool enabled) internal {
-        LibOnReAccessControl.checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        OfferConfig storage offer = LibOnReValidation.requireOfferConfig(offerConfigId);
+    function _setOfferConfigEnabled(bytes32 offerConfigId, bool enabled) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        OfferConfig storage offer = LibOnReValidation._requireOfferConfig(offerConfigId);
         bool disabled = !enabled;
         if (offer.disabled == disabled) revert NoChangeError();
         offer.disabled = disabled;
@@ -110,14 +110,14 @@ library LibOnReOfferConfig {
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) private {
-        LibOnReValidation.requirePricer(OnReIds.usdPricerId(_onReToken(offer)));
-        Quoter storage quoter = LibOnReValidation.requireQuoter(quoterId);
+        LibOnReValidation._requirePricer(OnReIds._usdPricerId(_onReToken(offer)));
+        Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
         _validateFlowQuoter(offer, quoter.kind);
-        FeeConfig storage feeConfig = LibOnReValidation.requireFeeConfig(feeConfigId);
-        LibOnReValidation.requireVaultKind(feeConfig.feeVaultId, ConfigurableVaultKind.Fee);
-        LibOnReValidation.requireVaultKind(proceedsVaultId, ConfigurableVaultKind.Proceeds);
+        FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
+        LibOnReValidation._requireVaultKind(feeConfig.feeVaultId, ConfigurableVaultKind.Fee);
+        LibOnReValidation._requireVaultKind(proceedsVaultId, ConfigurableVaultKind.Proceeds);
         if (liquidityVaultId != bytes32(0)) {
-            LibOnReValidation.requireVaultKind(liquidityVaultId, ConfigurableVaultKind.Liquidity);
+            LibOnReValidation._requireVaultKind(liquidityVaultId, ConfigurableVaultKind.Liquidity);
         }
         if (offer.direction == OfferDirection.OnReToAsset && liquidityVaultId == bytes32(0)) {
             revert LiquidityVaultRequiredError(offerConfigId);
@@ -142,11 +142,11 @@ library LibOnReOfferConfig {
     }
 
     function _deriveDirection(address tokenIn, address tokenOut) private view returns (OfferDirection) {
-        bool inputIsOnRe = LibOnReStorage.appStorage().onReTokenConfigs[tokenIn].decimals != 0;
-        bool outputIsOnRe = LibOnReStorage.appStorage().onReTokenConfigs[tokenOut].decimals != 0;
+        bool inputIsOnRe = LibOnReStorage._appStorage().onReTokenConfigs[tokenIn].decimals != 0;
+        bool outputIsOnRe = LibOnReStorage._appStorage().onReTokenConfigs[tokenOut].decimals != 0;
         if (inputIsOnRe == outputIsOnRe) revert InvalidOfferDirectionError();
         address onReToken = inputIsOnRe ? tokenIn : tokenOut;
-        LibOnReValidation.requireEnabledOnReToken(onReToken);
+        LibOnReValidation._requireEnabledOnReToken(onReToken);
         return inputIsOnRe ? OfferDirection.OnReToAsset : OfferDirection.AssetToOnRe;
     }
 

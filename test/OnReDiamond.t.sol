@@ -594,7 +594,7 @@ contract DiamondMultiSelectorFacet {
 
 contract StorageAwareMarketStatsFacet {
     function marketStats(address token) external view returns (MarketStats memory stats) {
-        OnReTokenConfig storage config = LibOnReStorage.appStorage().onReTokenConfigs[token];
+        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[token];
         stats.tvl = uint160(config.inventorySource);
         stats.nav = config.decimals;
     }

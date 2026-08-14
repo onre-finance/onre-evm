@@ -15,7 +15,7 @@ library LibOnReApproval {
     bytes32 private constant EIP712_NAME_HASH = keccak256("OnReApp");
     bytes32 private constant EIP712_VERSION_HASH = keccak256("1");
 
-    function isValidForUser(address user, ApprovalMessage calldata approval, bytes calldata signature)
+    function _isValidForUser(address user, ApprovalMessage calldata approval, bytes calldata signature)
         internal
         view
         returns (bool)
@@ -25,7 +25,7 @@ library LibOnReApproval {
         (address signer, ECDSA.RecoverError recoverError,) =
             ECDSA.tryRecoverCalldata(_approvalDigest(approval), signature);
         return recoverError == ECDSA.RecoverError.NoError
-            && (signer == LibOnReStorage.appStorage().approver1 || signer == LibOnReStorage.appStorage().approver2);
+            && (signer == LibOnReStorage._appStorage().approver1 || signer == LibOnReStorage._appStorage().approver2);
     }
 
     function _approvalDigest(ApprovalMessage calldata approval) private view returns (bytes32) {

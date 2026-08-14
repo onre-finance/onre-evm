@@ -111,18 +111,6 @@ library LibOnReQuoter {
         result = QuoteResult({price: price, amountOut: amountOut});
     }
 
-    function _adjustedFee(OfferConfig storage offer, uint256 grossInputAmount, uint256 feeAmount)
-        internal
-        view
-        returns (uint256)
-    {
-        Quoter storage quoter = LibOnReValidation._requireExecutableQuoter(offer.quoterId);
-        if (quoter.kind != QuoterKind.PropRfq) return feeAmount;
-        return LibOnRePropRfq._adjustedFee(
-            LibOnReStorage._appStorage().propRfqQuoterStates[offer.quoterId], offer, grossInputAmount, feeAmount
-        );
-    }
-
     function _recordExecution(OfferConfig storage offer, uint256 netInputAmount, uint256 price) internal {
         Quoter storage quoter = LibOnReStorage._appStorage().quoters[offer.quoterId];
         if (quoter.kind != QuoterKind.PropRfq) return;
@@ -146,8 +134,7 @@ library LibOnReQuoter {
             config.cadenceThreshold,
             config.cadenceWaveScaled,
             config.epochDurationSeconds,
-            config.wallSensitivityScaled,
-            config.minimumSellHaircutOnRe
+            config.wallSensitivityScaled
         );
     }
 

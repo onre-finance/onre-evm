@@ -45,7 +45,8 @@ The internal libraries follow the same responsibility boundaries:
   liquidity-vault refill targets.
 - `LibOnReConfig` owns OnRe-token and supply-exclusion configuration, while
   `LibOnReAppConfig` owns approvers and emergency control.
-- `LibOnReFeeConfig` owns reusable fee policy and fee calculation.
+- `LibOnReFeeConfig` owns reusable basis-point and minimum input-token fee
+  policy and fee calculation.
 - `LibOnReOfferConfig` owns pair-and-flow configuration and reference
   validation.
 - `LibOnRePropRfq` owns proprietary request-for-quote (Prop RFQ) configuration

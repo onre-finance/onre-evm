@@ -98,6 +98,7 @@ import {OnReDiamondTestHelper} from "./helpers/OnReDiamondTestHelper.sol";
 
 contract OnReAppTest is Test, OnReDiamondTestHelper {
     bytes32 private constant APPROVAL_TYPEHASH = keccak256("ApprovalMessage(address user,uint64 expiry)");
+    bytes32 private constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;
     uint256 private constant APPROVER_KEY = 0xA11CE;
     uint256 private constant INVENTORY_AMOUNT = 1_000_000_000e9;
 
@@ -154,7 +155,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         feeVaultId = app.createConfigurableVault(ConfigurableVaultKind.Fee, 0, vaultDestination, 0);
         proceedsVaultId = app.createConfigurableVault(ConfigurableVaultKind.Proceeds, 0, vaultDestination, 0);
         liquidityVaultId = app.createConfigurableVault(ConfigurableVaultKind.Liquidity, 0, vaultDestination, 0);
-        feeConfigId = app.createFeeConfig(0, 100, feeVaultId);
+        feeConfigId = app.createFeeConfig(0, 100, 0, feeVaultId);
 
         permissionedOfferId = _makeOffer(
             address(usd), address(onReToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
@@ -422,15 +423,14 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         assertFalse(app.getOfferConfig(expectedOfferId).exists);
     }
 
-    function test_PropRfqSellQuoteAppliesFeeFloorHardWallAndRecordsPressure() public {
+    function test_PropRfqSellUsesFeeConfigMinimumHardWallAndRecordsPressure() public {
         PropRfqQuoterConfig memory config = _basePropRfqTestConfig();
         config.cadenceThreshold = 1;
-        config.minimumSellHaircutOnRe = 100_000_000;
         bytes32 propRfqId = _createConfiguredPropRfqQuoter(0, config);
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 100_000_000, feeVaultId);
 
         _depositLiquidity(10_000_000);
         ExecutionAccounting memory firstPreview = app.previewExecution(sellOfferId, 1_000_000_000);
@@ -456,7 +456,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         _depositLiquidity(20_000_000);
         onReToken.mint(user, 1_000_000_000);
 
@@ -474,7 +474,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
 
         assertEq(app.previewExecution(permissionlessOfferId, 1_000_000).amountOut, 1_000_000_000);
         _depositLiquidity(10_000_000);
@@ -496,17 +496,11 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         assertGt(app.previewExecution(sellOfferId, 1_000_000_000).amountOut, pressuredAmountOut);
     }
 
-    function test_PropRfqSellRejectsFeeFloorAtGrossInput() public {
-        PropRfqQuoterConfig memory config = _basePropRfqTestConfig();
-        config.minimumSellHaircutOnRe = 1_000_000_000;
-        bytes32 propRfqId = _createConfiguredPropRfqQuoter(0, config);
-        bytes32 sellOfferId = _makeOffer(
-            address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
-        );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+    function test_FeeConfigRejectsMinimumThatConsumesGrossInput() public {
+        app.updateFeeConfig(feeConfigId, 0, 1_000_000, feeVaultId);
 
         vm.expectRevert(InvalidAmountError.selector);
-        app.previewExecution(sellOfferId, 1_000_000_000);
+        app.previewExecution(permissionlessOfferId, 1_000_000);
     }
 
     function test_PropRfqSellRejectsEveryLiquidityBoundary() public {
@@ -514,7 +508,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
 
         vm.expectPartialRevert(InsufficientLiquidityError.selector);
         app.previewExecution(sellOfferId, 1_000_000_000);
@@ -535,7 +529,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
 
         vm.expectPartialRevert(InsufficientLiquidityError.selector);
         app.previewExecution(sellOfferId, 1);
@@ -555,7 +549,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         _depositLiquidity(10_000_000);
 
         onReToken.mint(user, 1_000_000_000);
@@ -594,7 +588,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         bytes32 sellOfferId = _makeOffer(
             address(onReToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         _depositLiquidity(10_000_000);
         onReToken.mint(user, 1_000_000_000);
 
@@ -637,7 +631,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             liquidityVaultId
         );
 
-        bytes32 secondFee = app.createFeeConfig(1, 0, feeVaultId);
+        bytes32 secondFee = app.createFeeConfig(1, 0, 0, feeVaultId);
         vm.expectRevert(InvalidOfferDirectionError.selector);
         _makeOffer(
             address(alternativeUsd), address(onReToken), OfferFlow.Worker, navQuoterId, secondFee, liquidityVaultId
@@ -909,21 +903,51 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
     }
 
     function test_FeeConfigIsReusableAndMutable() public {
-        app.updateFeeConfig(feeConfigId, 200, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 200, 300_000, feeVaultId);
         ExecutionAccounting memory preview = app.previewExecution(permissionlessOfferId, 10e6);
-        assertEq(preview.feeAmount, 200_000);
-        assertEq(preview.netInputAmount, 9_800_000);
-        assertEq(preview.amountOut, 9_800_000_000);
+        assertEq(app.getFeeConfig(feeConfigId).minimumFeeAmount, 300_000);
+        assertEq(preview.feeAmount, 300_000);
+        assertEq(preview.netInputAmount, 9_700_000);
+        assertEq(preview.amountOut, 9_700_000_000);
 
         app.setFeeConfigEnabled(feeConfigId, false);
         vm.expectRevert(abi.encodeWithSelector(FeeConfigDisabledError.selector, feeConfigId));
         app.previewExecution(permissionedOfferId, 10e6);
     }
 
+    function test_FeeConfigMinimumAppendPreservesMainStorageLayout() public {
+        uint64 legacyInstanceId = 77;
+        uint16 legacyBasisPoints = 250;
+        bytes32 legacyFeeConfigId = OnReIds.feeConfigId(legacyInstanceId);
+        bytes32 feeConfigsMappingSlot = bytes32(uint256(APP_STORAGE_LOCATION) + 3);
+        bytes32 legacyFeeConfigSlot = keccak256(abi.encode(legacyFeeConfigId, feeConfigsMappingSlot));
+        uint256 packedMainFields =
+            uint256(legacyInstanceId) | uint256(legacyBasisPoints) << 64 | uint256(1) << 80 | uint256(1) << 88;
+
+        vm.store(address(app), legacyFeeConfigSlot, feeVaultId);
+        vm.store(address(app), bytes32(uint256(legacyFeeConfigSlot) + 1), bytes32(packedMainFields));
+
+        FeeConfig memory legacyFeeConfig = app.getFeeConfig(legacyFeeConfigId);
+        assertEq(legacyFeeConfig.feeVaultId, feeVaultId);
+        assertEq(legacyFeeConfig.feeConfigId, legacyInstanceId);
+        assertEq(legacyFeeConfig.basisPoints, legacyBasisPoints);
+        assertTrue(legacyFeeConfig.enabled);
+        assertTrue(legacyFeeConfig.exists);
+        assertEq(legacyFeeConfig.minimumFeeAmount, 0);
+
+        app.updateFeeConfig(legacyFeeConfigId, legacyBasisPoints, 300_000, feeVaultId);
+        legacyFeeConfig = app.getFeeConfig(legacyFeeConfigId);
+        assertEq(legacyFeeConfig.feeConfigId, legacyInstanceId);
+        assertEq(legacyFeeConfig.basisPoints, legacyBasisPoints);
+        assertTrue(legacyFeeConfig.enabled);
+        assertTrue(legacyFeeConfig.exists);
+        assertEq(legacyFeeConfig.minimumFeeAmount, 300_000);
+    }
+
     function test_ForwardExecutionRefillsLiquidityBeforeProceeds() public {
         onReToken.mint(address(this), 1_000e9);
         bytes32 refillVault = app.createConfigurableVault(ConfigurableVaultKind.Liquidity, 1, vaultDestination, 1_000);
-        bytes32 zeroFee = app.createFeeConfig(2, 0, feeVaultId);
+        bytes32 zeroFee = app.createFeeConfig(2, 0, 0, feeVaultId);
         app.updateOfferConfigReferences(
             permissionlessOfferId, navPermissionlessQuoterId, zeroFee, proceedsVaultId, refillVault
         );
@@ -1036,7 +1060,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         app.createConfigurableVault(ConfigurableVaultKind.Fee, 0, vaultDestination, 0);
 
         vm.expectRevert(InvalidFeeError.selector);
-        app.createFeeConfig(12, 1_001, feeVaultId);
+        app.createFeeConfig(12, 1_001, 0, feeVaultId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1046,10 +1070,10 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
                 uint8(ConfigurableVaultKind.Proceeds)
             )
         );
-        app.createFeeConfig(12, 0, proceedsVaultId);
+        app.createFeeConfig(12, 0, 0, proceedsVaultId);
 
         vm.expectRevert(NoChangeError.selector);
-        app.updateFeeConfig(feeConfigId, 100, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 100, 0, feeVaultId);
         vm.expectRevert(NoChangeError.selector);
         app.updateConfigurableVault(liquidityVaultId, vaultDestination, 0);
 
@@ -1241,7 +1265,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(abi.encodeWithSelector(QuoterNotFoundError.selector, missing));
         app.setQuoterEnabled(missing, false);
         vm.expectRevert(abi.encodeWithSelector(FeeConfigNotFoundError.selector, missing));
-        app.updateFeeConfig(missing, 0, feeVaultId);
+        app.updateFeeConfig(missing, 0, 0, feeVaultId);
         vm.expectRevert(abi.encodeWithSelector(ConfigurableVaultNotFoundError.selector, missing));
         app.updateConfigurableVault(missing, vaultDestination, 0);
         vm.expectRevert(abi.encodeWithSelector(OfferConfigNotFoundError.selector, missing));
@@ -1320,7 +1344,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
         vm.expectRevert(abi.encodeWithSelector(QuoterAlreadyExistsError.selector, navQuoterId));
         app.createQuoter(QuoterKind.Nav, 0);
         vm.expectRevert(abi.encodeWithSelector(FeeConfigAlreadyExistsError.selector, feeConfigId));
-        app.createFeeConfig(0, 100, feeVaultId);
+        app.createFeeConfig(0, 100, 0, feeVaultId);
     }
 
     function test_ApprovalBranchesAndInsufficientLiquidity() public {
@@ -1370,7 +1394,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             feeConfigId,
             liquidityVaultId
         );
-        app.updateFeeConfig(feeConfigId, 0, feeVaultId);
+        app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         onReToken.mint(user, 1e9);
         vm.prank(user);
         onReToken.approve(address(app), 1e9);
@@ -1571,8 +1595,7 @@ contract OnReAppTest is Test, OnReDiamondTestHelper {
             cadenceThreshold: 20,
             cadenceWaveScaled: 10_000,
             epochDurationSeconds: 86_400,
-            wallSensitivityScaled: 20_000,
-            minimumSellHaircutOnRe: 0
+            wallSensitivityScaled: 20_000
         });
     }
 

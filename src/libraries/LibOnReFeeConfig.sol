@@ -2,7 +2,12 @@
 pragma solidity 0.8.35;
 
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
-import {FeeConfigAlreadyExistsError, InvalidFeeError, NoChangeError} from "../types/OnReAppErrors.sol";
+import {
+    FeeConfigAlreadyExistsError,
+    InvalidAmountError,
+    InvalidFeeError,
+    NoChangeError
+} from "../types/OnReAppErrors.sol";
 import {FeeConfigCreated, FeeConfigEnabledSet, FeeConfigUpdated} from "../types/OnReAppEvents.sol";
 import {ConfigurableVaultKind, FeeConfig} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
@@ -16,10 +21,12 @@ library LibOnReFeeConfig {
     uint16 internal constant MAX_BASIS_POINTS = 10_000;
     uint16 internal constant MAX_ALLOWED_FEE_BPS = 1_000;
 
-    function _createFeeConfig(uint64 feeConfigInstanceId, uint16 basisPoints, bytes32 feeVaultId)
-        internal
-        returns (bytes32 feeConfigId)
-    {
+    function _createFeeConfig(
+        uint64 feeConfigInstanceId,
+        uint16 basisPoints,
+        uint256 minimumFeeAmount,
+        bytes32 feeVaultId
+    ) internal returns (bytes32 feeConfigId) {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateFeePolicy(basisPoints, feeVaultId);
 
@@ -29,23 +36,30 @@ library LibOnReFeeConfig {
 
         feeConfig.feeConfigId = feeConfigInstanceId;
         feeConfig.basisPoints = basisPoints;
+        feeConfig.minimumFeeAmount = minimumFeeAmount;
         feeConfig.feeVaultId = feeVaultId;
         feeConfig.enabled = true;
         feeConfig.exists = true;
-        emit FeeConfigCreated(feeConfigId, feeConfigInstanceId, basisPoints, feeVaultId);
+        emit FeeConfigCreated(feeConfigId, feeConfigInstanceId, basisPoints, minimumFeeAmount, feeVaultId);
     }
 
-    function _updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, bytes32 feeVaultId) internal {
+    function _updateFeeConfig(bytes32 feeConfigId, uint16 basisPoints, uint256 minimumFeeAmount, bytes32 feeVaultId)
+        internal
+    {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateFeePolicy(basisPoints, feeVaultId);
         FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
-        if (feeConfig.basisPoints == basisPoints && feeConfig.feeVaultId == feeVaultId) {
+        if (
+            feeConfig.basisPoints == basisPoints && feeConfig.minimumFeeAmount == minimumFeeAmount
+                && feeConfig.feeVaultId == feeVaultId
+        ) {
             revert NoChangeError();
         }
 
         feeConfig.basisPoints = basisPoints;
+        feeConfig.minimumFeeAmount = minimumFeeAmount;
         feeConfig.feeVaultId = feeVaultId;
-        emit FeeConfigUpdated(feeConfigId, basisPoints, feeVaultId);
+        emit FeeConfigUpdated(feeConfigId, basisPoints, minimumFeeAmount, feeVaultId);
     }
 
     function _setFeeConfigEnabled(bytes32 feeConfigId, bool enabled) internal {
@@ -62,6 +76,8 @@ library LibOnReFeeConfig {
         returns (uint256 feeAmount)
     {
         feeAmount = OnReMath._calculateFee(grossInputAmount, feeConfig.basisPoints, MAX_BASIS_POINTS);
+        if (feeConfig.minimumFeeAmount > feeAmount) feeAmount = feeConfig.minimumFeeAmount;
+        if (feeAmount >= grossInputAmount) revert InvalidAmountError();
     }
 
     function _validateFeePolicy(uint16 basisPoints, bytes32 feeVaultId) private view {

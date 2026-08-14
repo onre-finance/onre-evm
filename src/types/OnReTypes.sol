@@ -71,7 +71,6 @@ struct Quoter {
 }
 
 struct PropRfqQuoterConfig {
-    uint256 minimumSellHaircutOnRe;
     uint64 epochDurationSeconds;
     uint32 curveExponentScaled;
     uint32 cadenceThreshold;
@@ -97,6 +96,7 @@ struct FeeConfig {
     uint16 basisPoints;
     bool enabled;
     bool exists;
+    uint256 minimumFeeAmount;
 }
 
 struct ConfigurableVault {

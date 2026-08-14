@@ -31,12 +31,17 @@ event PropRfqQuoterConfigured(
     uint32 cadenceThreshold,
     uint32 cadenceWaveScaled,
     uint64 epochDurationSeconds,
-    uint32 wallSensitivityScaled,
-    uint256 minimumSellHaircutOnRe
+    uint32 wallSensitivityScaled
 );
 
-event FeeConfigCreated(bytes32 indexed feeConfigId, uint64 indexed instanceId, uint16 basisPoints, bytes32 feeVaultId);
-event FeeConfigUpdated(bytes32 indexed feeConfigId, uint16 basisPoints, bytes32 feeVaultId);
+event FeeConfigCreated(
+    bytes32 indexed feeConfigId,
+    uint64 indexed instanceId,
+    uint16 basisPoints,
+    uint256 minimumFeeAmount,
+    bytes32 feeVaultId
+);
+event FeeConfigUpdated(bytes32 indexed feeConfigId, uint16 basisPoints, uint256 minimumFeeAmount, bytes32 feeVaultId);
 event FeeConfigEnabledSet(bytes32 indexed feeConfigId, bool enabled);
 
 event OfferConfigCreated(

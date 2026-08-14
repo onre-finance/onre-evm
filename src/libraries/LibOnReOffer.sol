@@ -72,7 +72,6 @@ library LibOnReOffer {
         if (grossInputAmount == 0) revert InvalidAmountError();
         FeeConfig storage feeConfig = LibOnReValidation._requireExecutableFeeConfig(offer.feeConfigId);
         uint256 feeAmount = LibOnReFeeConfig._calculateFee(grossInputAmount, feeConfig);
-        feeAmount = LibOnReQuoter._adjustedFee(offer, grossInputAmount, feeAmount);
         uint256 netInputAmount = grossInputAmount - feeAmount;
         if (netInputAmount == 0) revert InvalidAmountError();
         QuoteResult memory quoteResult = LibOnReQuoter._quote(offer, netInputAmount);

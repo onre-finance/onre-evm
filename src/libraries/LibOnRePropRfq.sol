@@ -10,13 +10,7 @@ import {
     InvalidPropRfqPairError,
     PropRfqConfigurationRequiredError
 } from "../types/OnReAppErrors.sol";
-import {
-    ConfigurableVault,
-    OfferConfig,
-    OfferDirection,
-    PropRfqQuoterConfig,
-    PropRfqQuoterState
-} from "../types/OnReTypes.sol";
+import {ConfigurableVault, OfferConfig, PropRfqQuoterConfig, PropRfqQuoterState} from "../types/OnReTypes.sol";
 import {LibOnReMarketStats} from "./LibOnReMarketStats.sol";
 import {LibOnRePropRfqMath} from "./LibOnRePropRfqMath.sol";
 
@@ -64,19 +58,6 @@ library LibOnRePropRfq {
         if (!isBuy && !isSell) {
             revert InvalidPropRfqPairError(quoterId, offer.tokenIn, offer.tokenOut);
         }
-    }
-
-    function _adjustedFee(
-        PropRfqQuoterState storage state,
-        OfferConfig storage offer,
-        uint256 grossInputAmount,
-        uint256 feeAmount
-    ) internal view returns (uint256) {
-        if (offer.direction != OfferDirection.OnReToAsset) return feeAmount;
-        uint256 minimumFee = state.config.minimumSellHaircutOnRe;
-        if (minimumFee <= feeAmount) return feeAmount;
-        if (minimumFee >= grossInputAmount) revert InvalidAmountError();
-        return minimumFee;
     }
 
     function _quoteSell(PropRfqQuoterState storage state, OfferConfig storage offer, uint256 rawAmountOut)

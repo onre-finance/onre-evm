@@ -45,7 +45,7 @@ flowchart TB
     end
 
     subgraph Configuration["Reusable offer configuration"]
-        FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>feeVaultId<br/>enabled"]
+        FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>minimum input-token fee<br/>feeVaultId<br/>enabled"]
         OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>disabled"]
     end
 
@@ -191,9 +191,14 @@ Every fee is charged in the input token:
 
 ```text
 percentageFee = ceil(grossInput * basisPoints / 10_000)
-PropRfq sell fee = max(percentageFee, minimumSellHaircutOnRe)
+fee           = max(percentageFee, minimumFeeAmount)
 netInput      = grossInput - fee
 ```
+
+`minimumFeeAmount` is denominated in the offer input token's smallest unit.
+Set it to zero when the fee configuration should have no absolute floor. Since
+the floor is token-denominated, an offer must reference a fee configuration
+that is appropriate for its input token.
 
 The Prop RFQ configuration stored per quoter instance is:
 
@@ -201,8 +206,7 @@ The Prop RFQ configuration stored per quoter instance is:
 - curve exponent scaled by `10_000`;
 - sell cadence threshold and maximum cadence wave;
 - rolling epoch duration;
-- dynamic-wall sensitivity;
-- minimum OnRe input haircut for sells.
+- dynamic-wall sensitivity.
 
 Each instance also stores current sell value, current buy value, previous net
 sell value, current sell count, and epoch start. Successful buys add their net

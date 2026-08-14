@@ -31,7 +31,7 @@ contract OnReVaultAndFeeTest is OnReAppTestBase {
     function test_FeeConfigMinimumAppendPreservesMainStorageLayout() public {
         uint64 legacyInstanceId = 77;
         uint16 legacyBasisPoints = 250;
-        bytes32 legacyFeeConfigId = OnReIds.feeConfigId(legacyInstanceId);
+        bytes32 legacyFeeConfigId = OnReIds._feeConfigId(legacyInstanceId);
         bytes32 feeConfigsMappingSlot = bytes32(uint256(APP_STORAGE_LOCATION) + 3);
         bytes32 legacyFeeConfigSlot = keccak256(abi.encode(legacyFeeConfigId, feeConfigsMappingSlot));
         uint256 packedMainFields =

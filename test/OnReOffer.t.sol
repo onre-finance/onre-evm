@@ -8,11 +8,11 @@ import "./helpers/OnReAppTestBase.sol";
 
 contract OnReOfferTest is OnReAppTestBase {
     function test_OfferIdentityIncludesDirectedPairAndFlow() public view {
-        assertEq(permissionedOfferId, OnReIds.offerConfigId(address(usd), address(onReToken), OfferFlow.Permissioned));
+        assertEq(permissionedOfferId, OnReIds._offerConfigId(address(usd), address(onReToken), OfferFlow.Permissioned));
         assertEq(
-            permissionlessOfferId, OnReIds.offerConfigId(address(usd), address(onReToken), OfferFlow.Permissionless)
+            permissionlessOfferId, OnReIds._offerConfigId(address(usd), address(onReToken), OfferFlow.Permissionless)
         );
-        assertEq(workerOfferId, OnReIds.offerConfigId(address(onReToken), address(usd), OfferFlow.Worker));
+        assertEq(workerOfferId, OnReIds._offerConfigId(address(onReToken), address(usd), OfferFlow.Worker));
         assertTrue(permissionedOfferId != permissionlessOfferId);
 
         OfferConfig memory permissioned = app.getOfferConfig(permissionedOfferId);
@@ -129,7 +129,7 @@ contract OnReOfferTest is OnReAppTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 LiquidityVaultRequiredError.selector,
-                OnReIds.offerConfigId(address(onReToken), address(usd), OfferFlow.Permissionless)
+                OnReIds._offerConfigId(address(onReToken), address(usd), OfferFlow.Permissionless)
             )
         );
         _makeOffer(

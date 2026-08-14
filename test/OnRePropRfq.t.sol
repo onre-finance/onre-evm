@@ -10,7 +10,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
     function test_QuoterIdentitySupportsIndependentInstancesOfTheSameKind() public {
         bytes32 secondNavQuoterId = app.createQuoter(QuoterKind.Nav, 1);
 
-        assertEq(secondNavQuoterId, OnReIds.quoterId(QuoterKind.Nav, 1));
+        assertEq(secondNavQuoterId, OnReIds._quoterId(QuoterKind.Nav, 1));
         assertNotEq(secondNavQuoterId, navQuoterId);
         assertEq(app.getQuoter(secondNavQuoterId).instanceId, 1);
 
@@ -30,8 +30,8 @@ contract OnRePropRfqTest is OnReAppTestBase {
         app.configurePropRfqQuoter(firstId, address(usd), address(onReToken), firstConfig);
         app.configurePropRfqQuoter(secondId, address(usd), address(onReToken), secondConfig);
 
-        assertEq(firstId, OnReIds.quoterId(QuoterKind.PropRfq, 0));
-        assertEq(secondId, OnReIds.quoterId(QuoterKind.PropRfq, 1));
+        assertEq(firstId, OnReIds._quoterId(QuoterKind.PropRfq, 0));
+        assertEq(secondId, OnReIds._quoterId(QuoterKind.PropRfq, 1));
         assertNotEq(firstId, secondId);
 
         PropRfqQuoterState memory first = app.getPropRfqQuoter(firstId);
@@ -72,7 +72,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
 
     function test_PropRfqQuoterRequiresDedicatedConfigurationAndValidPairTokens() public {
         bytes32 propRfqId = app.createQuoter(QuoterKind.PropRfq, 0);
-        assertEq(propRfqId, OnReIds.quoterId(QuoterKind.PropRfq, 0));
+        assertEq(propRfqId, OnReIds._quoterId(QuoterKind.PropRfq, 0));
         assertTrue(app.getQuoter(propRfqId).exists);
         assertEq(app.getPropRfqQuoter(propRfqId).assetToken, address(0));
 
@@ -206,7 +206,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
 
         MockUsd alternativeUsd = new MockUsd();
         bytes32 expectedOfferId =
-            OnReIds.offerConfigId(address(alternativeUsd), address(onReToken), OfferFlow.Permissionless);
+            OnReIds._offerConfigId(address(alternativeUsd), address(onReToken), OfferFlow.Permissionless);
         vm.expectRevert(
             abi.encodeWithSelector(
                 InvalidPropRfqPairError.selector, propRfqId, address(alternativeUsd), address(onReToken)

@@ -54,7 +54,7 @@ contract OnReFulfillmentTest is OnReAppTestBase {
 
         vm.prank(user);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 7, 100e9);
-        assertEq(requestKey, OnReIds.fulfillmentRequestId(workerOfferId, user, 7));
+        assertEq(requestKey, OnReIds._fulfillmentRequestId(workerOfferId, user, 7));
         assertEq(onReToken.balanceOf(address(app)), 100e9);
 
         vm.prank(worker);

@@ -21,7 +21,7 @@ contract OnReConfigTest is OnReAppTestBase {
         assertEq(tokenConfig.inventorySource, inventorySource);
 
         Pricer memory pricer = app.getPricer(pricerId);
-        assertEq(pricerId, OnReIds.pricerId(address(onReToken), PricingDenomination.Usd));
+        assertEq(pricerId, OnReIds._pricerId(address(onReToken), PricingDenomination.Usd));
         assertEq(pricer.onReToken, address(onReToken));
         assertEq(uint8(pricer.denomination), uint8(PricingDenomination.Usd));
         assertEq(pricer.vectorCount, 1);

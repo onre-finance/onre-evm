@@ -157,7 +157,7 @@ library LibOnReOfferConfig {
     {
         if (quoter.kind == QuoterKind.NavPermissionless) return;
         if (quoter.kind == QuoterKind.PropRfq) {
-            LibOnRePropRfq._validatePair(quoterId, LibOnReStorage._appStorage().propRfqQuoterStates[quoterId], offer);
+            LibOnRePropRfq._validatePair(quoterId, LibOnReStorage._appStorage().propRfqStates[quoterId], offer);
             return;
         }
         revert InvalidFlowQuoterError();

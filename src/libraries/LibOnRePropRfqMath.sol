@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
-/// @notice Pure fixed-point curve and cadence math for the proprietary request-for-quote quoter.
+/// @notice Pure fixed-point curve and cadence math for the Proprietary Request for Quote pricing.
 /// @dev Mirrors `onre-sol` Prop AMM hard-wall math. Values use a 1e12 fixed-point scale.
 library LibOnRePropRfqMath {
     uint256 internal constant HARD_WALL_SCALE = 1_000_000_000_000;

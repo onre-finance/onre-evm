@@ -70,7 +70,7 @@ struct Quoter {
     bool exists;
 }
 
-struct PropRfqQuoterConfig {
+struct PropRfqConfig {
     uint64 epochDurationSeconds;
     uint32 curveExponentScaled;
     uint32 cadenceThreshold;
@@ -79,11 +79,11 @@ struct PropRfqQuoterConfig {
     uint16 curvePegHaircutBps;
 }
 
-struct PropRfqQuoterState {
+struct PropRfqState {
     uint256 currentSellValueStable;
     uint256 currentBuyValueStable;
     uint256 previousNetSellValueStable;
-    PropRfqQuoterConfig config;
+    PropRfqConfig config;
     address onReToken;
     uint64 epochStart;
     uint32 currentSellTradeCount;

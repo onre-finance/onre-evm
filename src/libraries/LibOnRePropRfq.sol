@@ -10,11 +10,11 @@ import {
     InvalidPropRfqPairError,
     PropRfqConfigurationRequiredError
 } from "../types/OnReAppErrors.sol";
-import {ConfigurableVault, OfferConfig, PropRfqQuoterConfig, PropRfqQuoterState} from "../types/OnReTypes.sol";
+import {ConfigurableVault, OfferConfig, PropRfqConfig, PropRfqState} from "../types/OnReTypes.sol";
 import {LibOnReMarketStats} from "./LibOnReMarketStats.sol";
 import {LibOnRePropRfqMath} from "./LibOnRePropRfqMath.sol";
 
-/// @notice Stateful pricing for the proprietary request-for-quote (Prop RFQ) quoter.
+/// @notice Stateful pricing for the Proprietary Request for Quote (Prop RFQ) pricing.
 /// @dev The fixed-point formulas mirror the corresponding Solana implementation.
 library LibOnRePropRfq {
     uint256 internal constant HARD_WALL_SCALE = 1_000_000_000_000;
@@ -27,7 +27,7 @@ library LibOnRePropRfq {
     uint256 internal constant WALL_SENSITIVITY_SCALE = 10_000;
     uint256 internal constant MAX_BASIS_POINTS = 10_000;
 
-    function _validateConfig(PropRfqQuoterConfig memory config) internal pure {
+    function _validateConfig(PropRfqConfig memory config) internal pure {
         if (config.curvePegHaircutBps > MAX_BASIS_POINTS) {
             revert InvalidBasisPointsError();
         }
@@ -46,10 +46,7 @@ library LibOnRePropRfq {
         }
     }
 
-    function _validatePair(bytes32 quoterId, PropRfqQuoterState storage state, OfferConfig storage offer)
-        internal
-        view
-    {
+    function _validatePair(bytes32 quoterId, PropRfqState storage state, OfferConfig storage offer) internal view {
         if (state.assetToken == address(0) || state.onReToken == address(0)) {
             revert PropRfqConfigurationRequiredError();
         }
@@ -60,7 +57,7 @@ library LibOnRePropRfq {
         }
     }
 
-    function _quoteSell(PropRfqQuoterState storage state, OfferConfig storage offer, uint256 rawAmountOut)
+    function _quoteSell(PropRfqState storage state, OfferConfig storage offer, uint256 rawAmountOut)
         internal
         view
         returns (uint256)
@@ -94,18 +91,18 @@ library LibOnRePropRfq {
         return Math.mulDiv(rawAmountOut, liquidityFactor, HARD_WALL_SCALE);
     }
 
-    function _recordBuy(PropRfqQuoterState storage state, uint256 buyValueStable) internal {
+    function _recordBuy(PropRfqState storage state, uint256 buyValueStable) internal {
         _rollVolumeTracker(state, block.timestamp);
         state.currentBuyValueStable += buyValueStable;
     }
 
-    function _recordSell(PropRfqQuoterState storage state, uint256 sellValueStable) internal {
+    function _recordSell(PropRfqState storage state, uint256 sellValueStable) internal {
         _rollVolumeTracker(state, block.timestamp);
         state.currentSellValueStable += sellValueStable;
         ++state.currentSellTradeCount;
     }
 
-    function _hardWallReserve(PropRfqQuoterState storage state, OfferConfig storage offer, uint256 actualLiquidity)
+    function _hardWallReserve(PropRfqState storage state, OfferConfig storage offer, uint256 actualLiquidity)
         private
         view
         returns (uint256)
@@ -122,7 +119,7 @@ library LibOnRePropRfq {
     }
 
     function _dynamicWallLiquidity(
-        PropRfqQuoterState storage state,
+        PropRfqState storage state,
         uint256 currentSellValueStable,
         uint256 actualLiquidity,
         uint256 hardWallReserve,
@@ -143,7 +140,7 @@ library LibOnRePropRfq {
     }
 
     function _previewEffectiveSellVolume(
-        PropRfqQuoterState storage state,
+        PropRfqState storage state,
         uint256 currentSellValueStable,
         uint256 currentTime
     ) private view returns (uint256) {
@@ -175,7 +172,7 @@ library LibOnRePropRfq {
         return decayedPrevious + effectiveCurrentNet + currentSellValueStable;
     }
 
-    function _rollVolumeTracker(PropRfqQuoterState storage state, uint256 currentTime) private {
+    function _rollVolumeTracker(PropRfqState storage state, uint256 currentTime) private {
         uint256 epochDuration = state.config.epochDurationSeconds;
         if (state.epochStart == 0 || currentTime < state.epochStart) {
             _resetCurrentEpoch(state, currentTime);
@@ -195,7 +192,7 @@ library LibOnRePropRfq {
         }
     }
 
-    function _resetCurrentEpoch(PropRfqQuoterState storage state, uint256 currentTime) private {
+    function _resetCurrentEpoch(PropRfqState storage state, uint256 currentTime) private {
         state.currentSellValueStable = 0;
         state.currentBuyValueStable = 0;
         state.currentSellTradeCount = 0;
@@ -204,11 +201,7 @@ library LibOnRePropRfq {
         state.epochStart = uint64(currentTime);
     }
 
-    function _cadenceWaveYForQuote(PropRfqQuoterState storage state, uint256 currentTime)
-        private
-        view
-        returns (uint256)
-    {
+    function _cadenceWaveYForQuote(PropRfqState storage state, uint256 currentTime) private view returns (uint256) {
         uint256 maxWaveY = state.config.cadenceWaveScaled;
         if (maxWaveY == 0 || state.epochStart == 0 || currentTime < state.epochStart) return 0;
         if (currentTime - state.epochStart >= state.config.epochDurationSeconds) return 0;

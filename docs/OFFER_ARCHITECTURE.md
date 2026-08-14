@@ -41,7 +41,7 @@ flowchart TB
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
         Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>disabled"]
         NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>disabled"]
-        PropRfq["<b>Prop RFQ Quoter</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
+        PropRfq["<b>Prop RFQ</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
     end
 
     subgraph Configuration["Reusable offer configuration"]
@@ -120,7 +120,7 @@ settings are not included in the identity hash.
 
 Every kind is first created through `createQuoter(kind, instanceId)`. Quoter
 kinds with additional state then expose a typed configuration function. For
-`PropRfq`, `configurePropRfqQuoter` binds the pair on its first call and updates
+`PropRfq`, `configurePropRfq` binds the pair on its first call and updates
 only the mutable curve, cadence, and wall settings on later calls. An
 unconfigured `PropRfq` cannot be assigned to an OfferConfig.
 

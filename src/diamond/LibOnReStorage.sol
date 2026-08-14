@@ -8,7 +8,7 @@ import {
     OfferConfig,
     OnReTokenConfig,
     Pricer,
-    PropRfqQuoterState,
+    PropRfqState,
     Quoter
 } from "../types/OnReTypes.sol";
 
@@ -29,7 +29,7 @@ library LibOnReStorage {
         bool isKilled;
         address approver1;
         address approver2;
-        mapping(bytes32 quoterId => PropRfqQuoterState state) propRfqQuoterStates;
+        mapping(bytes32 quoterId => PropRfqState state) propRfqStates;
     }
 
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;

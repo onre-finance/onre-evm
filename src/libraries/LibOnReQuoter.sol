@@ -85,12 +85,6 @@ library LibOnReQuoter {
         emit QuoterEnabledSet(quoterId, enabled);
     }
 
-    function _quote(bytes32 offerConfigId, uint256 netInputAmount) internal view returns (QuoteResult memory result) {
-        if (netInputAmount == 0) revert InvalidAmountError();
-        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
-        result = _quote(offer, netInputAmount);
-    }
-
     function _quote(OfferConfig storage offer, uint256 netInputAmount)
         internal
         view
@@ -113,6 +107,7 @@ library LibOnReQuoter {
                 )
                 : rawAmountOut;
         }
+        if (amountOut == 0) revert InvalidAmountError();
         result = QuoteResult({price: price, amountOut: amountOut});
     }
 

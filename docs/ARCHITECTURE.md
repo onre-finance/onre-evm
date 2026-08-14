@@ -49,8 +49,9 @@ The internal libraries follow the same responsibility boundaries:
 - `LibOnReOfferConfig` owns pair-and-flow configuration and reference
   validation.
 - `LibOnRePropRfq` owns proprietary request-for-quote (Prop RFQ) configuration
-  validation, rolling buy/sell pressure, the dynamic liquidity wall, and
-  curve/cadence sell dampening.
+  validation, rolling buy/sell pressure, and dynamic-wall orchestration.
+- `LibOnRePropRfqMath` owns the pure fixed-point curve and cadence formulas that
+  must remain numerically aligned with the Solana implementation.
 - `LibOnReApproval` owns EIP-712 approval verification.
 - `LibOnReOffer` owns direct and worker settlement against validated
   configuration.

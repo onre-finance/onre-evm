@@ -174,6 +174,10 @@ Every direct execution also carries `minimumAmountOut` and `deadline`. Settlemen
 reverts before collecting input when the current quote is below the caller's
 minimum or the deadline has expired.
 
+`previewExecution(offerConfigId, grossInputAmount)` is the canonical
+user-facing quote. It returns the gross input, fee, net input, price, and final
+output using the same path as execution.
+
 ## Quote and settlement rules
 
 The Pricer returns USD-denominated price `P` per OnRe token:
@@ -256,11 +260,10 @@ Cancellation returns only the unfilled input.
 - `diamondCut` routing cannot be removed, so an upgrade cannot accidentally
   delete the only upgrade entry point; replacement remains available.
 - `OnRePricerFacet` configures USD Pricers and embedded vectors.
-- `OnReQuoterFacet` configures NAV and pair-bound Prop RFQ instances and exposes
-  quote previews.
+- `OnReQuoterFacet` configures NAV and pair-bound Prop RFQ instances.
 - `OnReOfferFacet` delegates FeeConfig policy to `LibOnReFeeConfig`,
   OfferConfig lifecycle to `LibOnReOfferConfig`, and runtime execution to
-  `LibOnReOffer`.
+  `LibOnReOffer`; it also exposes the canonical gross-input execution preview.
 - `OnReFulfillmentFacet` owns worker request creation, partial fulfillment, and
   cancellation.
 - `OnReConfigurableVaultFacet` owns reusable vault instances, deposits,

@@ -25,7 +25,8 @@ enum QuoterKind {
 enum ConfigurableVaultKind {
     Fee,
     Proceeds,
-    Liquidity
+    Liquidity,
+    BufferReserve
 }
 
 struct InitializeParams {
@@ -104,6 +105,20 @@ struct ConfigurableVault {
     uint64 vaultId;
     address withdrawalDestination;
     uint16 refillTargetBps;
+    bool exists;
+}
+
+struct BufferState {
+    bytes32 reserveVaultId;
+    bytes32 managementFeeVaultId;
+    bytes32 performanceFeeVaultId;
+    uint256 previousSupply;
+    uint256 performanceFeeHighWatermark;
+    uint64 lastAccrualTimestamp;
+    uint64 grossApr;
+    uint16 managementFeeBasisPoints;
+    uint16 performanceFeeBasisPoints;
+    bool performanceFeeHighWatermarkEnabled;
     bool exists;
 }
 

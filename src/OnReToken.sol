@@ -2,7 +2,8 @@
 pragma solidity 0.8.35;
 
 import {IOnReToken} from "./IOnReToken.sol";
-import {ZeroAddressError} from "./types/OnReAppErrors.sol";
+import {IOnReBufferController} from "./IOnReBufferController.sol";
+import {NoChangeError, ZeroAddressError} from "./types/OnReAppErrors.sol";
 import {InitializeParams} from "./types/OnReTypes.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
@@ -24,6 +25,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     EnumerableSet.AddressSet private _burners;
 
     address private _ccipAdmin;
+    address private _bufferController;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -77,6 +79,19 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         emit CCIPAdminTransferredEvent(previousAdmin, newAdmin);
     }
 
+    function bufferController() external view returns (address) {
+        return _bufferController;
+    }
+
+    function setBufferController(address newController) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newController == address(0)) revert ZeroAddressError();
+        if (newController.code.length == 0) revert BufferControllerHasNoCodeError(newController);
+        address oldController = _bufferController;
+        if (newController == oldController) revert NoChangeError();
+        _bufferController = newController;
+        emit BufferControllerSet(oldController, newController);
+    }
+
     function getMinters() external view returns (address[] memory) {
         return _minters.values();
     }
@@ -128,10 +143,19 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     function mint(address to, uint256 amount) external onlyMinter {
+        _notifyBufferController(amount, true);
         _mint(to, amount);
     }
 
+    /// @notice Mints Buffer accrual to the configured controller without recursively notifying it.
+    function mintBuffer(uint256 amount) external {
+        address sender = msg.sender;
+        if (sender != _bufferController) revert SenderNotBufferControllerError(sender);
+        _mint(sender, amount);
+    }
+
     function burn(uint256 amount) public onlyBurner {
+        _notifyBufferController(amount, false);
         _burn(msg.sender, amount);
     }
 
@@ -141,6 +165,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
 
     function burnFrom(address account, uint256 amount) public onlyBurner {
         _spendAllowance(account, msg.sender, amount);
+        _notifyBufferController(amount, false);
         _burn(account, amount);
     }
 
@@ -196,5 +221,11 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         if (!_burners.remove(account)) return;
 
         emit BurnAccessRevokedEvent(account);
+    }
+
+    function _notifyBufferController(uint256 amount, bool isMint) private {
+        address controller = _bufferController;
+        if (controller == address(0)) return;
+        IOnReBufferController(controller).onBeforeSupplyChange(amount, isMint);
     }
 }

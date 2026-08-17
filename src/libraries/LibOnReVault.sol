@@ -87,7 +87,7 @@ library LibOnReVault {
         if (LibOnReStorage._appStorage().isKilled) revert KilledError();
         if (token == address(0)) revert ZeroAddressError();
         ConfigurableVault storage vault = LibOnReValidation._requireConfigurableVault(vaultId);
-        if (vault.kind == ConfigurableVaultKind.Liquidity) {
+        if (vault.kind == ConfigurableVaultKind.Liquidity || vault.kind == ConfigurableVaultKind.BufferReserve) {
             LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         } else if (vault.kind != ConfigurableVaultKind.Fee && vault.kind != ConfigurableVaultKind.Proceeds) {
             revert UnsupportedConfigurableVaultKindError(uint8(vault.kind));
@@ -158,7 +158,10 @@ library LibOnReVault {
     function _validateRefillTarget(ConfigurableVaultKind kind, uint16 refillTargetBps) private pure {
         if (refillTargetBps > MAX_BASIS_POINTS) revert InvalidBasisPointsError();
         if (kind == ConfigurableVaultKind.Liquidity) return;
-        if (kind == ConfigurableVaultKind.Fee || kind == ConfigurableVaultKind.Proceeds) {
+        if (
+            kind == ConfigurableVaultKind.Fee || kind == ConfigurableVaultKind.Proceeds
+                || kind == ConfigurableVaultKind.BufferReserve
+        ) {
             if (refillTargetBps != 0) revert InvalidBasisPointsError();
             return;
         }

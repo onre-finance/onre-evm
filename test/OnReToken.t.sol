@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {ZeroAddressError} from "../src/types/OnReAppErrors.sol";
+import {NoChangeError, ZeroAddressError} from "../src/types/OnReAppErrors.sol";
 import {InitializeParams} from "../src/types/OnReTypes.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
@@ -9,6 +9,7 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 import {IOnReToken} from "../src/IOnReToken.sol";
+import {IOnReBufferController} from "../src/IOnReBufferController.sol";
 import {OnReToken} from "../src/OnReToken.sol";
 
 contract OnReTokenTest is Test {
@@ -223,6 +224,58 @@ contract OnReTokenTest is Test {
         assertEq(token.getCCIPAdmin(), nextAdmin);
     }
 
+    function test_BufferControllerObservesEveryRegularMintAndBurnWhileBufferMintBypassesIt() public {
+        RecordingBufferController controller = new RecordingBufferController();
+
+        vm.expectRevert();
+        vm.prank(user);
+        token.setBufferController(address(controller));
+
+        vm.expectRevert(ZeroAddressError.selector);
+        vm.prank(admin);
+        token.setBufferController(address(0));
+
+        address noCodeController = makeAddr("noCodeController");
+        vm.expectRevert(abi.encodeWithSelector(IOnReToken.BufferControllerHasNoCodeError.selector, noCodeController));
+        vm.prank(admin);
+        token.setBufferController(noCodeController);
+
+        vm.prank(admin);
+        token.setBufferController(address(controller));
+        assertEq(token.bufferController(), address(controller));
+
+        vm.expectRevert(NoChangeError.selector);
+        vm.prank(admin);
+        token.setBufferController(address(controller));
+
+        vm.prank(minter);
+        token.mint(user, 100e9);
+        assertEq(controller.callCount(), 1);
+        assertEq(controller.lastAmount(), 100e9);
+        assertTrue(controller.lastIsMint());
+
+        vm.prank(minter);
+        token.mint(burner, 50e9);
+        vm.prank(burner);
+        token.burn(20e9);
+        assertEq(controller.callCount(), 3);
+        assertEq(controller.lastAmount(), 20e9);
+        assertFalse(controller.lastIsMint());
+
+        vm.prank(user);
+        token.approve(burner, 10e9);
+        vm.prank(burner);
+        token.burnFrom(user, 10e9);
+        assertEq(controller.callCount(), 4);
+        assertEq(controller.lastAmount(), 10e9);
+        assertFalse(controller.lastIsMint());
+
+        vm.prank(address(controller));
+        token.mintBuffer(7e9);
+        assertEq(controller.callCount(), 4);
+        assertEq(token.balanceOf(address(controller)), 7e9);
+    }
+
     function test_OnlyUpgraderCanUpgrade() public {
         OnReToken newImplementation = new OnReToken();
 
@@ -277,5 +330,17 @@ contract OnReTokenTest is Test {
     function _singleAddress(address account) private pure returns (address[] memory accounts) {
         accounts = new address[](1);
         accounts[0] = account;
+    }
+}
+
+contract RecordingBufferController is IOnReBufferController {
+    uint256 public callCount;
+    uint256 public lastAmount;
+    bool public lastIsMint;
+
+    function onBeforeSupplyChange(uint256 amount, bool isMint) external {
+        ++callCount;
+        lastAmount = amount;
+        lastIsMint = isMint;
     }
 }

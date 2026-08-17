@@ -360,7 +360,7 @@ contract OnReConfigTest is OnReAppTestBase {
             )
         );
         vm.prank(user);
-        app.configurePropRfqQuoter(propRfqId, address(usd), address(onReToken), _basePropRfqTestConfig());
+        app.configurePropRfq(propRfqId, address(usd), address(onReToken), _basePropRfqTestConfig());
 
         vm.expectRevert(
             abi.encodeWithSelector(

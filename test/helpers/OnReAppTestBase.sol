@@ -16,7 +16,7 @@ import {
     OfferFlow,
     PricingDenomination,
     PricingVector,
-    PropRfqQuoterConfig,
+    PropRfqConfig,
     QuoterKind,
     TakeOfferParams
 } from "../../src/types/OnReTypes.sol";
@@ -119,12 +119,12 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         );
     }
 
-    function _createConfiguredPropRfqQuoter(uint64 instanceId, PropRfqQuoterConfig memory config)
+    function _createConfiguredPropRfq(uint64 instanceId, PropRfqConfig memory config)
         internal
         returns (bytes32 quoterId)
     {
         quoterId = app.createQuoter(QuoterKind.PropRfq, instanceId);
-        app.configurePropRfqQuoter(quoterId, address(usd), address(onReToken), config);
+        app.configurePropRfq(quoterId, address(usd), address(onReToken), config);
     }
 
     function _fundAndApproveUsd(address account, uint256 amount) internal {
@@ -133,8 +133,8 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         usd.approve(address(app), amount);
     }
 
-    function _basePropRfqTestConfig() internal pure returns (PropRfqQuoterConfig memory) {
-        return PropRfqQuoterConfig({
+    function _basePropRfqTestConfig() internal pure returns (PropRfqConfig memory) {
+        return PropRfqConfig({
             curvePegHaircutBps: 700,
             curveExponentScaled: 25_000,
             cadenceThreshold: 20,

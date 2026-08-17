@@ -50,7 +50,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
     bytes32 internal permissionlessOfferId;
     bytes32 internal workerOfferId;
 
-    function setUp() public {
+    function setUp() public virtual {
         vm.warp(1);
         approver = vm.addr(APPROVER_KEY);
 

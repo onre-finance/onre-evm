@@ -6,13 +6,8 @@ import {LibOnReBuffer} from "../libraries/LibOnReBuffer.sol";
 import {IOnReBufferController} from "../IOnReBufferController.sol";
 
 contract OnReBufferFacet is IOnReBufferController {
-    function initializeBuffer(
-        address onReToken,
-        bytes32 reserveVaultId,
-        bytes32 managementFeeVaultId,
-        bytes32 performanceFeeVaultId
-    ) external {
-        LibOnReBuffer._initializeBuffer(onReToken, reserveVaultId, managementFeeVaultId, performanceFeeVaultId);
+    function initializeBuffer(address onReToken) external {
+        LibOnReBuffer._initializeBuffer(onReToken);
     }
 
     function setBufferGrossApr(address onReToken, uint64 grossApr) external {

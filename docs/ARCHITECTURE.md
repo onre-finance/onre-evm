@@ -129,7 +129,10 @@ fee-on-transfer assets are rejected by exact balance accounting.
 BufferReserve withdrawals require `DEFAULT_ADMIN_ROLE`, while Fee vaults retain
 their configured permissionless withdrawal path. Buffer accrual mints the full
 amount to the Diamond and divides that balance between one BufferReserve vault
-and two distinct Fee vaults for management and performance fees.
+and two distinct Fee vaults for management and performance fees. Buffer
+initialization derives these vault IDs from the OnRe token and vault role, then
+creates independent configurable-vault records. Their withdrawal destinations
+are set through the standard configurable-vault update path.
 
 Prop RFQ is implemented as a quoter kind rather than a separate facet. Each
 instance is bound to one asset/OnRe pair, stores its own configuration and

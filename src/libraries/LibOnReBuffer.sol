@@ -9,7 +9,6 @@ import {
     BufferAlreadyExistsError,
     BufferNotFoundError,
     BufferSupplyMismatchError,
-    DuplicateBufferVaultError,
     InvalidAmountError,
     InvalidBasisPointsError,
     InvalidBufferAprError,
@@ -54,24 +53,26 @@ library LibOnReBuffer {
         uint64 timestamp;
     }
 
-    function _initializeBuffer(
-        address onReToken,
-        bytes32 reserveVaultId,
-        bytes32 managementFeeVaultId,
-        bytes32 performanceFeeVaultId
-    ) internal {
+    function _initializeBuffer(address onReToken) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         LibOnReValidation._requireEnabledOnReToken(onReToken);
 
         BufferState storage state = LibOnReStorage._appStorage().bufferStates[onReToken];
         if (state.exists) revert BufferAlreadyExistsError(onReToken);
-        if (managementFeeVaultId == performanceFeeVaultId) {
-            revert DuplicateBufferVaultError(managementFeeVaultId);
-        }
 
-        LibOnReValidation._requireVaultKind(reserveVaultId, ConfigurableVaultKind.BufferReserve);
-        LibOnReValidation._requireVaultKind(managementFeeVaultId, ConfigurableVaultKind.Fee);
-        LibOnReValidation._requireVaultKind(performanceFeeVaultId, ConfigurableVaultKind.Fee);
+        bytes32 reserveVaultId = OnReIds._bufferReserveVaultId(onReToken);
+        bytes32 managementFeeVaultId = OnReIds._bufferManagementFeeVaultId(onReToken);
+        bytes32 performanceFeeVaultId = OnReIds._bufferPerformanceFeeVaultId(onReToken);
+
+        LibOnReVault._createDerivedConfigurableVault(
+            reserveVaultId, ConfigurableVaultKind.BufferReserve, OnReIds.BUFFER_RESERVE_VAULT_INSTANCE_ID
+        );
+        LibOnReVault._createDerivedConfigurableVault(
+            managementFeeVaultId, ConfigurableVaultKind.Fee, OnReIds.BUFFER_MANAGEMENT_FEE_VAULT_INSTANCE_ID
+        );
+        LibOnReVault._createDerivedConfigurableVault(
+            performanceFeeVaultId, ConfigurableVaultKind.Fee, OnReIds.BUFFER_PERFORMANCE_FEE_VAULT_INSTANCE_ID
+        );
 
         state.reserveVaultId = reserveVaultId;
         state.managementFeeVaultId = managementFeeVaultId;

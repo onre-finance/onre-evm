@@ -6,13 +6,12 @@ import {
     BufferAlreadyExistsError,
     BufferNotFoundError,
     BufferSupplyMismatchError,
-    DuplicateBufferVaultError,
     InvalidBasisPointsError,
-    InvalidBufferAprError,
-    InvalidConfigurableVaultKindError
+    InvalidBufferAprError
 } from "../src/types/OnReAppErrors.sol";
 import {
     BufferState,
+    ConfigurableVault,
     ConfigurableVaultKind,
     MarketStats,
     PricingDenomination,
@@ -21,6 +20,7 @@ import {
 import {IOnReToken} from "../src/IOnReToken.sol";
 import {IOnReBufferController} from "../src/IOnReBufferController.sol";
 import {OnReToken} from "../src/OnReToken.sol";
+import {OnReIds} from "../src/libraries/OnReIds.sol";
 import {OnReAppTestBase} from "./helpers/OnReAppTestBase.sol";
 
 contract OnReBufferTest is OnReAppTestBase {
@@ -35,10 +35,14 @@ contract OnReBufferTest is OnReAppTestBase {
     function setUp() public override {
         super.setUp();
 
-        bufferReserveVaultId = app.createConfigurableVault(ConfigurableVaultKind.BufferReserve, 0, vaultDestination, 0);
-        managementFeeVaultId = app.createConfigurableVault(ConfigurableVaultKind.Fee, 1, vaultDestination, 0);
-        performanceFeeVaultId = app.createConfigurableVault(ConfigurableVaultKind.Fee, 2, vaultDestination, 0);
-        app.initializeBuffer(address(onReToken), bufferReserveVaultId, managementFeeVaultId, performanceFeeVaultId);
+        app.initializeBuffer(address(onReToken));
+        BufferState memory state = app.getBufferState(address(onReToken));
+        bufferReserveVaultId = state.reserveVaultId;
+        managementFeeVaultId = state.managementFeeVaultId;
+        performanceFeeVaultId = state.performanceFeeVaultId;
+        app.updateConfigurableVault(bufferReserveVaultId, vaultDestination, 0);
+        app.updateConfigurableVault(managementFeeVaultId, vaultDestination, 0);
+        app.updateConfigurableVault(performanceFeeVaultId, vaultDestination, 0);
         onReToken.setBufferController(address(app));
         app.setBufferGrossApr(address(onReToken), GROSS_APR);
         app.setBufferFeeConfig(address(onReToken), MANAGEMENT_FEE_BPS, PERFORMANCE_FEE_BPS, true);
@@ -170,10 +174,10 @@ contract OnReBufferTest is OnReAppTestBase {
     }
 
     function test_BufferGrossAccrualMatchesSolanaReferenceVectors() public {
-        _assertSolanaGrossAccrualVector(10, 1_000_000_000, 150_000, 50_000, 365 days / 2, 48_780_487);
-        _assertSolanaGrossAccrualVector(20, 1_000_000_000, 120_000, 20_000, 365 days, 98_039_215);
-        _assertSolanaGrossAccrualVector(30, 2_500_000_000, 300_000, 100_000, 365 days / 4, 121_951_219);
-        _assertSolanaGrossAccrualVector(40, 1_000_000_000, 80_000, 60_000, 30 days, 1_635_768);
+        _assertSolanaGrossAccrualVector(1_000_000_000, 150_000, 50_000, 365 days / 2, 48_780_487);
+        _assertSolanaGrossAccrualVector(1_000_000_000, 120_000, 20_000, 365 days, 98_039_215);
+        _assertSolanaGrossAccrualVector(2_500_000_000, 300_000, 100_000, 365 days / 4, 121_951_219);
+        _assertSolanaGrossAccrualVector(1_000_000_000, 80_000, 60_000, 30 days, 1_635_768);
     }
 
     function test_BufferFeeSplitMatchesSolanaReferenceVector() public {
@@ -193,11 +197,8 @@ contract OnReBufferTest is OnReAppTestBase {
             })
         );
 
-        bytes32 reserveVaultId =
-            app.createConfigurableVault(ConfigurableVaultKind.BufferReserve, 50, vaultDestination, 0);
-        bytes32 managementVaultId = app.createConfigurableVault(ConfigurableVaultKind.Fee, 51, vaultDestination, 0);
-        bytes32 performanceVaultId = app.createConfigurableVault(ConfigurableVaultKind.Fee, 52, vaultDestination, 0);
-        app.initializeBuffer(address(parityToken), reserveVaultId, managementVaultId, performanceVaultId);
+        app.initializeBuffer(address(parityToken));
+        BufferState memory parityState = app.getBufferState(address(parityToken));
         parityToken.setBufferController(address(app));
         app.setBufferGrossApr(address(parityToken), 100_000);
         app.setBufferFeeConfig(address(parityToken), 100, 2_000, true);
@@ -206,9 +207,9 @@ contract OnReBufferTest is OnReAppTestBase {
         parityToken.mint(user, 0);
 
         assertEq(parityToken.balanceOf(address(app)), 10_000);
-        assertEq(app.configurableVaultBalance(reserveVaultId, address(parityToken)), 7_200);
-        assertEq(app.configurableVaultBalance(managementVaultId, address(parityToken)), 1_000);
-        assertEq(app.configurableVaultBalance(performanceVaultId, address(parityToken)), 1_800);
+        assertEq(app.configurableVaultBalance(parityState.reserveVaultId, address(parityToken)), 7_200);
+        assertEq(app.configurableVaultBalance(parityState.managementFeeVaultId, address(parityToken)), 1_000);
+        assertEq(app.configurableVaultBalance(parityState.performanceFeeVaultId, address(parityToken)), 1_800);
     }
 
     function test_UntrackedSupplyChangeFailsClosedAfterActivation() public {
@@ -226,23 +227,26 @@ contract OnReBufferTest is OnReAppTestBase {
 
     function test_BufferInitializationAndConfigurationGuards() public {
         vm.expectRevert(abi.encodeWithSelector(BufferAlreadyExistsError.selector, address(onReToken)));
-        app.initializeBuffer(address(onReToken), bufferReserveVaultId, managementFeeVaultId, performanceFeeVaultId);
+        app.initializeBuffer(address(onReToken));
 
         OnReToken secondToken = _deployToken(address(app));
         app.registerOnReToken(address(secondToken), inventorySource);
+        app.initializeBuffer(address(secondToken));
 
-        vm.expectRevert(abi.encodeWithSelector(DuplicateBufferVaultError.selector, managementFeeVaultId));
-        app.initializeBuffer(address(secondToken), bufferReserveVaultId, managementFeeVaultId, managementFeeVaultId);
+        BufferState memory secondState = app.getBufferState(address(secondToken));
+        assertEq(secondState.reserveVaultId, OnReIds._bufferReserveVaultId(address(secondToken)));
+        assertEq(secondState.managementFeeVaultId, OnReIds._bufferManagementFeeVaultId(address(secondToken)));
+        assertEq(secondState.performanceFeeVaultId, OnReIds._bufferPerformanceFeeVaultId(address(secondToken)));
+        assertNotEq(secondState.reserveVaultId, bufferReserveVaultId);
+        assertNotEq(secondState.managementFeeVaultId, managementFeeVaultId);
+        assertNotEq(secondState.performanceFeeVaultId, performanceFeeVaultId);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                InvalidConfigurableVaultKindError.selector,
-                feeVaultId,
-                uint8(ConfigurableVaultKind.BufferReserve),
-                uint8(ConfigurableVaultKind.Fee)
-            )
-        );
-        app.initializeBuffer(address(secondToken), feeVaultId, managementFeeVaultId, performanceFeeVaultId);
+        address secondVaultDestination = makeAddr("secondVaultDestination");
+        app.updateConfigurableVault(secondState.reserveVaultId, secondVaultDestination, 0);
+        ConfigurableVault memory firstReserveVault = app.getConfigurableVault(bufferReserveVaultId);
+        ConfigurableVault memory secondReserveVault = app.getConfigurableVault(secondState.reserveVaultId);
+        assertEq(firstReserveVault.withdrawalDestination, vaultDestination);
+        assertEq(secondReserveVault.withdrawalDestination, secondVaultDestination);
 
         vm.expectRevert(abi.encodeWithSelector(InvalidBufferAprError.selector, 1_000_001));
         app.setBufferGrossApr(address(onReToken), 1_000_001);
@@ -260,7 +264,6 @@ contract OnReBufferTest is OnReAppTestBase {
     }
 
     function _assertSolanaGrossAccrualVector(
-        uint64 firstVaultInstanceId,
         uint256 previousSupply,
         uint64 grossApr,
         uint64 currentApr,
@@ -284,13 +287,8 @@ contract OnReBufferTest is OnReAppTestBase {
             })
         );
 
-        bytes32 reserveVaultId =
-            app.createConfigurableVault(ConfigurableVaultKind.BufferReserve, firstVaultInstanceId, vaultDestination, 0);
-        bytes32 managementVaultId =
-            app.createConfigurableVault(ConfigurableVaultKind.Fee, firstVaultInstanceId + 1, vaultDestination, 0);
-        bytes32 performanceVaultId =
-            app.createConfigurableVault(ConfigurableVaultKind.Fee, firstVaultInstanceId + 2, vaultDestination, 0);
-        app.initializeBuffer(address(parityToken), reserveVaultId, managementVaultId, performanceVaultId);
+        app.initializeBuffer(address(parityToken));
+        bytes32 parityReserveVaultId = app.getBufferState(address(parityToken)).reserveVaultId;
         parityToken.setBufferController(address(app));
         app.setBufferGrossApr(address(parityToken), grossApr);
 
@@ -298,7 +296,7 @@ contract OnReBufferTest is OnReAppTestBase {
         parityToken.mint(user, 0);
 
         assertEq(parityToken.balanceOf(address(app)), expectedBufferMint);
-        assertEq(app.configurableVaultBalance(reserveVaultId, address(parityToken)), expectedBufferMint);
+        assertEq(app.configurableVaultBalance(parityReserveVaultId, address(parityToken)), expectedBufferMint);
         assertEq(app.getBufferState(address(parityToken)).previousSupply, previousSupply + expectedBufferMint);
     }
 }

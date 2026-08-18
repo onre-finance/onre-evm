@@ -44,7 +44,6 @@ error BufferNotFoundError(address onReToken);
 error InvalidBufferAprError(uint256 grossApr);
 error InvalidBufferControllerError(address onReToken, address controller);
 error BufferSupplyMismatchError(address onReToken, uint256 expectedSupply, uint256 actualSupply);
-error DuplicateBufferVaultError(bytes32 vaultId);
 error MissingConfigurableVaultDestinationError(bytes32 vaultId);
 error OfferConfigAlreadyExistsError(bytes32 offerConfigId);
 error OfferConfigNotFoundError(bytes32 offerConfigId);

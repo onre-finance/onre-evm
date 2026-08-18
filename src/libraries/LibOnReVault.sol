@@ -43,10 +43,26 @@ library LibOnReVault {
         address withdrawalDestination,
         uint16 refillTargetBps
     ) internal returns (bytes32 vaultId) {
+        vaultId = OnReIds._configurableVaultId(kind, vaultInstanceId);
+        _createConfigurableVault(vaultId, kind, vaultInstanceId, withdrawalDestination, refillTargetBps);
+    }
+
+    function _createDerivedConfigurableVault(bytes32 vaultId, ConfigurableVaultKind kind, uint64 vaultInstanceId)
+        internal
+    {
+        _createConfigurableVault(vaultId, kind, vaultInstanceId, address(0), 0);
+    }
+
+    function _createConfigurableVault(
+        bytes32 vaultId,
+        ConfigurableVaultKind kind,
+        uint64 vaultInstanceId,
+        address withdrawalDestination,
+        uint16 refillTargetBps
+    ) private {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         _validateRefillTarget(kind, refillTargetBps);
 
-        vaultId = OnReIds._configurableVaultId(kind, vaultInstanceId);
         ConfigurableVault storage vault = LibOnReStorage._appStorage().configurableVaults[vaultId];
         if (vault.exists) revert ConfigurableVaultAlreadyExistsError(vaultId);
 

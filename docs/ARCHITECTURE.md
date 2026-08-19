@@ -126,16 +126,24 @@ than a separate facet. Each instance is bound to one asset/OnRe pair, stores its
 own configuration and rolling pressure, and can be shared by both directed
 permissionless OfferConfigs for that pair.
 
-## OnRe token inventory
+## OnRe token issuance
 
-Each registered OnRe token has a configured inventory-source address. Production
-uses a multisig holding pre-minted inventory. The multisig grants the Diamond a
-maximum ERC-20 allowance, and successful `AssetToOnRe` settlement transfers the
-quoted output directly from that multisig to the user. The Diamond never receives
-mint authority and there is no mint-gateway contract.
+OnRe tokens are not pre-minted. The token administrator grants the Diamond mint
+and burn authority. Successful `AssetToOnRe` settlement mints the quoted output
+for the user, while `OnReToAsset` settlement burns the net OnRe input before
+releasing asset liquidity. Permissioned and worker settlement is direct.
+Permissionless settlement routes input as user to settlement account to Diamond,
+then routes output as Diamond or mint to settlement account to user. The
+settlement account is boss-configured, pre-approves the Diamond for every
+supported token, and retains no balance after a successful transaction.
 
-Inventory held by the configured source is excluded from circulating supply.
-Operational vault assets remain physically held by the Diamond.
+All minted supply is circulating unless governance explicitly registers an
+excluded-supply address. Operational vault assets remain physically held by the
+Diamond.
+
+`OnReTokenConfig` keeps a reserved `uint160` at its original first-field offset.
+It has no runtime meaning; it only preserves the already-deployed namespaced
+storage layout while the old inventory configuration is removed.
 
 ## Deployment
 

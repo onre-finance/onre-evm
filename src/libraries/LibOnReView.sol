@@ -71,4 +71,8 @@ library LibOnReView {
         LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
         (isKilled, approver1, approver2) = (s.isKilled, s.approver1, s.approver2);
     }
+
+    function _permissionlessSettlementAccount() internal view returns (address) {
+        return LibOnReStorage._appStorage().permissionlessSettlementAccount;
+    }
 }

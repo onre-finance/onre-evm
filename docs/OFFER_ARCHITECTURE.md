@@ -29,8 +29,8 @@ config:
 ---
 flowchart TB
     subgraph Control["Global control and reporting"]
-        AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers"]
-        TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals<br/>inventorySource"]
+        AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers<br/>permissionless settlement account"]
+        TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals"]
         MarketStats["<b>MarketStats</b><br/>derived view - not stored<br/>APY<br/>circulating supply<br/>USD NAV<br/>NAV adjustment<br/>TVL"]
         Roles["<b>Application roles</b><br/>DEFAULT_ADMIN_ROLE - exactly one boss, two-step transfer<br/>ADMIN_ROLE - emergency activation only<br/>WORKER_ROLE - fulfill or cancel requests<br/>UPGRADER_ROLE - Diamond cuts, may also be the boss"]
         DiamondCut["<b>Diamond upgrades</b><br/>add, replace, or remove selectors"]
@@ -50,7 +50,7 @@ flowchart TB
     end
 
     subgraph Custody["Diamond custody and logical vault accounting"]
-        Inventory["<b>OnRe inventory multisig</b><br/>holds pre-minted OnRe tokens<br/>approves Diamond for uint256 max"]
+        OnReToken["<b>OnRe token</b><br/>Diamond has mint and burn authority<br/>no pre-minted inventory"]
         FeeVault["<b>Fee vault</b><br/>ConfigurableVault kind = Fee<br/>per-token logical balance"]
         ProceedsVault["<b>Proceeds vault</b><br/>ConfigurableVault kind = Proceeds<br/>per-token logical balance"]
         LiquidityVault["<b>Liquidity vault</b><br/>ConfigurableVault kind = Liquidity<br/>refill target<br/>per-token logical balance"]
@@ -58,6 +58,7 @@ flowchart TB
 
     subgraph Runtime["Runtime execution"]
         TakeOffer["<b>takeOffer</b><br/>loads flow from OfferConfig<br/>Permissioned: approval required<br/>Permissionless: approval empty<br/>Worker: direct execution rejected<br/>minimum output and deadline enforced"]
+        SettlementAccount["<b>Permissionless settlement account</b><br/>boss configured<br/>max token allowances to Diamond<br/>transient hop with zero retained inventory"]
         Request["<b>FulfillmentRequest</b><br/>ID = offer + user + request ID<br/>escrowed gross input<br/>partially filled by worker"]
         Fulfill["<b>fulfillWorkerRequest</b><br/>WORKER_ROLE required<br/>current USD price and fee<br/>partial or complete fill"]
     end
@@ -65,7 +66,7 @@ flowchart TB
     Pricer -->|"embeds up to 10"| PricingVector
     TokenConfig -.->|"derives USD Pricer ID"| Pricer
     MarketStats -.->|"derives the same USD Pricer ID"| Pricer
-    MarketStats -.->|"token identity; excludes inventory balance"| TokenConfig
+    MarketStats -.->|"token identity and explicit supply exclusions"| TokenConfig
 
     OfferConfig -.->|"OnRe token from pair derives USD Pricer"| Pricer
     OfferConfig -->|"quoterId"| Nav
@@ -78,8 +79,10 @@ flowchart TB
 
     TakeOffer -->|"loads direct-flow configuration"| OfferConfig
     AppConfig -.->|"kill switch and approval"| TakeOffer
-    TokenConfig -->|"inventorySource"| Inventory
-    Inventory -.->|"transferFrom to user"| TakeOffer
+    AppConfig -.->|"configures"| SettlementAccount
+    SettlementAccount <-->|"permissionless input and output hop"| TakeOffer
+    TokenConfig -->|"registered token"| OnReToken
+    OnReToken -.->|"mint output or burn input"| TakeOffer
     Request -->|"flow = Worker; direction = OnReToAsset"| OfferConfig
     Fulfill -->|"settles escrowed input"| Request
 
@@ -170,6 +173,19 @@ configuration. Permissioned offers require the embedded approval message and
 signature. Permissionless offers require both to be empty. Worker offers reject
 direct execution and use the escrowed fulfillment-request path.
 
+Permissioned execution transfers input from the user to the Diamond and output
+from the Diamond or mint directly to the user. Permissionless execution instead
+uses the globally configured settlement account for both token legs:
+
+```text
+input:  user -> settlement account -> Diamond
+output: Diamond or mint -> settlement account -> user
+```
+
+The settlement account must pre-approve the Diamond for every supported token.
+Both legs are atomic, exact-transfer checked, and leave no trade inventory in
+the settlement account. Worker fulfillment remains direct and does not use it.
+
 Every direct execution also carries `minimumAmountOut` and `deadline`. Settlement
 reverts before collecting input when the current quote is below the caller's
 minimum or the deadline has expired.
@@ -231,22 +247,20 @@ amountOut         = rawSellOutput * max(0, 1 - haircut)
 All curve operations use integer fixed-point arithmetic. The fractional-power
 approximation and cadence vectors match the corresponding Solana implementation.
 
-For `AssetToOnRe`, the Diamond pulls the input asset, accounts the fee in the
+For `AssetToOnRe`, the Diamond collects the input asset, accounts the fee in the
 Fee vault, refills the configured Liquidity vault up to its TVL target, accounts
-the remainder in the Proceeds vault, and transfers the OnRe output directly from
-the token's configured inventory multisig to the user. The multisig holds
-pre-minted inventory and grants the Diamond a `type(uint256).max` allowance.
-The transfer must decrease the inventory source by exactly the quoted amount
-and increase the user's balance by exactly the same amount.
+the remainder in the Proceeds vault, and mints the quoted OnRe output. For a
+permissionless offer the mint recipient is the settlement account, whose
+allowance lets the Diamond transfer the output to the user. The Diamond must
+have the OnRe token's mint authority; no pre-minted inventory is involved.
 
-The inventory-source balance is excluded from circulating supply. A source
-change therefore changes which balance is treated as undistributed inventory;
-governance should move the remaining inventory and grant the new allowance in
-the same operational change.
+Minted OnRe supply is circulating unless its holder is explicitly configured as
+an excluded-supply address.
 
 For `OnReToAsset`, the Diamond pulls or has already escrowed the OnRe input,
 accounts the input fee, burns the net input, debits the configured Liquidity
-vault, and transfers the asset output to the user.
+vault, and transfers the asset output. Permissionless execution sends that
+output through the settlement account before it reaches the user.
 
 Every token transfer used by deposits, settlement, vault withdrawal, and
 request cancellation verifies both sides of the balance change. The sender

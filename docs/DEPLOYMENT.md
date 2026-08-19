@@ -57,6 +57,23 @@ wallet can no longer upgrade the diamond** unless it was named as
 `ONRE_UPGRADER`. For local and testnet iteration, set `ONRE_UPGRADER` to the
 deployment wallet. For mainnet, set it to the upgrade multisig.
 
+## Registering an OnRe token
+
+OnRe tokens are issued and redeemed by the Diamond; they are not pre-minted.
+Before enabling offers for a token, its token administrator must call
+`grantMintAndBurnRoles(diamond)` on the `OnReToken`, then the application boss
+calls `registerOnReToken(onReToken)` on the Diamond. A missing mint role makes
+`AssetToOnRe` execution revert atomically, and a missing burn role makes
+`OnReToAsset` execution revert atomically.
+
+Before enabling permissionless offers, the application boss calls
+`setPermissionlessSettlementAccount(account)`. That dedicated account must
+approve the Diamond for every input and output token used by permissionless
+offers, normally with `type(uint256).max`. A permissionless trade then routes
+input as user to settlement account to Diamond and output as Diamond or mint to
+settlement account to user. The account is a transient hop, not an inventory
+source, and its token balances are unchanged after successful settlement.
+
 ## What an upgrade does
 
 `gemforge deploy <target>` on an existing deployment reads `facets()` from the

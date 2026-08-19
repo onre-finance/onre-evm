@@ -6,11 +6,17 @@ import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     ApproverAlreadyExistsError,
     BothApproversFilledError,
+    InvalidPermissionlessSettlementAccountError,
     NoChangeError,
     NotApproverError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
-import {ApproverAdded, ApproverRemoved, KillSwitchSet} from "../types/OnReAppEvents.sol";
+import {
+    ApproverAdded,
+    ApproverRemoved,
+    KillSwitchSet,
+    PermissionlessSettlementAccountUpdated
+} from "../types/OnReAppEvents.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 
@@ -61,5 +67,18 @@ library LibOnReAppConfig {
         if (LibOnReStorage._appStorage().isKilled == killed) revert NoChangeError();
         LibOnReStorage._appStorage().isKilled = killed;
         emit KillSwitchSet(killed);
+    }
+
+    function _setPermissionlessSettlementAccount(address account) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        if (account == address(0)) revert ZeroAddressError();
+        if (account == address(this)) revert InvalidPermissionlessSettlementAccountError(account);
+
+        LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
+        address previousAccount = s.permissionlessSettlementAccount;
+        if (account == previousAccount) revert NoChangeError();
+
+        s.permissionlessSettlementAccount = account;
+        emit PermissionlessSettlementAccountUpdated(previousAccount, account);
     }
 }

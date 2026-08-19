@@ -41,7 +41,8 @@ struct InitializeParams {
 }
 
 struct OnReTokenConfig {
-    address inventorySource;
+    /// @dev Preserves the first 20 bytes of the already-deployed struct layout.
+    uint160 reserved;
     bool enabled;
     uint8 decimals;
 }

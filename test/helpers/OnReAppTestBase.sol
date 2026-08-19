@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Test} from "forge-std/Test.sol";
 import {IDiamondProxy} from "../../src/generated/IDiamondProxy.sol";
 import {IOnReToken} from "../../src/IOnReToken.sol";
@@ -26,7 +27,6 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
     bytes32 internal constant APPROVAL_TYPEHASH = keccak256("ApprovalMessage(address user,uint64 expiry)");
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;
     uint256 internal constant APPROVER_KEY = 0xA11CE;
-    uint256 internal constant INVENTORY_AMOUNT = 1_000_000_000e9;
 
     IDiamondProxy internal app;
     OnReToken internal onReToken;
@@ -35,8 +35,8 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
     address internal worker = makeAddr("worker");
     address internal admin = makeAddr("admin");
     address internal user = makeAddr("user");
+    address internal permissionlessSettlementAccount = makeAddr("permissionlessSettlementAccount");
     address internal vaultDestination = makeAddr("vaultDestination");
-    address internal inventorySource = makeAddr("inventorySource");
     address internal approver;
 
     bytes32 internal pricerId;
@@ -65,10 +65,10 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         onReToken = _deployToken(address(app));
         usd = new MockUsd();
 
-        onReToken.mint(inventorySource, INVENTORY_AMOUNT);
-        vm.prank(inventorySource);
-        onReToken.approve(address(app), type(uint256).max);
-        app.registerOnReToken(address(onReToken), inventorySource);
+        app.setPermissionlessSettlementAccount(permissionlessSettlementAccount);
+        _approvePermissionlessSettlementToken(address(usd));
+        _approvePermissionlessSettlementToken(address(onReToken));
+        app.registerOnReToken(address(onReToken));
 
         pricerId = app.createPricer(address(onReToken), PricingDenomination.Usd);
         app.addPricingVector(
@@ -133,6 +133,11 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         usd.approve(address(app), amount);
     }
 
+    function _approvePermissionlessSettlementToken(address token) internal {
+        vm.prank(permissionlessSettlementAccount);
+        IERC20(token).approve(address(app), type(uint256).max);
+    }
+
     function _basePropRfqTestConfig() internal pure returns (PropRfqConfig memory) {
         return PropRfqConfig({
             curvePegHaircutBps: 700,
@@ -191,8 +196,9 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
 
     function _deployToken(address burner) internal returns (OnReToken token) {
         OnReToken implementation = new OnReToken();
-        address[] memory initialMinters = new address[](1);
+        address[] memory initialMinters = new address[](2);
         initialMinters[0] = address(this);
+        initialMinters[1] = burner;
         address[] memory initialBurners = new address[](1);
         initialBurners[0] = burner;
         IOnReToken.InitializeParams memory params = IOnReToken.InitializeParams({

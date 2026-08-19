@@ -8,6 +8,31 @@ import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
 contract OnReConfigTest is OnReAppTestBase {
+    function test_PermissionlessSettlementAccountConfigurationLifecycle() public {
+        assertEq(app.permissionlessSettlementAccount(), permissionlessSettlementAccount);
+
+        address replacement = makeAddr("replacementPermissionlessSettlementAccount");
+        app.setPermissionlessSettlementAccount(replacement);
+        assertEq(app.permissionlessSettlementAccount(), replacement);
+
+        vm.expectRevert(NoChangeError.selector);
+        app.setPermissionlessSettlementAccount(replacement);
+
+        vm.expectRevert(ZeroAddressError.selector);
+        app.setPermissionlessSettlementAccount(address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidPermissionlessSettlementAccountError.selector, address(app)));
+        app.setPermissionlessSettlementAccount(address(app));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user, app.DEFAULT_ADMIN_ROLE()
+            )
+        );
+        vm.prank(user);
+        app.setPermissionlessSettlementAccount(user);
+    }
+
     function test_InitializesRolesAndCanonicalDomainRecords() public view {
         assertTrue(app.hasRole(app.DEFAULT_ADMIN_ROLE(), address(this)));
         assertTrue(app.hasRole(app.ADMIN_ROLE(), admin));
@@ -18,7 +43,8 @@ contract OnReConfigTest is OnReAppTestBase {
         OnReTokenConfig memory tokenConfig = app.getOnReTokenConfig(address(onReToken));
         assertTrue(tokenConfig.enabled);
         assertEq(tokenConfig.decimals, 9);
-        assertEq(tokenConfig.inventorySource, inventorySource);
+        assertEq(tokenConfig.reserved, 0);
+        assertEq(onReToken.totalSupply(), 0);
 
         Pricer memory pricer = app.getPricer(pricerId);
         assertEq(pricerId, OnReIds._pricerId(address(onReToken), PricingDenomination.Usd));
@@ -125,11 +151,6 @@ contract OnReConfigTest is OnReAppTestBase {
         vm.expectRevert(abi.encodeWithSelector(NotApproverError.selector, secondApprover));
         app.removeApprover(secondApprover);
 
-        address newInventorySource = makeAddr("newInventorySource");
-        app.setOnReTokenInventorySource(address(onReToken), newInventorySource);
-        assertEq(app.getOnReTokenConfig(address(onReToken)).inventorySource, newInventorySource);
-        vm.expectRevert(NoChangeError.selector);
-        app.setOnReTokenInventorySource(address(onReToken), newInventorySource);
         app.setOnReTokenEnabled(address(onReToken), false);
         vm.expectRevert(NoChangeError.selector);
         app.setOnReTokenEnabled(address(onReToken), false);
@@ -141,25 +162,22 @@ contract OnReConfigTest is OnReAppTestBase {
 
     function test_TokenRegistrationRejectsInvalidInputsAndSupportsReenable() public {
         vm.expectRevert(ZeroAddressError.selector);
-        app.registerOnReToken(address(0), inventorySource);
+        app.registerOnReToken(address(0));
 
         OnReToken secondToken = _deployToken(address(app));
-        vm.expectRevert(ZeroAddressError.selector);
-        app.registerOnReToken(address(secondToken), address(0));
+        app.registerOnReToken(address(secondToken));
+        assertTrue(app.getOnReTokenConfig(address(secondToken)).enabled);
 
         vm.expectRevert(InvalidTokenError.selector);
-        app.registerOnReToken(address(usd), inventorySource);
+        app.registerOnReToken(address(usd));
 
         app.setOnReTokenEnabled(address(onReToken), false);
         vm.expectRevert(abi.encodeWithSelector(TokenAlreadyRegisteredError.selector, address(onReToken)));
-        app.registerOnReToken(address(onReToken), inventorySource);
+        app.registerOnReToken(address(onReToken));
 
         vm.expectRevert(InvalidTokenError.selector);
         app.createPricer(address(onReToken), PricingDenomination.Usd);
         app.setOnReTokenEnabled(address(onReToken), true);
-
-        vm.expectRevert(ZeroAddressError.selector);
-        app.setOnReTokenInventorySource(address(onReToken), address(0));
 
         vm.expectRevert(abi.encodeWithSelector(TokenNotRegisteredError.selector, address(usd)));
         app.setOnReTokenEnabled(address(usd), true);
@@ -167,7 +185,7 @@ contract OnReConfigTest is OnReAppTestBase {
         app.createPricer(address(usd), PricingDenomination.Usd);
     }
 
-    function test_ExcludedSupplyAddressCapacityRemovalAndInventoryDeduplication() public {
+    function test_ExcludedSupplyAddressCapacityRemovalAndCirculatingSupply() public {
         vm.expectRevert(ZeroAddressError.selector);
         app.addExcludedSupplyAddress(address(onReToken), address(0));
         vm.expectRevert(ZeroAddressError.selector);
@@ -179,7 +197,9 @@ contract OnReConfigTest is OnReAppTestBase {
         );
         app.removeExcludedSupplyAddress(address(onReToken), missing);
 
-        app.addExcludedSupplyAddress(address(onReToken), inventorySource);
+        address excludedSupplyAccount = makeAddr("excludedSupplyAccount");
+        onReToken.mint(excludedSupplyAccount, 10e9);
+        app.addExcludedSupplyAddress(address(onReToken), excludedSupplyAccount);
         for (uint160 i = 1; i < 20; ++i) {
             app.addExcludedSupplyAddress(address(onReToken), address(10_000 + i));
         }
@@ -187,9 +207,10 @@ contract OnReConfigTest is OnReAppTestBase {
         app.addExcludedSupplyAddress(address(onReToken), address(20_000));
 
         assertEq(app.marketStats(address(onReToken)).circulatingSupply, 0);
-        app.removeExcludedSupplyAddress(address(onReToken), inventorySource);
+        app.removeExcludedSupplyAddress(address(onReToken), excludedSupplyAccount);
         app.removeExcludedSupplyAddress(address(onReToken), address(10_018));
         assertEq(app.getExcludedSupplyAccounts(address(onReToken)).length, 18);
+        assertEq(app.marketStats(address(onReToken)).circulatingSupply, 10e9);
     }
 
     function test_ApproverSlotValidationAndReuse() public {

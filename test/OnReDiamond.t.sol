@@ -455,9 +455,8 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
     function test_ReplacementFacetReadsExistingNamespacedApplicationState() public {
         NineDecimalToken token = new NineDecimalToken();
-        address inventorySource = makeAddr("inventorySource");
         vm.prank(boss);
-        app.registerOnReToken(address(token), inventorySource);
+        app.registerOnReToken(address(token));
 
         StorageAwareMarketStatsFacet replacement = new StorageAwareMarketStatsFacet();
         _cut(
@@ -465,7 +464,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         );
 
         MarketStats memory stats = app.marketStats(address(token));
-        assertEq(stats.tvl, uint160(inventorySource));
+        assertEq(stats.tvl, 1);
         assertEq(stats.nav, 9);
     }
 
@@ -595,7 +594,7 @@ contract DiamondMultiSelectorFacet {
 contract StorageAwareMarketStatsFacet {
     function marketStats(address token) external view returns (MarketStats memory stats) {
         OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[token];
-        stats.tvl = uint160(config.inventorySource);
+        stats.tvl = config.enabled ? 1 : 0;
         stats.nav = config.decimals;
     }
 }

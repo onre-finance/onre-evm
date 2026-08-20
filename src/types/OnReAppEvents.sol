@@ -3,11 +3,8 @@ pragma solidity 0.8.35;
 
 import {ConfigurableVaultKind, OfferDirection, OfferFlow, PricingDenomination, QuoterKind} from "./OnReTypes.sol";
 
-event OnReTokenRegistered(address indexed onReToken, address indexed inventorySource, uint8 decimals);
+event OnReTokenRegistered(address indexed onReToken, uint8 decimals);
 event OnReTokenEnabledSet(address indexed onReToken, bool enabled);
-event OnReTokenInventorySourceUpdated(
-    address indexed onReToken, address indexed oldInventorySource, address indexed newInventorySource
-);
 event ExcludedSupplyAddressAdded(address indexed onReToken, address indexed account);
 event ExcludedSupplyAddressRemoved(address indexed onReToken, address indexed account);
 
@@ -117,6 +114,7 @@ event ConfigurableVaultWithdrawn(
 
 event ApproverAdded(address indexed approver);
 event ApproverRemoved(address indexed approver);
+event PermissionlessSettlementAccountUpdated(address indexed previousAccount, address indexed newAccount);
 event KillSwitchSet(bool isKilled);
 
 event BossTransferStarted(address indexed currentBoss, address indexed pendingBoss);

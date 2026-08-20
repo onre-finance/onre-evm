@@ -40,15 +40,11 @@ library LibOnReMarketStats {
 
     function _circulatingSupply(address onReToken) internal view returns (uint256) {
         uint256 supply = IERC20Metadata(onReToken).totalSupply();
-        address inventorySource = LibOnReStorage._appStorage().onReTokenConfigs[onReToken].inventorySource;
-        uint256 excludedSupply = IERC20Metadata(onReToken).balanceOf(inventorySource);
+        uint256 excludedSupply;
         address[] storage excludedAccounts = LibOnReStorage._appStorage().excludedSupplyAccounts[onReToken];
         uint256 excludedAccountsLength = excludedAccounts.length;
         for (uint256 i; i < excludedAccountsLength;) {
-            address account = excludedAccounts[i];
-            if (account != inventorySource) {
-                excludedSupply += IERC20Metadata(onReToken).balanceOf(account);
-            }
+            excludedSupply += IERC20Metadata(onReToken).balanceOf(excludedAccounts[i]);
             unchecked {
                 ++i;
             }

@@ -58,4 +58,8 @@ contract OnReViewFacet {
     function appConfig() external view returns (bool isKilled, address approver1, address approver2) {
         (isKilled, approver1, approver2) = LibOnReView._appConfig();
     }
+
+    function permissionlessSettlementAccount() external view returns (address) {
+        return LibOnReView._permissionlessSettlementAccount();
+    }
 }

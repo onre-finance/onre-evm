@@ -193,6 +193,15 @@ contract OnReMathTest is Test {
         assertEq(price, 1_000_273_973);
     }
 
+    function test_VectorPriceMatchesSolanaReferenceVectors() public view {
+        assertEq(math.calculateVectorPrice(97_600, PRICE_SCALE, 1 hours), 1_000_011_142);
+        assertEq(math.calculateVectorPrice(97_600, PRICE_SCALE, 6 hours), 1_000_066_849);
+        assertEq(math.calculateVectorPrice(97_600, PRICE_SCALE, 1 days), 1_000_267_397);
+        assertEq(math.calculateVectorPrice(97_600, PRICE_SCALE, 2 days), 1_000_534_866);
+        assertEq(math.calculateVectorPrice(97_600, PRICE_SCALE, 3 days), 1_000_802_406);
+        assertEq(math.calculateVectorPrice(97_600, PRICE_SCALE, 3 days + 6 hours), 1_000_869_309);
+    }
+
     function testFuzz_ApyFromAprIsZeroOrAtLeastApr(uint64 rawApr) public view {
         uint256 apr = bound(uint256(rawApr), 0, APR_SCALE);
 

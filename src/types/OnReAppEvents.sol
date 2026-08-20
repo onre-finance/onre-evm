@@ -115,6 +115,42 @@ event ConfigurableVaultWithdrawn(
     bytes32 indexed vaultId, address indexed token, address indexed destination, uint256 amount
 );
 
+event BufferInitialized(
+    address indexed onReToken,
+    bytes32 indexed reserveVaultId,
+    bytes32 managementFeeVaultId,
+    bytes32 performanceFeeVaultId,
+    uint64 timestamp
+);
+event BufferGrossAprUpdated(address indexed onReToken, uint64 oldGrossApr, uint64 newGrossApr);
+event BufferFeeConfigUpdated(
+    address indexed onReToken,
+    uint16 oldManagementFeeBasisPoints,
+    uint16 newManagementFeeBasisPoints,
+    uint16 oldPerformanceFeeBasisPoints,
+    uint16 newPerformanceFeeBasisPoints,
+    bool oldPerformanceFeeHighWatermarkEnabled,
+    bool newPerformanceFeeHighWatermarkEnabled
+);
+event BufferAccrued(
+    address indexed onReToken,
+    uint256 secondsElapsed,
+    uint256 aprDelta,
+    uint256 bufferMintAmount,
+    uint256 reserveMintAmount,
+    uint256 managementFeeMintAmount,
+    uint256 performanceFeeMintAmount,
+    uint256 oldPreviousSupply,
+    uint256 newPreviousSupply,
+    uint256 oldPerformanceFeeHighWatermark,
+    uint256 newPerformanceFeeHighWatermark,
+    uint256 currentNav,
+    uint64 timestamp
+);
+event BufferSupplyChangeRecorded(
+    address indexed onReToken, bool indexed isMint, uint256 amount, uint256 oldPreviousSupply, uint256 newPreviousSupply
+);
+
 event ApproverAdded(address indexed approver);
 event ApproverRemoved(address indexed approver);
 event KillSwitchSet(bool isKilled);

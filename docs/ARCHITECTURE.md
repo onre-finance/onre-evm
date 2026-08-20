@@ -27,8 +27,10 @@ generates against, so the layout has to match what its templates import. See
 - `OnReOfferFacet` implements FeeConfigs, OfferConfigs, and flow-dispatched
   `takeOffer` execution.
 - `OnReFulfillmentFacet` implements escrowed worker requests and partial fills.
-- `OnReConfigurableVaultFacet` implements reusable Fee, Proceeds, and Liquidity
-  vault instances.
+- `OnReConfigurableVaultFacet` implements reusable Fee, Proceeds, Liquidity,
+  and BufferReserve vault instances.
+- `OnReBufferFacet` implements per-token Buffer configuration, accrual, manual
+  settlement, and the token supply-change callback.
 - `OnReViewFacet` exposes application and domain records.
 - `OnReMarketStatsFacet` derives APY and NAV from the canonical USD Pricer,
   derives circulating supply from token balances, and combines them into TVL.
@@ -56,6 +58,8 @@ The internal libraries follow the same responsibility boundaries:
 - `LibOnReApproval` owns EIP-712 approval verification.
 - `LibOnReOffer` owns direct and worker settlement against validated
   configuration.
+- `LibOnReBuffer` owns per-token Buffer accrual, fee splitting, supply
+  reconciliation, and logical-vault accounting.
 - `OnReMath` owns shared pure arithmetic; domain libraries add policy around
   those calculations rather than duplicating the formulas.
 
@@ -113,29 +117,53 @@ their own requests.
 
 ## Vault boundary
 
-The Diamond has three reusable vault kinds: `Fee`, `Proceeds`, and `Liquidity`.
-Each vault instance has one fixed withdrawal destination and an independent
-logical balance per ERC-20 token. Tokens remain physically held by the Diamond.
+The Diamond has four reusable vault kinds: `Fee`, `Proceeds`, `Liquidity`, and
+`BufferReserve`. Each vault instance has one fixed withdrawal destination and
+an independent logical balance per ERC-20 token. Tokens remain physically held
+by the Diamond.
 
 Anyone may deposit or trigger withdrawal. Withdrawal can only send to the
 configured destination, amount zero means the full logical balance, and
 fee-on-transfer assets are rejected by exact balance accounting.
 
-Buffer remains out of scope. Prop RFQ is implemented as a quoter kind rather
-than a separate facet. Each instance is bound to one asset/OnRe pair, stores its
-own configuration and rolling pressure, and can be shared by both directed
-permissionless OfferConfigs for that pair.
+BufferReserve withdrawals require `DEFAULT_ADMIN_ROLE`, while Fee vaults retain
+their configured permissionless withdrawal path. Buffer accrual mints the full
+amount to the Diamond and divides that balance between one BufferReserve vault
+and two distinct Fee vaults for management and performance fees. Buffer
+initialization derives these vault IDs from the OnRe token and vault role, then
+creates independent configurable-vault records. Their withdrawal destinations
+are set through the standard configurable-vault update path.
+
+Prop RFQ is implemented as a quoter kind rather than a separate facet. Each
+instance is bound to one asset/OnRe pair, stores its own configuration and
+rolling pressure, and can be shared by both directed permissionless
+OfferConfigs for that pair.
 
 ## OnRe token inventory
 
 Each registered OnRe token has a configured inventory-source address. Production
 uses a multisig holding pre-minted inventory. The multisig grants the Diamond a
 maximum ERC-20 allowance, and successful `AssetToOnRe` settlement transfers the
-quoted output directly from that multisig to the user. The Diamond never receives
-mint authority and there is no mint-gateway contract.
+quoted output directly from that multisig to the user. Ordinary offer buys do
+not mint.
+
+Separately, a token may configure the Diamond as its Buffer controller. That
+controller has one narrow mint path: `mintBuffer` always mints to the Diamond
+and deliberately skips the supply-change callback so Buffer settlement cannot
+recurse.
 
 Inventory held by the configured source is excluded from circulating supply.
+Buffer tokens held by the Diamond are not excluded: they are real supply, count
+toward circulating supply and TVL, and participate in future compounding.
 Operational vault assets remain physically held by the Diamond.
+
+Every ordinary token mint and burn synchronously calls
+`onBeforeSupplyChange` on the configured Buffer controller before changing
+`totalSupply`. The Diamond first settles accrual against the old supply, then
+records the expected post-change supply. If the observed supply differs from
+the stored baseline, the operation reverts rather than silently accounting from
+an incorrect value. See [`docs/BUFFER.md`](BUFFER.md) for the formula,
+configuration, and activation sequence.
 
 ## Deployment
 
@@ -150,7 +178,7 @@ Because cuts are derived from the facet ABIs, there is no selector manifest and
 no domain-interface layer to keep in sync. `src/generated/IDiamondProxy.sol` is
 the interface clients, integrations and tests bind to.
 
-Pricers, Quoters, FeeConfigs, vaults, and OfferConfigs are explicit
+Pricers, Quoters, FeeConfigs, vaults, Buffers, and OfferConfigs are explicit
 post-deployment configuration transactions.
 
 ERC-165 advertises only interfaces with a stable, standardised id: `IERC165`,

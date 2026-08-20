@@ -1,0 +1,59 @@
+name: CI
+
+permissions: {}
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  evm:
+    name: EVM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Show Forge version
+        run: forge --version
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Gemforge
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate diamond sources and check deployable contract sizes
+        # `gemforge build` writes src/generated (DiamondProxy, IDiamondProxy,
+        # LibDiamondHelper) and then runs the configured build command,
+        # `forge build --sizes src`. The generated proxy is a real deployable, so
+        # it is inside the size check; test-only helpers are not, because an
+        # unscoped `--sizes` would enforce EIP-170/EIP-3860 against contracts that
+        # are never broadcast on-chain.
+        run: pnpm build
+
+      - name: Run Forge fmt
+        # After gemforge build, so a stale src/generated cannot mask a diff.
+        # src/generated and templates are excluded via [fmt].ignore in foundry.toml.
+        run: forge fmt --check
+
+      - name: Run Forge tests
+        run: forge test -vvv
+
+      - name: Run Gemforge deployment and upgrade integration test
+        run: pnpm test:integration

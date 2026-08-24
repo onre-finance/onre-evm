@@ -1,0 +1,6 @@
+{
+  "chainId": 31337,
+  "diamond": "0x87EC3eBD9c8FA3b26e79620c1f3Cf0c8A3fDbb29",
+  "onReToken": "0x22c2e64965ed1cfd83aa410dcc7778658cd025a1",
+  "assetToken": "0xc23bae2b2a5af5380985b3192ce1f51f97e7d514"
+}

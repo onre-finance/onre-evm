@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>OnRe Local Admin</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">OR</span>
+        <div><p class="eyebrow">Local operations</p><h1>OnRe Admin</h1></div>
+      </div>
+      <div class="wallet-actions">
+        <span id="wallet-summary" class="wallet-summary">User wallet not connected</span>
+        <button id="connect-wallet" class="primary">Connect MetaMask</button>
+      </div>
+    </header>
+
+    <div class="app-shell">
+      <nav class="tabs" aria-label="Admin sections">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="tokens">Tokens</button>
+        <button class="tab" data-tab="pricing">Pricing</button>
+        <button class="tab" data-tab="quoters">Quoters</button>
+        <button class="tab" data-tab="vaults">Vaults</button>
+        <button class="tab" data-tab="fees">Fees</button>
+        <button class="tab" data-tab="offers">Offers</button>
+        <button class="tab" data-tab="transactions">Transactions</button>
+        <button class="tab" data-tab="advanced">Advanced</button>
+      </nav>
+
+      <main>
+        <div id="global-message" class="message hidden" aria-live="polite"></div>
+
+        <section class="tab-page active" data-page="overview">
+          <div class="page-heading">
+            <div><p class="eyebrow">System overview</p><h2>Local deployment</h2><p>Configure the protocol in dependency order and inspect what is currently usable.</p></div>
+            <button id="refresh-all">Refresh state</button>
+          </div>
+          <div id="status-grid" class="status-grid"></div>
+          <div class="panel actor-panel">
+            <div class="section-heading"><div><p class="eyebrow">Transaction senders</p><h3>Prepare local protocol actors</h3></div></div>
+            <p class="muted">Admin actions are sent from the boss returned by the Diamond. Offer execution stays on the connected browser wallet. The dedicated permissionless account approves the Diamond for every token used by permissionless offers.</p>
+            <div class="connection-grid">
+              <label>Permissionless account, if not configured<input id="permissionless-account" placeholder="0x…" /></label>
+              <button id="use-anvil-boss" class="primary">Prepare Anvil actors</button>
+            </div>
+          </div>
+          <div class="panel setup-panel">
+            <div class="section-heading"><div><p class="eyebrow">Quick start</p><h3>Build a complete local market</h3></div></div>
+            <p class="muted">Deploy only Mock USDC and Mock ONyc. This does not register tokens or create any protocol configuration; continue manually through the tabs.</p>
+            <div class="button-row">
+              <button id="deploy-fixtures" class="primary">Deploy fresh mock tokens</button>
+              <button id="clear-fixtures" class="ghost">Forget local token addresses</button>
+            </div>
+            <div id="fixture-grid" class="entity-grid compact-grid"></div>
+          </div>
+          <div class="panel">
+            <div class="section-heading"><div><p class="eyebrow">Configuration map</p><h3>What exists</h3></div></div>
+            <div id="entity-summary" class="summary-grid"></div>
+          </div>
+        </section>
+
+        <section class="tab-page" data-page="tokens">
+          <div class="page-heading"><div><p class="eyebrow">Assets</p><h2>Tokens</h2><p>Registered OnRe tokens and ERC-20 assets known from protocol configuration.</p></div></div>
+          <div class="two-column">
+            <form id="register-token-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">OnRe token</p><h3>Register token</h3></div><span class="step">Create</span></div>
+              <label>Token<select name="onReToken" data-options="tokens"></select></label>
+              <p class="field-help">OnRe tokens are minted and burned by the Diamond. There is no inventory source.</p>
+              <button class="primary" type="submit">Register OnRe token</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+            <form id="track-token-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Display only</p><h3>Track existing ERC-20</h3></div><span class="step neutral">Local</span></div>
+              <label>Token address<input name="token" placeholder="0x…" required /></label>
+              <p class="field-help">Adds token name, symbol and decimals to this browser. It does not send a transaction.</p>
+              <button type="submit">Track token</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+          </div>
+          <div id="tokens-list" class="entity-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="pricing">
+          <div class="page-heading"><div><p class="eyebrow">NAV source</p><h2>Pricing</h2><p>One USD-denominated pricer per OnRe token, with time-based pricing vectors.</p></div></div>
+          <div class="two-column">
+            <form id="create-pricer-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Pricer</p><h3>Create pricing feed</h3></div><span class="step">Create</span></div>
+              <label>OnRe token<select name="onReToken" data-options="onre-tokens"></select></label>
+              <label>Denomination<select name="denomination"><option value="0">USD</option></select></label>
+              <button class="primary" type="submit">Create pricer</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+            <form id="add-vector-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Price schedule</p><h3>Add pricing vector</h3></div><span class="step">Configure</span></div>
+              <label>Pricer<select name="pricerId" data-options="pricers"></select></label>
+              <div class="field-pair">
+                <label>Base price (USD)<input name="basePrice" type="number" min="0" step="0.000000001" value="1" required /></label>
+                <label>APR (%)<input name="apr" type="number" min="0" step="0.0001" value="5" required /></label>
+              </div>
+              <div class="field-pair">
+                <label>Curve base time (UTC)<input name="baseTime" type="datetime-local" required /></label>
+                <label>Activation time (UTC)<input name="startTime" type="datetime-local" required /></label>
+              </div>
+              <p class="field-help standalone">Price growth and fixed-step boundaries begin at the curve base time. The vector only becomes active at the later activation time.</p>
+              <label>Price fix duration<select name="priceFixDuration"><option value="3600">1 hour</option><option value="86400" selected>1 day</option><option value="604800">1 week</option></select></label>
+              <button class="primary" type="submit">Add pricing vector</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+          </div>
+          <div id="pricing-list" class="entity-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="quoters">
+          <div class="page-heading"><div><p class="eyebrow">Execution pricing</p><h2>Quoters</h2><p>Select how an offer transforms NAV into an executable quote.</p></div></div>
+          <div class="two-column">
+            <form id="create-quoter-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Quoter</p><h3>Create quoter</h3></div><span class="step">Create</span></div>
+              <label>Type<select name="kind"><option value="0">NAV — permissioned</option><option value="1">NAV — permissionless</option><option value="2">Proprietary RFQ</option></select></label>
+              <label>Instance number<input name="instanceId" type="number" min="0" data-default="instance" required /></label>
+              <button class="primary" type="submit">Create quoter</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+            <form id="configure-rfq-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Proprietary RFQ</p><h3>Configure asset pair</h3></div><span class="step">Configure</span></div>
+              <label>RFQ quoter<select name="quoterId" data-options="rfq-quoters"></select></label>
+              <div class="field-pair">
+                <label>Asset token<select name="assetToken" data-options="asset-tokens"></select></label>
+                <label>OnRe token<select name="onReToken" data-options="onre-tokens"></select></label>
+              </div>
+              <div class="field-triple">
+                <label>Epoch (hours)<input name="epochHours" type="number" min="1" value="24" /></label>
+                <label>Peg haircut (bps)<input name="haircutBps" type="number" min="0" max="10000" value="700" /></label>
+                <label>Curve exponent<input name="curveExponent" type="number" min="1000" step="1000" value="25000" /></label>
+              </div>
+              <details><summary>Advanced RFQ parameters</summary><div class="field-triple details-fields">
+                <label>Cadence threshold<input name="cadenceThreshold" type="number" value="20" /></label>
+                <label>Cadence wave<input name="cadenceWave" type="number" value="10000" /></label>
+                <label>Wall sensitivity<input name="wallSensitivity" type="number" value="20000" /></label>
+              </div></details>
+              <button class="primary" type="submit">Save RFQ configuration</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+          </div>
+          <div id="quoters-list" class="entity-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="vaults">
+          <div class="page-heading"><div><p class="eyebrow">Accounting destinations</p><h2>Vaults</h2><p>Create logical vaults and inspect their purpose, destination, target, and balances.</p></div></div>
+          <div class="two-column">
+            <form id="create-vault-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Configurable vault</p><h3>Create vault</h3></div><span class="step">Create</span></div>
+              <label>Purpose<select name="kind"><option value="0">Fee collection</option><option value="1">Offer proceeds</option><option value="2">Redemption liquidity</option></select></label>
+              <label>Instance number<input name="instanceId" type="number" min="0" data-default="instance" required /></label>
+              <label>Withdrawal destination<input name="destination" data-default="boss" placeholder="0x…" required /></label>
+              <label>Refill target (%)<input name="refillTarget" type="number" min="0" max="100" step="0.01" value="0" /></label>
+              <button class="primary" type="submit">Create vault</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+            <form id="vault-balance-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Funds</p><h3>Deposit or withdraw</h3></div><span class="step">Manage</span></div>
+              <label>Vault<select name="vaultId" data-options="vaults"></select></label>
+              <label>Token<select name="token" data-options="tokens"></select></label>
+              <div class="field-pair"><label>Action<select name="action"><option value="deposit">Deposit</option><option value="withdraw">Withdraw</option></select></label><label>Amount<input name="amount" type="number" min="0" step="any" value="1000" /></label></div>
+              <button class="primary" type="submit">Submit vault transaction</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+          </div>
+          <div id="vaults-list" class="entity-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="fees">
+          <div class="page-heading"><div><p class="eyebrow">Execution charges</p><h2>Fee configurations</h2><p>Reusable percentage and minimum-fee policies linked to fee vaults.</p></div></div>
+          <form id="create-fee-form" class="panel entity-form horizontal-form">
+            <div class="form-heading"><div><p class="eyebrow">Fee policy</p><h3>Create fee configuration</h3></div><span class="step">Create</span></div>
+            <label>Instance number<input name="instanceId" type="number" min="0" data-default="instance" required /></label>
+            <label>Fee (%)<input name="feePercent" type="number" min="0" max="100" step="0.01" value="1" /></label>
+            <label>Minimum fee (raw units)<input name="minimumFee" type="number" min="0" step="1" value="0" /></label>
+            <label>Fee vault<select name="feeVaultId" data-options="fee-vaults"></select></label>
+            <button class="primary" type="submit">Create fee config</button>
+            <p class="form-result" aria-live="polite"></p>
+          </form>
+          <p class="field-help standalone">The minimum is denominated in the smallest unit of each offer's input token. A reusable fee config therefore has no single display currency.</p>
+          <div id="fees-list" class="entity-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="offers">
+          <div class="page-heading"><div><p class="eyebrow">Markets</p><h2>Offers</h2><p>Compose a token pair and flow from existing pricing, quoting, fee, and vault configuration.</p></div></div>
+          <form id="create-offer-form" class="panel entity-form offer-form">
+            <div class="form-heading"><div><p class="eyebrow">Offer configuration</p><h3>Create offer</h3></div><span class="step">Compose</span></div>
+            <div class="field-triple">
+              <label>Input token<select name="tokenIn" data-options="tokens"></select></label>
+              <label>Output token<select name="tokenOut" data-options="tokens"></select></label>
+              <label>Execution flow<select name="flow"><option value="0">Permissioned</option><option value="1" selected>Permissionless</option><option value="2">Worker</option></select></label>
+            </div>
+            <div id="derived-pricer" class="derived-dependency"><span>Pricer</span><strong>Select a pair</strong><small>Automatically derived by the contract from the OnRe token.</small></div>
+            <div class="field-pair">
+              <label>Quoter<select name="quoterId" data-options="compatible-quoters"></select></label>
+              <label>Fee configuration<select name="feeConfigId" data-options="fees"></select></label>
+            </div>
+            <div class="field-pair">
+              <label>Proceeds vault<select name="proceedsVaultId" data-options="proceeds-vaults"></select></label>
+              <label>Liquidity vault<select name="liquidityVaultId" data-options="liquidity-vaults" data-optional="true"><option value="0x0000000000000000000000000000000000000000000000000000000000000000">None</option></select></label>
+            </div>
+            <button class="primary" type="submit">Create offer configuration</button>
+            <p class="form-result" aria-live="polite"></p>
+          </form>
+          <div id="offers-list" class="entity-grid wide-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="transactions">
+          <div class="page-heading"><div><p class="eyebrow">Interactive testing</p><h2>Transactions</h2><p>Mint local test tokens and execute an existing offer as the connected wallet.</p></div></div>
+          <div class="two-column">
+            <form id="mint-token-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Local mocks</p><h3>Mint tokens</h3></div><span class="step">Test only</span></div>
+              <label>Token<select name="token" data-options="mintable-tokens"></select></label>
+              <label>Recipient<input name="recipient" data-default="account" placeholder="0x…" required /></label>
+              <label>Amount<input name="amount" type="number" min="0" step="any" value="10000" required /></label>
+              <button class="primary" type="submit">Mint test tokens</button>
+              <p class="field-help">Sent by the prepared boss. Mock USDC is unrestricted; Mock ONyc grants its mint role to that boss.</p>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+
+            <div class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Wallet balances</p><h3>Available test funds</h3></div><button id="refresh-balances" type="button">Refresh</button></div>
+              <div id="wallet-balances" class="balance-list"></div>
+            </div>
+          </div>
+
+          <form id="take-offer-form" class="panel entity-form take-offer-form">
+            <div class="form-heading"><div><p class="eyebrow">Offer execution</p><h3>Take an offer</h3></div><span class="step">Execute</span></div>
+            <label>Offer configuration<select name="offerConfigId" data-options="executable-offers"></select></label>
+            <div id="take-offer-summary" class="derived-dependency offer-summary"><span>Offer</span><strong>Create an executable offer first</strong><small>The selected offer's token pair, flow, fee policy, and quote appear here.</small></div>
+            <div class="field-triple">
+              <label>Gross input amount<input name="grossInputAmount" type="number" min="0" step="any" value="100" required /></label>
+              <label>Maximum slippage (%)<input name="slippage" type="number" min="0" max="100" step="0.01" value="0.5" required /></label>
+              <label>Deadline (minutes)<input name="deadlineMinutes" type="number" min="1" value="20" required /></label>
+            </div>
+            <div id="permissioned-approval" class="approval-fields hidden">
+              <p class="field-help">Permissioned offers require an EIP-712 approval signed by a configured approver.</p>
+              <div class="field-pair">
+                <label>Approval expiry (Unix seconds)<input name="approvalExpiry" type="number" min="0" value="0" /></label>
+                <label>Approval signature<input name="approvalSignature" value="0x" /></label>
+              </div>
+            </div>
+            <div class="button-row">
+              <button id="preview-offer" type="button">Preview quote</button>
+              <button class="primary" type="submit">Approve input and take offer</button>
+            </div>
+            <div id="take-offer-preview" class="quote-preview empty-state">Select an offer and preview an amount.</div>
+            <p class="form-result" aria-live="polite"></p>
+          </form>
+        </section>
+
+        <section class="tab-page" data-page="advanced">
+          <div class="page-heading"><div><p class="eyebrow">Raw contract access</p><h2>Advanced</h2><p>Connection settings, every ABI method, raw events, and transaction diagnostics.</p></div></div>
+          <section class="panel">
+            <div class="section-heading"><div><p class="eyebrow">Connection</p><h3>RPC and Diamond</h3></div></div>
+            <div class="connection-grid"><label>RPC URL<input id="rpc-url" value="http://127.0.0.1:8545" /></label><label>Diamond address<input id="diamond-address" autocomplete="off" /></label><button id="apply-connection">Apply</button></div>
+          </section>
+          <details class="panel advanced-panel"><summary>All write methods — sent by the prepared boss</summary><input id="write-filter" class="compact-input" placeholder="Filter write methods" /><div id="write-methods" class="method-grid"></div></details>
+          <details class="panel advanced-panel"><summary>All read methods</summary><input id="read-filter" class="compact-input" placeholder="Filter read methods" /><div id="read-methods" class="method-grid"></div></details>
+          <section class="panel"><div class="section-heading"><div><p class="eyebrow">Audit trail</p><h3>Diamond events</h3></div><span id="event-count" class="pill">0 events</span></div><div id="events" class="events-table"></div></section>
+          <section class="panel"><div class="section-heading"><div><p class="eyebrow">Session</p><h3>Transactions and errors</h3></div><button id="clear-log" class="ghost">Clear</button></div><pre id="activity-log" class="activity-log">Ready.</pre></section>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>

@@ -3,6 +3,8 @@ pragma solidity 0.8.35;
 
 import "../src/types/OnReAppErrors.sol";
 import "../src/types/OnReTypes.sol";
+import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
+import {IOnReToken} from "../src/IOnReToken.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
@@ -55,8 +57,7 @@ contract OnReOfferTest is OnReAppTestBase {
         assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 1e6);
         assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 99e6);
         assertEq(usd.balanceOf(address(app)), inputAmount);
-        assertEq(onReToken.balanceOf(inventorySource), INVENTORY_AMOUNT - amountOut);
-        assertEq(onReToken.allowance(inventorySource, address(app)), type(uint256).max);
+        assertEq(onReToken.totalSupply(), amountOut);
 
         _fundAndApproveUsd(user, inputAmount);
         TakeOfferParams memory missingSignature =
@@ -74,6 +75,10 @@ contract OnReOfferTest is OnReAppTestBase {
 
         assertEq(amountOut, 49_500_000_000);
         assertEq(onReToken.balanceOf(user), amountOut);
+        assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(onReToken.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(usd.allowance(permissionlessSettlementAccount, address(app)), type(uint256).max);
+        assertEq(onReToken.allowance(permissionlessSettlementAccount, address(app)), type(uint256).max);
 
         ExecutionAccounting memory preview = app.previewExecution(permissionlessOfferId, inputAmount);
         assertEq(preview.price, 1e9);
@@ -85,6 +90,90 @@ contract OnReOfferTest is OnReAppTestBase {
         vm.expectRevert(InvalidApprovalError.selector);
         vm.prank(user);
         app.takeOffer(unexpectedApproval);
+    }
+
+    function test_TakeOfferPermissionlessRequiresSettlementInputAllowance() public {
+        uint256 inputAmount = 50e6;
+        vm.prank(permissionlessSettlementAccount);
+        usd.approve(address(app), 0);
+        _fundAndApproveUsd(user, inputAmount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, address(app), 0, inputAmount)
+        );
+        vm.prank(user);
+        app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
+
+        assertEq(usd.balanceOf(user), inputAmount);
+        assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(usd.balanceOf(address(app)), 0);
+        assertEq(onReToken.totalSupply(), 0);
+    }
+
+    function test_TakeOfferPermissionlessRequiresConfiguredSettlementAccount() public {
+        bytes32 permissionlessSettlementAccountSlot = bytes32(uint256(APP_STORAGE_LOCATION) + 13);
+        vm.store(address(app), permissionlessSettlementAccountSlot, bytes32(0));
+        assertEq(app.permissionlessSettlementAccount(), address(0));
+
+        uint256 inputAmount = 50e6;
+        _fundAndApproveUsd(user, inputAmount);
+
+        vm.expectRevert(PermissionlessSettlementAccountNotSetError.selector);
+        vm.prank(user);
+        app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
+
+        assertEq(usd.balanceOf(user), inputAmount);
+        assertEq(usd.balanceOf(address(app)), 0);
+        assertEq(onReToken.totalSupply(), 0);
+    }
+
+    function test_TakeOfferPermissionlessRequiresSettlementOutputAllowance() public {
+        uint256 inputAmount = 50e6;
+        vm.prank(permissionlessSettlementAccount);
+        onReToken.approve(address(app), 0);
+        _fundAndApproveUsd(user, inputAmount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, address(app), 0, 49_500_000_000)
+        );
+        vm.prank(user);
+        app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
+
+        assertEq(usd.balanceOf(user), inputAmount);
+        assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(usd.balanceOf(address(app)), 0);
+        assertEq(onReToken.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(onReToken.totalSupply(), 0);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 0);
+        assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 0);
+    }
+
+    function test_TakeOfferPermissionlessRejectsSettlementAccountAsUser() public {
+        uint256 inputAmount = 50e6;
+        usd.mint(permissionlessSettlementAccount, inputAmount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                InvalidPermissionlessSettlementAccountError.selector, permissionlessSettlementAccount
+            )
+        );
+        vm.prank(permissionlessSettlementAccount);
+        app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
+    }
+
+    function test_TakeOfferAssetToOnReRequiresDiamondMintAuthority() public {
+        onReToken.revokeMintRole(address(app));
+        uint256 inputAmount = 50e6;
+        _fundAndApproveUsd(user, inputAmount);
+
+        vm.expectRevert(abi.encodeWithSelector(IOnReToken.SenderNotMinterError.selector, address(app)));
+        vm.prank(user);
+        app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
+
+        assertEq(onReToken.totalSupply(), 0);
+        assertEq(usd.balanceOf(user), inputAmount);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 0);
+        assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 0);
     }
 
     function test_TakeOfferPermissionedReverseBurnsInputAndPaysFromLiquidity() public {
@@ -103,7 +192,33 @@ contract OnReOfferTest is OnReAppTestBase {
 
         assertEq(amountOut, 99e6);
         assertEq(usd.balanceOf(user), 99e6);
-        assertEq(onReToken.totalSupply(), INVENTORY_AMOUNT + 1e9);
+        assertEq(onReToken.totalSupply(), 1e9);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
+        assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 101e6);
+    }
+
+    function test_TakeOfferPermissionlessReverseRoutesBothLegsThroughSettlementAccount() public {
+        bytes32 reversePermissionless = _makeOffer(
+            address(onReToken),
+            address(usd),
+            OfferFlow.Permissionless,
+            navPermissionlessQuoterId,
+            feeConfigId,
+            liquidityVaultId
+        );
+        _depositLiquidity(200e6);
+        onReToken.mint(user, 100e9);
+        vm.prank(user);
+        onReToken.approve(address(app), 100e9);
+
+        vm.prank(user);
+        uint256 amountOut = app.takeOffer(_takeOfferParams(reversePermissionless, 100e9));
+
+        assertEq(amountOut, 99e6);
+        assertEq(usd.balanceOf(user), amountOut);
+        assertEq(onReToken.totalSupply(), 1e9);
+        assertEq(onReToken.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
         assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
         assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 101e6);
     }

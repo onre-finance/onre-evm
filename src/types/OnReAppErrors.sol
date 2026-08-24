@@ -8,6 +8,8 @@ error InvalidBasisPointsError();
 error InvalidTokenError();
 error InvalidDecimalsError();
 error InvalidApprovalError();
+error InvalidPermissionlessSettlementAccountError(address account);
+error PermissionlessSettlementAccountNotSetError();
 error InvalidOfferDirectionError();
 error InvalidFlowQuoterError();
 error UnsupportedOfferFlowError(uint8 flow);

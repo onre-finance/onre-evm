@@ -5,16 +5,12 @@ import {LibOnReConfig} from "../libraries/LibOnReConfig.sol";
 import {LibOnReAppConfig} from "../libraries/LibOnReAppConfig.sol";
 
 contract OnReConfigFacet {
-    function registerOnReToken(address onReToken, address inventorySource) external {
-        LibOnReConfig._registerOnReToken(onReToken, inventorySource);
+    function registerOnReToken(address onReToken) external {
+        LibOnReConfig._registerOnReToken(onReToken);
     }
 
     function setOnReTokenEnabled(address onReToken, bool enabled) external {
         LibOnReConfig._setOnReTokenEnabled(onReToken, enabled);
-    }
-
-    function setOnReTokenInventorySource(address onReToken, address inventorySource) external {
-        LibOnReConfig._setOnReTokenInventorySource(onReToken, inventorySource);
     }
 
     function addExcludedSupplyAddress(address onReToken, address account) external {
@@ -35,5 +31,9 @@ contract OnReConfigFacet {
 
     function setKillSwitch(bool killed) external {
         LibOnReAppConfig._setKillSwitch(killed);
+    }
+
+    function setPermissionlessSettlementAccount(address account) external {
+        LibOnReAppConfig._setPermissionlessSettlementAccount(account);
     }
 }

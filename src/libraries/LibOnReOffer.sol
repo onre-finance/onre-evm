@@ -6,7 +6,9 @@ import {
     InvalidAmountError,
     InvalidApprovalError,
     InvalidOfferDirectionError,
+    InvalidPermissionlessSettlementAccountError,
     MinimumAmountOutNotMetError,
+    PermissionlessSettlementAccountNotSetError,
     TakeOfferDeadlineExpiredError,
     UnsupportedOfferFlowError,
     WorkerOfferRequiresFulfillmentRequestError
@@ -87,7 +89,8 @@ library LibOnReOffer {
     ) internal returns (ExecutionAccounting memory accounting) {
         accounting = _previewExecution(offer, grossInputAmount);
         LibOnReQuoter._recordExecution(offer, accounting.netInputAmount, accounting.price);
-        _settleCollectedInput(offerConfigId, offer, recipient, accounting);
+        _settleCollectedInput(offer, recipient, accounting);
+        _emitOfferExecuted(offerConfigId, offer, recipient, accounting);
     }
 
     function _executeCollectedFromUser(
@@ -101,28 +104,52 @@ library LibOnReOffer {
             revert MinimumAmountOutNotMetError(minimumAmountOut, accounting.amountOut);
         }
         LibOnReQuoter._recordExecution(offer, accounting.netInputAmount, accounting.price);
-        LibOnReVault._pullExactTokenAmount(offer.tokenIn, msg.sender, grossInputAmount);
-        _settleCollectedInput(offerConfigId, offer, msg.sender, accounting);
+
+        if (offer.flow == OfferFlow.Permissionless) {
+            address permissionlessAccount = _requirePermissionlessSettlementAccount(msg.sender);
+            LibOnReVault._transferExactTokenAmountFrom(
+                offer.tokenIn, msg.sender, permissionlessAccount, grossInputAmount
+            );
+            LibOnReVault._transferExactTokenAmountFrom(
+                offer.tokenIn, permissionlessAccount, address(this), grossInputAmount
+            );
+
+            _settleCollectedInput(offer, permissionlessAccount, accounting);
+            LibOnReVault._transferExactTokenAmountFrom(
+                offer.tokenOut, permissionlessAccount, msg.sender, accounting.amountOut
+            );
+        } else {
+            LibOnReVault._transferExactTokenAmountFrom(offer.tokenIn, msg.sender, address(this), grossInputAmount);
+            _settleCollectedInput(offer, msg.sender, accounting);
+        }
+
+        _emitOfferExecuted(offerConfigId, offer, msg.sender, accounting);
         amountOut = accounting.amountOut;
     }
 
     function _settleCollectedInput(
-        bytes32 offerConfigId,
         OfferConfig storage offer,
-        address recipient,
+        address outputRecipient,
         ExecutionAccounting memory accounting
     ) private {
         FeeConfig storage feeConfig = LibOnReValidation._requireExecutableFeeConfig(offer.feeConfigId);
         LibOnReVault._accrue(feeConfig.feeVaultId, offer.tokenIn, accounting.feeAmount);
 
         if (offer.direction == OfferDirection.AssetToOnRe) {
-            _settleAssetToOnRe(offer, recipient, accounting);
+            _settleAssetToOnRe(offer, outputRecipient, accounting);
         } else if (offer.direction == OfferDirection.OnReToAsset) {
-            _settleOnReToAsset(offer, recipient, accounting);
+            _settleOnReToAsset(offer, outputRecipient, accounting);
         } else {
             revert InvalidOfferDirectionError();
         }
+    }
 
+    function _emitOfferExecuted(
+        bytes32 offerConfigId,
+        OfferConfig storage offer,
+        address recipient,
+        ExecutionAccounting memory accounting
+    ) private {
         emit OfferExecuted(
             offerConfigId,
             recipient,
@@ -144,8 +171,7 @@ library LibOnReOffer {
         accounting.proceedsAmount = accounting.netInputAmount - accounting.liquidityRefillAmount;
         LibOnReVault._accrue(offer.liquidityVaultId, offer.tokenIn, accounting.liquidityRefillAmount);
         LibOnReVault._accrue(offer.proceedsVaultId, offer.tokenIn, accounting.proceedsAmount);
-        address inventorySource = LibOnReStorage._appStorage().onReTokenConfigs[offer.tokenOut].inventorySource;
-        LibOnReVault._transferExactTokenAmountFrom(offer.tokenOut, inventorySource, recipient, accounting.amountOut);
+        IOnReToken(offer.tokenOut).mint(recipient, accounting.amountOut);
     }
 
     function _settleOnReToAsset(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
@@ -176,6 +202,14 @@ library LibOnReOffer {
             LibOnReVault._balance(offer.liquidityVaultId, offer.tokenIn),
             netInputAmount
         );
+    }
+
+    function _requirePermissionlessSettlementAccount(address user) private view returns (address account) {
+        account = LibOnReStorage._appStorage().permissionlessSettlementAccount;
+        if (account == address(0)) revert PermissionlessSettlementAccountNotSetError();
+        if (account == address(this) || account == user) {
+            revert InvalidPermissionlessSettlementAccountError(account);
+        }
     }
 
     function _validateTakeOfferFlow(TakeOfferParams calldata params, OfferFlow flow) private view {

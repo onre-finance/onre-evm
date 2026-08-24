@@ -40,7 +40,7 @@ library LibOnReFulfillment {
         request.inputAmount = inputAmount;
         request.exists = true;
 
-        LibOnReVault._pullExactTokenAmount(offer.tokenIn, msg.sender, inputAmount);
+        LibOnReVault._transferExactTokenAmountFrom(offer.tokenIn, msg.sender, address(this), inputAmount);
         emit FulfillmentRequested(fulfillmentRequestId, offerConfigId, msg.sender, requestId, inputAmount);
     }
 

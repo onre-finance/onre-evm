@@ -72,7 +72,7 @@ contract OnReFulfillmentTest is OnReAppTestBase {
 
         assertEq(secondAmountOut, 118_800_000);
         assertEq(usd.balanceOf(user), 158_400_000);
-        assertEq(onReToken.totalSupply(), INVENTORY_AMOUNT + 1e9);
+        assertEq(onReToken.totalSupply(), 1e9);
         assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
         assertFalse(app.getFulfillmentRequest(requestKey).exists);
     }
@@ -96,7 +96,7 @@ contract OnReFulfillmentTest is OnReAppTestBase {
 
     function test_WorkerCancellationRejectsExcessDiamondDebit() public {
         MockSenderPaysFeeToken taxedToken = new MockSenderPaysFeeToken(address(app));
-        app.registerOnReToken(address(taxedToken), inventorySource);
+        app.registerOnReToken(address(taxedToken));
         bytes32 taxedPricerId = app.createPricer(address(taxedToken), PricingDenomination.Usd);
         app.addPricingVector(
             taxedPricerId, PricingVector({startTime: 1, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})

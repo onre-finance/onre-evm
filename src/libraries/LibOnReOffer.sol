@@ -89,7 +89,8 @@ library LibOnReOffer {
     ) internal returns (ExecutionAccounting memory accounting) {
         accounting = _previewExecution(offer, grossInputAmount);
         LibOnReQuoter._recordExecution(offer, accounting.netInputAmount, accounting.price);
-        _settleCollectedInput(offerConfigId, offer, recipient, recipient, accounting);
+        _settleCollectedInput(offer, recipient, accounting);
+        _emitOfferExecuted(offerConfigId, offer, recipient, accounting);
     }
 
     function _executeCollectedFromUser(
@@ -104,41 +105,51 @@ library LibOnReOffer {
         }
         LibOnReQuoter._recordExecution(offer, accounting.netInputAmount, accounting.price);
 
-        address outputAccount = msg.sender;
         if (offer.flow == OfferFlow.Permissionless) {
-            outputAccount = _requirePermissionlessSettlementAccount(msg.sender);
-            LibOnReVault._transferExactTokenAmountFrom(offer.tokenIn, msg.sender, outputAccount, grossInputAmount);
-            LibOnReVault._transferExactTokenAmountFrom(offer.tokenIn, outputAccount, address(this), grossInputAmount);
+            address permissionlessAccount = _requirePermissionlessSettlementAccount(msg.sender);
+            LibOnReVault._transferExactTokenAmountFrom(
+                offer.tokenIn, msg.sender, permissionlessAccount, grossInputAmount
+            );
+            LibOnReVault._transferExactTokenAmountFrom(
+                offer.tokenIn, permissionlessAccount, address(this), grossInputAmount
+            );
+
+            _settleCollectedInput(offer, permissionlessAccount, accounting);
+            LibOnReVault._transferExactTokenAmountFrom(
+                offer.tokenOut, permissionlessAccount, msg.sender, accounting.amountOut
+            );
         } else {
-            LibOnReVault._pullExactTokenAmount(offer.tokenIn, msg.sender, grossInputAmount);
+            LibOnReVault._transferExactTokenAmountFrom(offer.tokenIn, msg.sender, address(this), grossInputAmount);
+            _settleCollectedInput(offer, msg.sender, accounting);
         }
 
-        _settleCollectedInput(offerConfigId, offer, msg.sender, outputAccount, accounting);
+        _emitOfferExecuted(offerConfigId, offer, msg.sender, accounting);
         amountOut = accounting.amountOut;
     }
 
     function _settleCollectedInput(
-        bytes32 offerConfigId,
         OfferConfig storage offer,
-        address recipient,
-        address outputAccount,
+        address outputRecipient,
         ExecutionAccounting memory accounting
     ) private {
         FeeConfig storage feeConfig = LibOnReValidation._requireExecutableFeeConfig(offer.feeConfigId);
         LibOnReVault._accrue(feeConfig.feeVaultId, offer.tokenIn, accounting.feeAmount);
 
         if (offer.direction == OfferDirection.AssetToOnRe) {
-            _settleAssetToOnRe(offer, outputAccount, accounting);
+            _settleAssetToOnRe(offer, outputRecipient, accounting);
         } else if (offer.direction == OfferDirection.OnReToAsset) {
-            _settleOnReToAsset(offer, outputAccount, accounting);
+            _settleOnReToAsset(offer, outputRecipient, accounting);
         } else {
             revert InvalidOfferDirectionError();
         }
+    }
 
-        if (outputAccount != recipient) {
-            LibOnReVault._transferExactTokenAmountFrom(offer.tokenOut, outputAccount, recipient, accounting.amountOut);
-        }
-
+    function _emitOfferExecuted(
+        bytes32 offerConfigId,
+        OfferConfig storage offer,
+        address recipient,
+        ExecutionAccounting memory accounting
+    ) private {
         emit OfferExecuted(
             offerConfigId,
             recipient,

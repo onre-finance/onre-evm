@@ -76,7 +76,7 @@ library LibOnReVault {
         if (token == address(0)) revert ZeroAddressError();
         if (amount == 0) revert InvalidAmountError();
 
-        _pullExactTokenAmount(token, msg.sender, amount);
+        _transferExactTokenAmountFrom(token, msg.sender, address(this), amount);
         _accrue(vaultId, token, amount);
     }
 
@@ -107,10 +107,6 @@ library LibOnReVault {
         LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = availableAmount - withdrawnAmount;
         _transferExactTokenAmount(token, destination, withdrawnAmount);
         emit ConfigurableVaultWithdrawn(vaultId, token, destination, withdrawnAmount);
-    }
-
-    function _pullExactTokenAmount(address token, address from, uint256 amount) internal {
-        _transferExactTokenAmountFrom(token, from, address(this), amount);
     }
 
     function _transferExactTokenAmountFrom(address token, address from, address recipient, uint256 amount) internal {

@@ -1,12 +1,14 @@
 import { zeroAddress } from "viem";
 import {
   addPricingVector,
+  configureBuffer,
   configurePropRfq,
   createFeeConfig,
   createOffer,
   createPricer,
   createQuoter,
   createVault,
+  initializeBuffer,
   manageVaultBalance,
   registerOnReToken,
   trackToken,
@@ -19,6 +21,7 @@ import { deployFixtures, renderFixtures } from "./fixtures.js";
 import { ensurePermissionlessTokenApprovals } from "./permissionless.js";
 import { renderSelectOptions } from "./selectors.js";
 import { resetFixtures, state } from "./state.js";
+import { renderBuffers, syncBufferForm } from "./tabs/buffer.js";
 import { renderFees } from "./tabs/fees.js";
 import { renderOffers, renderDerivedPricer } from "./tabs/offers.js";
 import { renderOverview } from "./tabs/overview.js";
@@ -111,6 +114,8 @@ function bindActions() {
     ["#vault-balance-form", manageVaultBalance],
     ["#create-fee-form", createFeeConfig],
     ["#create-offer-form", createOffer],
+    ["#initialize-buffer-form", initializeBuffer],
+    ["#configure-buffer-form", configureBuffer],
     ["#mint-token-form", mintMockToken],
     ["#take-offer-form", takeSelectedOffer],
   ];
@@ -123,6 +128,7 @@ function bindActions() {
       renderDerivedPricer();
     });
   });
+  $("#configure-buffer-form").elements.onReToken.addEventListener("change", syncBufferForm);
   bindTransactionControls();
 }
 
@@ -263,6 +269,7 @@ async function refreshDomainUi() {
   renderOverview(renderTransactions);
   renderTokens();
   renderPricing();
+  renderBuffers();
   renderQuoters();
   renderVaults();
   renderFees();

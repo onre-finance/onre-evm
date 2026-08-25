@@ -1,7 +1,7 @@
 # Local admin console
 
 This is a local, entity-oriented operations console for the OnRe Diamond. Its
-tabs cover tokens, pricing, quoters, vaults, fees, and offers.
+tabs cover tokens, pricing, Buffer accounting, quoters, vaults, fees, and offers.
 Creation forms use readable token metadata and selectors populated from existing
 compatible records. Raw bytes32 identifiers stay collapsed under **Technical
 identifier** unless they are needed for debugging.
@@ -95,6 +95,13 @@ OnRe tokens are minted and burned by the Diamond; the UI does not configure an
 inventory source. The permissionless settlement account grants the Diamond a
 maximum allowance for each freshly deployed or registered token and re-checks
 both tokens before a permissionless offer is created.
+
+The **Buffer** tab follows the contract activation order. Initialize the Buffer
+only after the registered token has an active USD pricing vector. Activation
+then configures all three derived vault destinations, sets the Diamond as the
+token's Buffer controller, and finally saves gross APR and fee settings. The UI
+preserves each derived vault's existing refill target when updating its
+withdrawal destination.
 
 `pnpm admin:build` produces the static build under `admin-ui/dist`.
 

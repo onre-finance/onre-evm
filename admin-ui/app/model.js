@@ -46,6 +46,7 @@ export function tokenUsage(address) {
     return rfqState && [rfqState.assetToken, rfqState.onReToken].some((token) => token.toLowerCase() === lower);
   })) uses.push("Quoting");
   if (recordsOf("Offer").some((record) => [record.value.tokenIn, record.value.tokenOut].some((token) => token.toLowerCase() === lower))) uses.push("Offers");
+  if (recordsOf("Buffer").some((record) => String(record.id).toLowerCase() === lower)) uses.push("Buffer");
   return uses.join(", ");
 }
 
@@ -58,5 +59,6 @@ export function vaultPurpose(kind) {
     "Receives execution fees",
     "Receives non-refill offer proceeds",
     "Funds asset redemptions",
+    "Holds Buffer reserve accounting",
   ][kind] || "Protocol vault";
 }

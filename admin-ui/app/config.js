@@ -16,7 +16,7 @@ export const APR_SCALE = 1_000_000;
 export const BASIS_POINTS = 10_000;
 export const PRICING_DENOMINATIONS = ["USD"];
 export const QUOTER_KINDS = ["NAV", "NAV permissionless", "Proprietary RFQ"];
-export const VAULT_KINDS = ["Fee", "Proceeds", "Liquidity"];
+export const VAULT_KINDS = ["Fee", "Proceeds", "Liquidity", "Buffer reserve"];
 export const OFFER_FLOWS = ["Permissioned", "Permissionless", "Worker"];
 export const OFFER_DIRECTIONS = ["Asset → OnRe", "OnRe → asset"];
 
@@ -45,6 +45,7 @@ export const getterByEvent = {
   ConfigurableVaultCreated: ["Vault", "vaultId", "getConfigurableVault"],
   OfferConfigCreated: ["Offer", "offerConfigId", "getOfferConfig"],
   FulfillmentRequested: ["Fulfillment request", "fulfillmentRequestId", "getFulfillmentRequest"],
+  BufferInitialized: ["Buffer", "onReToken", "getBufferState"],
 };
 
 export const advancedMethods = new Set(["diamondCut", "onBeforeSupplyChange", "renounceRole"]);

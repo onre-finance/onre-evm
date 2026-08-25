@@ -5,6 +5,7 @@ export function renderOverview(onTransactions) {
   const summaries = [
     ["tokens", recordsOf("OnRe token").length, "OnRe tokens"],
     ["pricing", recordsOf("Pricer").length, "Pricers"],
+    ["buffer", recordsOf("Buffer").length, "Buffers"],
     ["quoters", recordsOf("Quoter").length, "Quoters"],
     ["vaults", recordsOf("Vault").length, "Vaults"],
     ["fees", recordsOf("Fee config").length, "Fee configs"],

@@ -1,7 +1,7 @@
 import { parseUnits } from "viem";
 import { APR_SCALE, erc20MetadataAbi, OFFER_FLOWS, onReTokenArtifact, PRICE_DECIMALS, QUOTER_KINDS, VAULT_KINDS, ZERO_BYTES32 } from "./config.js";
-import { writeBossDiamond, writeBossToken } from "./chain.js";
-import { hydrateTokenMetadata, recordsOf } from "./data.js";
+import { readDiamond, writeBossDiamond, writeBossToken } from "./chain.js";
+import { hydrateTokenMetadata, recordById, recordsOf } from "./data.js";
 import { entityLabel, tokenLabel, tokenMeta } from "./model.js";
 import { ensurePermissionlessTokenApprovals } from "./permissionless.js";
 import { state, storeTrackedTokens } from "./state.js";
@@ -122,4 +122,69 @@ export async function createOffer(form) {
   if (flow === 1) await ensurePermissionlessTokenApprovals([tokenIn, tokenOut]);
   const result = await writeBossDiamond("makeOfferConfig", [{ tokenIn, tokenOut, flow, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId }]);
   return `Created ${tokenLabel(tokenIn)} → ${tokenLabel(tokenOut)} ${OFFER_FLOWS[flow]} offer (${short(result.simulatedResult)}).`;
+}
+
+export async function initializeBuffer(form) {
+  const onReToken = requiredAddress(form.elements.onReToken.value, "OnRe token");
+  const pricer = recordsOf("Pricer").find((record) => record.value.onReToken.toLowerCase() === onReToken.toLowerCase());
+  if (!pricer) throw new Error("Create this token's USD pricer and active pricing vector before initializing its Buffer.");
+  await readDiamond("currentPrice", [pricer.id]);
+  await writeBossDiamond("initializeBuffer", [onReToken]);
+  return `Initialized the ${tokenLabel(onReToken)} Buffer and its three derived vaults.`;
+}
+
+export async function configureBuffer(form) {
+  const onReToken = requiredAddress(form.elements.onReToken.value, "OnRe token");
+  const reserveDestination = requiredAddress(form.elements.reserveDestination.value, "Reserve withdrawal destination");
+  const managementFeeDestination = requiredAddress(form.elements.managementFeeDestination.value, "Management-fee withdrawal destination");
+  const performanceFeeDestination = requiredAddress(form.elements.performanceFeeDestination.value, "Performance-fee withdrawal destination");
+  const grossAprPercent = Number(form.elements.grossApr.value);
+  const managementFeePercent = Number(form.elements.managementFee.value);
+  const performanceFeePercent = Number(form.elements.performanceFee.value);
+  for (const [label, value] of [
+    ["Gross APR", grossAprPercent],
+    ["Management fee", managementFeePercent],
+    ["Performance fee", performanceFeePercent],
+  ]) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error(`${label} must be between 0% and 100%.`);
+  }
+
+  const buffer = recordById("Buffer", onReToken)?.value;
+  if (!buffer) throw new Error("Initialize this Buffer first.");
+  const pricer = recordsOf("Pricer").find((record) => record.value.onReToken.toLowerCase() === onReToken.toLowerCase());
+  if (!pricer) throw new Error("Create this token's USD pricer and active pricing vector before activating its Buffer.");
+  await readDiamond("currentPrice", [pricer.id]);
+
+  const grossApr = Math.round(grossAprPercent * APR_SCALE / 100);
+  const managementFee = Math.round(managementFeePercent * 100);
+  const performanceFee = Math.round(performanceFeePercent * 100);
+
+  await updateBufferVaultDestination(buffer.reserveVaultId, reserveDestination);
+  await updateBufferVaultDestination(buffer.managementFeeVaultId, managementFeeDestination);
+  await updateBufferVaultDestination(buffer.performanceFeeVaultId, performanceFeeDestination);
+
+  const currentController = await state.publicClient.readContract({
+    address: onReToken,
+    abi: onReTokenArtifact.abi,
+    functionName: "bufferController",
+  });
+  if (currentController.toLowerCase() !== state.diamondAddress.toLowerCase()) {
+    await writeBossToken(onReToken, onReTokenArtifact.abi, "setBufferController", [state.diamondAddress]);
+  }
+
+  if (Number(buffer.grossApr) !== grossApr) await writeBossDiamond("setBufferGrossApr", [onReToken, grossApr]);
+  if (
+    Number(buffer.managementFeeBasisPoints) !== managementFee
+    || Number(buffer.performanceFeeBasisPoints) !== performanceFee
+    || buffer.performanceFeeHighWatermarkEnabled !== form.elements.highWatermark.checked
+  ) {
+    await writeBossDiamond("setBufferFeeConfig", [onReToken, managementFee, performanceFee, form.elements.highWatermark.checked]);
+  }
+  return `Activated ${tokenLabel(onReToken)} Buffer with its Diamond controller, vault destinations, and fee configuration.`;
+}
+
+async function updateBufferVaultDestination(vaultId, withdrawalDestination) {
+  const vault = await readDiamond("getConfigurableVault", [vaultId]);
+  if (vault.withdrawalDestination.toLowerCase() === withdrawalDestination.toLowerCase()) return;
+  await writeBossDiamond("updateConfigurableVault", [vaultId, withdrawalDestination, Number(vault.refillTargetBps)]);
 }

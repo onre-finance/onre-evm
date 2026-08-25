@@ -48,6 +48,12 @@ export function optionsFor(kind) {
   });
   if (kind === "tokens") return tokens;
   if (kind === "onre-tokens") return recordsOf("OnRe token").map((record) => ({ value: record.id, label: tokenLabel(record.id) }));
+  if (kind === "buffer-candidates") {
+    const initialized = new Set(recordsOf("Buffer").map((record) => String(record.id).toLowerCase()));
+    return recordsOf("OnRe token")
+      .filter((record) => !initialized.has(String(record.id).toLowerCase()))
+      .map((record) => ({ value: record.id, label: tokenLabel(record.id) }));
+  }
   if (kind === "asset-tokens") {
     const onRe = new Set(recordsOf("OnRe token").map((record) => String(record.id).toLowerCase()));
     return tokens.filter((option) => !onRe.has(String(option.value).toLowerCase()));
@@ -66,6 +72,7 @@ export function optionsFor(kind) {
       value: record.id,
       label: `${tokenLabel(record.value.tokenIn)} → ${tokenLabel(record.value.tokenOut)} · ${OFFER_FLOWS[enumValue(record.value.flow)]}`,
     }));
+  if (kind === "buffer-tokens") return recordsOf("Buffer").map((record) => ({ value: record.id, label: tokenLabel(record.id) }));
   if (kind === "compatible-quoters") return compatibleQuoterOptions();
   return [];
 }

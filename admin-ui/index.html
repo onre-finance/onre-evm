@@ -24,6 +24,7 @@
         <button class="tab active" data-tab="overview">Overview</button>
         <button class="tab" data-tab="tokens">Tokens</button>
         <button class="tab" data-tab="pricing">Pricing</button>
+        <button class="tab" data-tab="buffer">Buffer</button>
         <button class="tab" data-tab="quoters">Quoters</button>
         <button class="tab" data-tab="vaults">Vaults</button>
         <button class="tab" data-tab="fees">Fees</button>
@@ -113,6 +114,38 @@
             </form>
           </div>
           <div id="pricing-list" class="entity-grid"></div>
+        </section>
+
+        <section class="tab-page" data-page="buffer">
+          <div class="page-heading"><div><p class="eyebrow">Supply accounting</p><h2>Buffer</h2><p>Initialize and activate token-scoped reserve and fee accounting.</p></div></div>
+          <div class="two-column">
+            <form id="initialize-buffer-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Step 1</p><h3>Initialize Buffer</h3></div><span class="step">Create</span></div>
+              <label>Registered OnRe token<select name="onReToken" data-options="buffer-candidates"></select></label>
+              <p class="field-help">Create the token's USD pricer and active pricing vector first. Initialization derives the reserve, management-fee, and performance-fee vaults.</p>
+              <button class="primary" type="submit">Initialize Buffer and vaults</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+            <form id="configure-buffer-form" class="panel entity-form">
+              <div class="form-heading"><div><p class="eyebrow">Step 2</p><h3>Activate Buffer</h3></div><span class="step">Configure</span></div>
+              <label>Initialized Buffer<select name="onReToken" data-options="buffer-tokens"></select></label>
+              <div class="field-triple">
+                <label>Reserve destination<input name="reserveDestination" data-default="boss" placeholder="0x…" required /></label>
+                <label>Management-fee destination<input name="managementFeeDestination" data-default="boss" placeholder="0x…" required /></label>
+                <label>Performance-fee destination<input name="performanceFeeDestination" data-default="boss" placeholder="0x…" required /></label>
+              </div>
+              <div class="field-triple">
+                <label>Gross APR (%)<input name="grossApr" type="number" min="0" max="100" step="0.0001" value="10" required /></label>
+                <label>Management fee (%)<input name="managementFee" type="number" min="0" max="100" step="0.01" value="1" required /></label>
+                <label>Performance fee (%)<input name="performanceFee" type="number" min="0" max="100" step="0.01" value="20" required /></label>
+              </div>
+              <label class="checkbox"><input name="highWatermark" type="checkbox" checked /> Use performance-fee high watermark</label>
+              <p class="field-help">This sets all three vault destinations first, then makes the Diamond the token's Buffer controller, then saves APR and fees. Once active, ordinary token mint and burn operations settle the Buffer automatically.</p>
+              <button class="primary" type="submit">Activate and save Buffer</button>
+              <p class="form-result" aria-live="polite"></p>
+            </form>
+          </div>
+          <div id="buffer-list" class="entity-grid"></div>
         </section>
 
         <section class="tab-page" data-page="quoters">

@@ -1,5 +1,5 @@
 import { decodeEventLog, getAddress, isAddress } from "viem";
-import { diamondAbi, erc20MetadataAbi, getterByEvent } from "./config.js";
+import { diamondAbi, erc20MetadataAbi, getterByEvent, onReTokenArtifact } from "./config.js";
 import { readDiamond } from "./chain.js";
 import { state } from "./state.js";
 import { friendlyError } from "./utils.js";
@@ -74,6 +74,17 @@ async function hydrateReadableState() {
       record.currentPrice = undefined;
     }
   }));
+  await Promise.all(recordsOf("Buffer").map(async (record) => {
+    try {
+      record.controller = await state.publicClient.readContract({
+        address: record.id,
+        abi: onReTokenArtifact.abi,
+        functionName: "bufferController",
+      });
+    } catch {
+      record.controller = undefined;
+    }
+  }));
   const tokens = knownTokenAddresses();
   await Promise.all(recordsOf("Vault").flatMap((record) => tokens.map(async (token) => {
     record.balances ||= {};
@@ -88,7 +99,7 @@ async function hydrateReadableState() {
 export function knownTokenAddresses() {
   const values = new Set([...state.trackedTokens, state.fixtures.onReToken, state.fixtures.assetToken].filter(Boolean));
   for (const record of state.discoveredRecords) {
-    if (record.type === "OnRe token") values.add(String(record.id));
+    if (record.type === "OnRe token" || record.type === "Buffer") values.add(String(record.id));
     for (const field of ["onReToken", "assetToken", "tokenIn", "tokenOut"]) {
       const value = record.value?.[field] || record.eventArgs?.[field];
       if (value && isAddress(value)) values.add(getAddress(value));

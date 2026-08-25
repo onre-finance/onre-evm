@@ -27,5 +27,5 @@ export function renderVaults() {
       idLabel: "Vault ID",
     });
   });
-  $("#vaults-list").innerHTML = cards.length ? cards.join("") : emptyState("No vaults yet. Create a vault for fees, proceeds, or liquidity.");
+  $("#vaults-list").innerHTML = cards.length ? cards.join("") : emptyState("No vaults yet. Create a vault for fees, proceeds, liquidity, or initialize a Buffer.");
 }

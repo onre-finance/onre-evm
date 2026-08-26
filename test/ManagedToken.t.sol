@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {NoChangeError, ZeroAddressError} from "../src/types/OnReAppErrors.sol";
-import {InitializeParams} from "../src/types/OnReTypes.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
-import {IOnReToken} from "../src/IOnReToken.sol";
-import {IOnReBufferController} from "../src/IOnReBufferController.sol";
-import {OnReToken} from "../src/OnReToken.sol";
+import {IManagedToken} from "../src/IManagedToken.sol";
+import {IBufferController} from "../src/IBufferController.sol";
+import {ManagedToken} from "../src/ManagedToken.sol";
 
-contract OnReTokenTest is Test {
-    OnReToken private token;
+contract ManagedTokenTest is Test {
+    ManagedToken private token;
 
     address private admin = makeAddr("admin");
     address private ccipAdmin = makeAddr("ccipAdmin");
@@ -23,7 +21,7 @@ contract OnReTokenTest is Test {
     address private user = makeAddr("user");
 
     function setUp() public {
-        token = _deployToken(admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+        token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
     }
 
     function test_InitializesTokenAndCCIPAdmin() public view {
@@ -33,8 +31,21 @@ contract OnReTokenTest is Test {
         assertEq(token.getCCIPAdmin(), ccipAdmin);
         assertTrue(token.supportsInterface(type(IBurnMintERC20).interfaceId));
         assertTrue(token.supportsInterface(type(IGetCCIPAdmin).interfaceId));
+        assertTrue(token.supportsInterface(type(IManagedToken).interfaceId));
         assertTrue(token.supportsInterface(type(IAccessControl).interfaceId));
         assertFalse(token.supportsInterface(0xffffffff));
+    }
+
+    function test_InitializesWithConfiguredDecimals() public {
+        ManagedToken sixDecimalToken = _deployToken(6, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+        ManagedToken zeroDecimalToken =
+            _deployToken(0, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+        ManagedToken maxDecimalToken =
+            _deployToken(type(uint8).max, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+
+        assertEq(sixDecimalToken.decimals(), 6);
+        assertEq(zeroDecimalToken.decimals(), 0);
+        assertEq(maxDecimalToken.decimals(), type(uint8).max);
     }
 
     function test_InitializeRejectsZeroAdminOrCCIPAdmin() public {
@@ -71,7 +82,7 @@ contract OnReTokenTest is Test {
     }
 
     function test_NonMinterCannotMint() public {
-        vm.expectRevert(abi.encodeWithSelector(IOnReToken.SenderNotMinterError.selector, user));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotMinterError.selector, user));
         vm.prank(user);
         token.mint(user, 1);
     }
@@ -111,11 +122,11 @@ contract OnReTokenTest is Test {
     }
 
     function test_AdminRoleChangesRejectZeroAddress() public {
-        vm.expectRevert(ZeroAddressError.selector);
+        vm.expectRevert(IManagedToken.ZeroAddressError.selector);
         vm.prank(admin);
         token.grantMintRole(address(0));
 
-        vm.expectRevert(ZeroAddressError.selector);
+        vm.expectRevert(IManagedToken.ZeroAddressError.selector);
         vm.prank(admin);
         token.grantBurnRole(address(0));
     }
@@ -164,11 +175,11 @@ contract OnReTokenTest is Test {
     }
 
     function test_NonBurnerCannotBurn() public {
-        vm.expectRevert(abi.encodeWithSelector(IOnReToken.SenderNotBurnerError.selector, user));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
         vm.prank(user);
         token.burn(1);
 
-        vm.expectRevert(abi.encodeWithSelector(IOnReToken.SenderNotBurnerError.selector, user));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
         vm.prank(user);
         token.burnFrom(pool, 1);
     }
@@ -214,7 +225,7 @@ contract OnReTokenTest is Test {
     function test_AdminCanUpdateCCIPAdmin() public {
         address nextAdmin = makeAddr("nextAdmin");
 
-        vm.expectRevert(ZeroAddressError.selector);
+        vm.expectRevert(IManagedToken.ZeroAddressError.selector);
         vm.prank(admin);
         token.setCCIPAdmin(address(0));
 
@@ -231,12 +242,12 @@ contract OnReTokenTest is Test {
         vm.prank(user);
         token.setBufferController(address(controller));
 
-        vm.expectRevert(ZeroAddressError.selector);
+        vm.expectRevert(IManagedToken.ZeroAddressError.selector);
         vm.prank(admin);
         token.setBufferController(address(0));
 
         address noCodeController = makeAddr("noCodeController");
-        vm.expectRevert(abi.encodeWithSelector(IOnReToken.BufferControllerHasNoCodeError.selector, noCodeController));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.BufferControllerHasNoCodeError.selector, noCodeController));
         vm.prank(admin);
         token.setBufferController(noCodeController);
 
@@ -244,7 +255,7 @@ contract OnReTokenTest is Test {
         token.setBufferController(address(controller));
         assertEq(token.bufferController(), address(controller));
 
-        vm.expectRevert(NoChangeError.selector);
+        vm.expectRevert(IManagedToken.NoChangeError.selector);
         vm.prank(admin);
         token.setBufferController(address(controller));
 
@@ -277,7 +288,7 @@ contract OnReTokenTest is Test {
     }
 
     function test_OnlyUpgraderCanUpgrade() public {
-        OnReToken newImplementation = new OnReToken();
+        ManagedToken newImplementation = new ManagedToken();
 
         vm.expectRevert();
         vm.prank(user);
@@ -288,23 +299,26 @@ contract OnReTokenTest is Test {
     }
 
     function _deployToken(
+        uint8 decimals_,
         address admin_,
         address ccipAdmin_,
         address[] memory initialMinters,
         address[] memory initialBurners
-    ) private returns (OnReToken) {
-        OnReToken implementation = new OnReToken();
-        IOnReToken.InitializeParams memory params = IOnReToken.InitializeParams({
+    ) private returns (ManagedToken) {
+        ManagedToken implementation = new ManagedToken();
+        IManagedToken.InitializeParams memory params = IManagedToken.InitializeParams({
             name: "OnRe USD",
             symbol: "ONusd",
+            decimals: decimals_,
             admin: admin_,
             ccipAdmin: ccipAdmin_,
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
 
-        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), abi.encodeCall(OnReToken.initialize, (params)));
-        return OnReToken(address(proxy));
+        ERC1967Proxy proxy =
+            new ERC1967Proxy(address(implementation), abi.encodeCall(ManagedToken.initialize, (params)));
+        return ManagedToken(address(proxy));
     }
 
     function _expectDeployTokenZeroAddressRevert(
@@ -313,18 +327,19 @@ contract OnReTokenTest is Test {
         address[] memory initialMinters,
         address[] memory initialBurners
     ) private {
-        OnReToken implementation = new OnReToken();
-        IOnReToken.InitializeParams memory params = IOnReToken.InitializeParams({
+        ManagedToken implementation = new ManagedToken();
+        IManagedToken.InitializeParams memory params = IManagedToken.InitializeParams({
             name: "OnRe USD",
             symbol: "ONusd",
+            decimals: 9,
             admin: admin_,
             ccipAdmin: ccipAdmin_,
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
 
-        vm.expectRevert(ZeroAddressError.selector);
-        new ERC1967Proxy(address(implementation), abi.encodeCall(OnReToken.initialize, (params)));
+        vm.expectRevert(IManagedToken.ZeroAddressError.selector);
+        new ERC1967Proxy(address(implementation), abi.encodeCall(ManagedToken.initialize, (params)));
     }
 
     function _singleAddress(address account) private pure returns (address[] memory accounts) {
@@ -333,7 +348,7 @@ contract OnReTokenTest is Test {
     }
 }
 
-contract RecordingBufferController is IOnReBufferController {
+contract RecordingBufferController is IBufferController {
     uint256 public callCount;
     uint256 public lastAmount;
     bool public lastIsMint;

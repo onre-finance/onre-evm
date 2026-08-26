@@ -6,7 +6,7 @@ import {
     FeeConfig,
     FulfillmentRequest,
     OfferConfig,
-    OnReTokenConfig,
+    ManagedTokenConfig,
     Pricer,
     PricingVector,
     PropRfqState,
@@ -15,8 +15,8 @@ import {
 import {LibOnReView} from "../libraries/LibOnReView.sol";
 
 contract OnReViewFacet {
-    function getOnReTokenConfig(address onReToken) external view returns (OnReTokenConfig memory) {
-        return LibOnReView._getOnReTokenConfig(onReToken);
+    function getManagedTokenConfig(address managedToken) external view returns (ManagedTokenConfig memory) {
+        return LibOnReView._getManagedTokenConfig(managedToken);
     }
 
     function getPricer(bytes32 pricerId) external view returns (Pricer memory) {
@@ -51,8 +51,8 @@ contract OnReViewFacet {
         return LibOnReView._getConfigurableVault(vaultId);
     }
 
-    function getExcludedSupplyAccounts(address onReToken) external view returns (address[] memory) {
-        return LibOnReView._getExcludedSupplyAccounts(onReToken);
+    function getExcludedSupplyAccounts(address managedToken) external view returns (address[] memory) {
+        return LibOnReView._getExcludedSupplyAccounts(managedToken);
     }
 
     function appConfig() external view returns (bool isKilled, address approver1, address approver2) {

@@ -9,6 +9,7 @@ import {Diamond} from "../src/diamond/contracts/Diamond.sol";
 import {DiamondCutFacet} from "../src/diamond/contracts/facets/DiamondCutFacet.sol";
 import {IDiamondCut} from "../src/diamond/contracts/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../src/diamond/contracts/interfaces/IDiamondLoupe.sol";
+import {IManagedToken} from "../src/IManagedToken.sol";
 import {LibDiamond} from "../src/diamond/contracts/libraries/LibDiamond.sol";
 import {LibOnReStorage} from "../src/diamond/LibOnReStorage.sol";
 import {DiamondProxy} from "../src/generated/DiamondProxy.sol";
@@ -23,7 +24,7 @@ import {
     ZeroAddressError
 } from "../src/types/OnReAppErrors.sol";
 import {BossTransferCancelled, BossTransferStarted, BossTransferred} from "../src/types/OnReAppEvents.sol";
-import {InitializeParams, MarketStats, OnReTokenConfig} from "../src/types/OnReTypes.sol";
+import {InitializeParams, MarketStats, ManagedTokenConfig} from "../src/types/OnReTypes.sol";
 import {OnReDiamondTestHelper} from "./helpers/OnReDiamondTestHelper.sol";
 
 contract OnReDiamondTest is Test, OnReDiamondTestHelper {
@@ -50,11 +51,11 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         IDiamondLoupe loupe = IDiamondLoupe(address(app));
         assertEq(loupe.facetAddresses().length, 12);
         assertEq(loupe.facets().length, 12);
-        assertTrue(loupe.facetAddress(IDiamondProxy.registerOnReToken.selector) != address(0));
+        assertTrue(loupe.facetAddress(IDiamondProxy.registerManagedToken.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.initializeBuffer.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.marketStats.selector) != address(0));
         assertNotEq(
-            loupe.facetAddress(IDiamondProxy.registerOnReToken.selector),
+            loupe.facetAddress(IDiamondProxy.registerManagedToken.selector),
             loupe.facetAddress(IDiamondProxy.marketStats.selector)
         );
         assertEq(loupe.facetFunctionSelectors(loupe.facetAddress(IDiamondProxy.marketStats.selector)).length, 1);
@@ -457,7 +458,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     function test_ReplacementFacetReadsExistingNamespacedApplicationState() public {
         NineDecimalToken token = new NineDecimalToken();
         vm.prank(boss);
-        app.registerOnReToken(address(token));
+        app.registerManagedToken(address(token));
 
         StorageAwareMarketStatsFacet replacement = new StorageAwareMarketStatsFacet();
         _cut(
@@ -594,7 +595,7 @@ contract DiamondMultiSelectorFacet {
 
 contract StorageAwareMarketStatsFacet {
     function marketStats(address token) external view returns (MarketStats memory stats) {
-        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[token];
+        ManagedTokenConfig storage config = LibOnReStorage._appStorage().managedTokenConfigs[token];
         stats.tvl = config.enabled ? 1 : 0;
         stats.nav = config.decimals;
     }
@@ -603,6 +604,10 @@ contract StorageAwareMarketStatsFacet {
 contract NineDecimalToken {
     function decimals() external pure returns (uint8) {
         return 9;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IERC165).interfaceId || interfaceId == type(IManagedToken).interfaceId;
     }
 }
 

@@ -30,14 +30,14 @@ config:
 flowchart TB
     subgraph Control["Global control and reporting"]
         AppConfig["<b>Application configuration</b><br/>kill switch<br/>approvers<br/>permissionless settlement account"]
-        TokenConfig["<b>OnReTokenConfig</b><br/>enabled<br/>decimals"]
+        TokenConfig["<b>ManagedTokenConfig</b><br/>enabled<br/>decimals"]
         MarketStats["<b>MarketStats</b><br/>derived view - not stored<br/>APY<br/>circulating supply<br/>USD NAV<br/>NAV adjustment<br/>TVL"]
         Roles["<b>Application roles</b><br/>DEFAULT_ADMIN_ROLE - exactly one boss, two-step transfer<br/>ADMIN_ROLE - emergency activation only<br/>WORKER_ROLE - fulfill or cancel requests<br/>UPGRADER_ROLE - Diamond cuts, may also be the boss"]
         DiamondCut["<b>Diamond upgrades</b><br/>add, replace, or remove selectors"]
     end
 
     subgraph Pricing["Deterministic USD pricing and quoting"]
-        Pricer["<b>USD Pricer</b><br/>ID = hash(onReToken, Usd)<br/>exactly one per OnRe token<br/>disabled"]
+        Pricer["<b>USD Pricer</b><br/>ID = hash(managedToken, Usd)<br/>exactly one per managed token<br/>disabled"]
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
         Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>disabled"]
         NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>disabled"]
@@ -50,7 +50,7 @@ flowchart TB
     end
 
     subgraph Custody["Diamond custody and logical vault accounting"]
-        OnReToken["<b>OnRe token</b><br/>Diamond has mint and burn authority<br/>no pre-minted inventory"]
+        ManagedToken["<b>Managed token</b><br/>Diamond has mint and burn authority<br/>no pre-minted inventory"]
         FeeVault["<b>Fee vault</b><br/>ConfigurableVault kind = Fee<br/>per-token logical balance"]
         ProceedsVault["<b>Proceeds vault</b><br/>ConfigurableVault kind = Proceeds<br/>per-token logical balance"]
         LiquidityVault["<b>Liquidity vault</b><br/>ConfigurableVault kind = Liquidity<br/>refill target<br/>per-token logical balance"]
@@ -68,7 +68,7 @@ flowchart TB
     MarketStats -.->|"derives the same USD Pricer ID"| Pricer
     MarketStats -.->|"token identity and explicit supply exclusions"| TokenConfig
 
-    OfferConfig -.->|"OnRe token from pair derives USD Pricer"| Pricer
+    OfferConfig -.->|"managed token from pair derives USD Pricer"| Pricer
     OfferConfig -->|"quoterId"| Nav
     OfferConfig -->|"quoterId"| NavPermissionless
     OfferConfig -->|"quoterId"| PropRfq
@@ -81,9 +81,9 @@ flowchart TB
     AppConfig -.->|"kill switch and approval"| TakeOffer
     AppConfig -.->|"configures"| SettlementAccount
     SettlementAccount <-->|"permissionless input and output hop"| TakeOffer
-    TokenConfig -->|"registered token"| OnReToken
-    OnReToken -.->|"mint output or burn input"| TakeOffer
-    Request -->|"flow = Worker; direction = OnReToAsset"| OfferConfig
+    TokenConfig -->|"registered token"| ManagedToken
+    ManagedToken -.->|"mint output or burn input"| TakeOffer
+    Request -->|"flow = Worker; direction = ManagedToAsset"| OfferConfig
     Fulfill -->|"settles escrowed input"| Request
 
     Roles -.->|"DEFAULT_ADMIN_ROLE"| Pricer
@@ -107,7 +107,7 @@ flowchart TB
 The EVM IDs mirror the proposed PDA seed boundaries:
 
 ```text
-USD Pricer         = hash("onre.pricer", onReToken, Usd)
+USD Pricer         = hash("onre.pricer", managedToken, Usd)
 Quoter             = hash("onre.quoter", kind, instanceId)
 FeeConfig          = hash("onre.fee_config", instanceId)
 ConfigurableVault  = hash("onre.configurable_vault", kind, instanceId)
@@ -128,9 +128,9 @@ only the mutable curve, cadence, and wall settings on later calls. An
 unconfigured `PropRfq` cannot be assigned to an OfferConfig.
 
 A `PropRfq` proprietary request-for-quote instance is immutably bound to one
-asset and one OnRe token.
+asset and one managed token.
 Multiple instances may use the same pair while keeping independent curve
-configuration and rolling pressure. The asset-to-OnRe and OnRe-to-asset
+configuration and rolling pressure. The asset-to-managed and managed-to-asset
 permissionless `OfferConfig`s may reference the same instance, which makes buys
 relieve the sell pressure accumulated by that instance.
 
@@ -138,17 +138,17 @@ There is exactly one `OfferConfig` for a directed pair and flow. Permissioned
 and permissionless routes for the same pair therefore cannot silently share an
 authorization mode. A reverse route is a different directed pair.
 
-Direction is derived from which token is a registered OnRe token:
+Direction is derived from which token is a registered managed token:
 
 ```text
-tokenOut is registered OnRe -> AssetToOnRe
-tokenIn  is registered OnRe -> OnReToAsset
-both or neither             -> reject
+tokenOut is a registered managed token -> AssetToManaged
+tokenIn  is a registered managed token -> ManagedToAsset
+both or neither                         -> reject
 ```
 
 `tokenIn`, `tokenOut`, `flow`, and `direction` are immutable. The referenced
 Quoter, FeeConfig, and vaults can be replaced by governance while preserving
-the route identity. The USD Pricer is derived from the route's OnRe token and
+the route identity. The USD Pricer is derived from the route's managed token and
 cannot be redirected independently.
 
 ## Compatibility matrix
@@ -158,7 +158,7 @@ cannot be redirected independently.
 | `Permissioned` | either | `Nav` | `takeOffer`; valid approver signature required |
 | `Permissionless` | either | `NavPermissionless` | `takeOffer`; approval fields must be empty |
 | `Permissionless` | either | pair-matching `PropRfq` | `takeOffer`; approval fields must be empty |
-| `Worker` | `OnReToAsset` | `Nav` | create, partially fulfill, or cancel a `FulfillmentRequest` |
+| `Worker` | `ManagedToAsset` | `Nav` | create, partially fulfill, or cancel a `FulfillmentRequest` |
 
 The two NAV quoter kinds use the same arithmetic but remain separate
 dispatch families so permissionless quoting can evolve without changing
@@ -167,7 +167,7 @@ For sells it applies the configured liquidity, pressure, curve, and cadence
 dampening after the NAV result.
 
 `takeOffer` loads the flow, direction, and Quoter from the selected
-`OfferConfig`, then derives the single USD Pricer from the route's OnRe token.
+`OfferConfig`, then derives the single USD Pricer from the route's managed token.
 The caller does not choose an execution path or Pricer independently of that
 configuration. Permissioned offers require the embedded approval message and
 signature. Permissionless offers require both to be empty. Worker offers reject
@@ -196,11 +196,11 @@ output using the same path as execution.
 
 ## Quote and settlement rules
 
-The Pricer returns USD-denominated price `P` per OnRe token:
+The Pricer returns USD-denominated price `P` per managed token:
 
 ```text
-asset -> OnRe: amountOut = normalizedNetInput / P
-OnRe -> asset: amountOut = normalizedNetInput * P
+asset -> managed: amountOut = normalizedNetInput / P
+managed -> asset: amountOut = normalizedNetInput * P
 ```
 
 Every fee is charged in the input token:
@@ -247,20 +247,21 @@ amountOut         = rawSellOutput * max(0, 1 - haircut)
 All curve operations use integer fixed-point arithmetic. The fractional-power
 approximation and cadence vectors match the corresponding Solana implementation.
 
-For `AssetToOnRe`, the Diamond collects the input asset, accounts the fee in the
-Fee vault, refills the configured Liquidity vault up to its TVL target, accounts
-the remainder in the Proceeds vault, and mints the quoted OnRe output. For a
-permissionless offer the mint recipient is the settlement account, whose
-allowance lets the Diamond transfer the output to the user. The Diamond must
-have the OnRe token's mint authority; no pre-minted inventory is involved.
+For `AssetToManaged`, the Diamond collects the input asset, accounts the fee in
+the Fee vault, refills the configured Liquidity vault up to its TVL target,
+accounts the remainder in the Proceeds vault, and mints the quoted managed-token
+output. For a permissionless offer the mint recipient is the settlement account,
+whose allowance lets the Diamond transfer the output to the user. The Diamond
+must have the managed token's mint authority; no pre-minted inventory is
+involved.
 
-Minted OnRe supply is circulating unless its holder is explicitly configured as
-an excluded-supply address.
+Minted managed-token supply is circulating unless its holder is explicitly
+configured as an excluded-supply address.
 
-For `OnReToAsset`, the Diamond pulls or has already escrowed the OnRe input,
-accounts the input fee, burns the net input, debits the configured Liquidity
-vault, and transfers the asset output. Permissionless execution sends that
-output through the settlement account before it reaches the user.
+For `ManagedToAsset`, the Diamond pulls or has already escrowed the managed-token
+input, accounts the input fee, burns the net input, debits the configured
+Liquidity vault, and transfers the asset output. Permissionless execution sends
+that output through the settlement account before it reaches the user.
 
 Every token transfer used by deposits, settlement, vault withdrawal, and
 request cancellation verifies both sides of the balance change. The sender

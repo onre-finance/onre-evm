@@ -40,15 +40,15 @@ contract OnReConfigTest is OnReAppTestBase {
         assertFalse(app.hasRole(app.ADMIN_ROLE(), address(this)));
         assertFalse(app.hasRole(app.WORKER_ROLE(), address(this)));
 
-        OnReTokenConfig memory tokenConfig = app.getOnReTokenConfig(address(onReToken));
+        ManagedTokenConfig memory tokenConfig = app.getManagedTokenConfig(address(managedToken));
         assertTrue(tokenConfig.enabled);
+        assertTrue(tokenConfig.exists);
         assertEq(tokenConfig.decimals, 9);
-        assertEq(tokenConfig.reserved, 0);
-        assertEq(onReToken.totalSupply(), 0);
+        assertEq(managedToken.totalSupply(), 0);
 
         Pricer memory pricer = app.getPricer(pricerId);
-        assertEq(pricerId, OnReIds._pricerId(address(onReToken), PricingDenomination.Usd));
-        assertEq(pricer.onReToken, address(onReToken));
+        assertEq(pricerId, OnReIds._pricerId(address(managedToken), PricingDenomination.Usd));
+        assertEq(pricer.managedToken, address(managedToken));
         assertEq(uint8(pricer.denomination), uint8(PricingDenomination.Usd));
         assertEq(pricer.vectorCount, 1);
         assertTrue(pricer.exists);
@@ -71,8 +71,8 @@ contract OnReConfigTest is OnReAppTestBase {
         PricingVector memory vector = app.getPricingVector(pricerId, 0);
         assertEq(vector.basePrice, 1e9);
 
-        onReToken.mint(user, 250e9);
-        MarketStats memory stats = app.marketStats(address(onReToken));
+        managedToken.mint(user, 250e9);
+        MarketStats memory stats = app.marketStats(address(managedToken));
         assertEq(stats.nav, 1e9);
         assertEq(stats.circulatingSupply, 250e9);
         assertEq(stats.tvl, 250e9);
@@ -82,12 +82,12 @@ contract OnReConfigTest is OnReAppTestBase {
         );
         vm.warp(2);
         assertEq(app.currentPrice(pricerId), 2e9);
-        assertEq(app.marketStats(address(onReToken)).nav, 2e9);
+        assertEq(app.marketStats(address(managedToken)).nav, 2e9);
     }
 
     function test_PricingVectorLifecycleAndValidationBranches() public {
         vm.expectRevert(abi.encodeWithSelector(PricerAlreadyExistsError.selector, pricerId));
-        app.createPricer(address(onReToken), PricingDenomination.Usd);
+        app.createPricer(address(managedToken), PricingDenomination.Usd);
 
         vm.expectRevert(InvalidAmountError.selector);
         app.addPricingVector(
@@ -137,13 +137,13 @@ contract OnReConfigTest is OnReAppTestBase {
 
     function test_TokenApproverAndEmergencyConfigurationLifecycle() public {
         address excluded = makeAddr("excluded");
-        app.addExcludedSupplyAddress(address(onReToken), excluded);
-        assertEq(app.getExcludedSupplyAccounts(address(onReToken)).length, 1);
+        app.addExcludedSupplyAddress(address(managedToken), excluded);
+        assertEq(app.getExcludedSupplyAccounts(address(managedToken)).length, 1);
         vm.expectRevert(
-            abi.encodeWithSelector(ExcludedSupplyAddressAlreadyExistsError.selector, address(onReToken), excluded)
+            abi.encodeWithSelector(ExcludedSupplyAddressAlreadyExistsError.selector, address(managedToken), excluded)
         );
-        app.addExcludedSupplyAddress(address(onReToken), excluded);
-        app.removeExcludedSupplyAddress(address(onReToken), excluded);
+        app.addExcludedSupplyAddress(address(managedToken), excluded);
+        app.removeExcludedSupplyAddress(address(managedToken), excluded);
 
         address secondApprover = makeAddr("secondApprover");
         app.addApprover(secondApprover);
@@ -151,9 +151,9 @@ contract OnReConfigTest is OnReAppTestBase {
         vm.expectRevert(abi.encodeWithSelector(NotApproverError.selector, secondApprover));
         app.removeApprover(secondApprover);
 
-        app.setOnReTokenEnabled(address(onReToken), false);
+        app.setManagedTokenEnabled(address(managedToken), false);
         vm.expectRevert(NoChangeError.selector);
-        app.setOnReTokenEnabled(address(onReToken), false);
+        app.setManagedTokenEnabled(address(managedToken), false);
 
         app.setKillSwitch(true);
         vm.expectRevert(NoChangeError.selector);
@@ -162,55 +162,70 @@ contract OnReConfigTest is OnReAppTestBase {
 
     function test_TokenRegistrationRejectsInvalidInputsAndSupportsReenable() public {
         vm.expectRevert(ZeroAddressError.selector);
-        app.registerOnReToken(address(0));
+        app.registerManagedToken(address(0));
 
-        OnReToken secondToken = _deployToken(address(app));
-        app.registerOnReToken(address(secondToken));
-        assertTrue(app.getOnReTokenConfig(address(secondToken)).enabled);
+        ManagedToken secondToken = _deployToken(address(app));
+        app.registerManagedToken(address(secondToken));
+        assertTrue(app.getManagedTokenConfig(address(secondToken)).enabled);
+
+        ManagedToken zeroDecimalToken = _deployToken(address(app), 0);
+        app.registerManagedToken(address(zeroDecimalToken));
+        ManagedTokenConfig memory zeroDecimalConfig = app.getManagedTokenConfig(address(zeroDecimalToken));
+        assertTrue(zeroDecimalConfig.enabled);
+        assertTrue(zeroDecimalConfig.exists);
+        assertEq(zeroDecimalConfig.decimals, 0);
+
+        ManagedToken sixDecimalToken = _deployToken(address(app), 6);
+        app.registerManagedToken(address(sixDecimalToken));
+        assertEq(app.getManagedTokenConfig(address(sixDecimalToken)).decimals, 6);
+
+        ManagedToken excessiveDecimalToken = _deployToken(address(app), 19);
+        vm.expectRevert(InvalidDecimalsError.selector);
+        app.registerManagedToken(address(excessiveDecimalToken));
 
         vm.expectRevert(InvalidTokenError.selector);
-        app.registerOnReToken(address(usd));
+        app.registerManagedToken(address(usd));
 
-        app.setOnReTokenEnabled(address(onReToken), false);
-        vm.expectRevert(abi.encodeWithSelector(TokenAlreadyRegisteredError.selector, address(onReToken)));
-        app.registerOnReToken(address(onReToken));
+        app.setManagedTokenEnabled(address(managedToken), false);
+        vm.expectRevert(abi.encodeWithSelector(TokenAlreadyRegisteredError.selector, address(managedToken)));
+        app.registerManagedToken(address(managedToken));
 
         vm.expectRevert(InvalidTokenError.selector);
-        app.createPricer(address(onReToken), PricingDenomination.Usd);
-        app.setOnReTokenEnabled(address(onReToken), true);
+        app.createPricer(address(managedToken), PricingDenomination.Usd);
+        app.setManagedTokenEnabled(address(managedToken), true);
 
         vm.expectRevert(abi.encodeWithSelector(TokenNotRegisteredError.selector, address(usd)));
-        app.setOnReTokenEnabled(address(usd), true);
+        app.setManagedTokenEnabled(address(usd), true);
         vm.expectRevert(abi.encodeWithSelector(TokenNotRegisteredError.selector, address(usd)));
         app.createPricer(address(usd), PricingDenomination.Usd);
     }
 
     function test_ExcludedSupplyAddressCapacityRemovalAndCirculatingSupply() public {
         vm.expectRevert(ZeroAddressError.selector);
-        app.addExcludedSupplyAddress(address(onReToken), address(0));
+        app.addExcludedSupplyAddress(address(managedToken), address(0));
         vm.expectRevert(ZeroAddressError.selector);
-        app.removeExcludedSupplyAddress(address(onReToken), address(0));
+        app.removeExcludedSupplyAddress(address(managedToken), address(0));
 
         address missing = makeAddr("missingExcluded");
         vm.expectRevert(
-            abi.encodeWithSelector(ExcludedSupplyAddressNotFoundError.selector, address(onReToken), missing)
+            abi.encodeWithSelector(ExcludedSupplyAddressNotFoundError.selector, address(managedToken), missing)
         );
-        app.removeExcludedSupplyAddress(address(onReToken), missing);
+        app.removeExcludedSupplyAddress(address(managedToken), missing);
 
         address excludedSupplyAccount = makeAddr("excludedSupplyAccount");
-        onReToken.mint(excludedSupplyAccount, 10e9);
-        app.addExcludedSupplyAddress(address(onReToken), excludedSupplyAccount);
+        managedToken.mint(excludedSupplyAccount, 10e9);
+        app.addExcludedSupplyAddress(address(managedToken), excludedSupplyAccount);
         for (uint160 i = 1; i < 20; ++i) {
-            app.addExcludedSupplyAddress(address(onReToken), address(10_000 + i));
+            app.addExcludedSupplyAddress(address(managedToken), address(10_000 + i));
         }
-        vm.expectRevert(abi.encodeWithSelector(TooManyExcludedSupplyAddressesError.selector, address(onReToken)));
-        app.addExcludedSupplyAddress(address(onReToken), address(20_000));
+        vm.expectRevert(abi.encodeWithSelector(TooManyExcludedSupplyAddressesError.selector, address(managedToken)));
+        app.addExcludedSupplyAddress(address(managedToken), address(20_000));
 
-        assertEq(app.marketStats(address(onReToken)).circulatingSupply, 0);
-        app.removeExcludedSupplyAddress(address(onReToken), excludedSupplyAccount);
-        app.removeExcludedSupplyAddress(address(onReToken), address(10_018));
-        assertEq(app.getExcludedSupplyAccounts(address(onReToken)).length, 18);
-        assertEq(app.marketStats(address(onReToken)).circulatingSupply, 10e9);
+        assertEq(app.marketStats(address(managedToken)).circulatingSupply, 0);
+        app.removeExcludedSupplyAddress(address(managedToken), excludedSupplyAccount);
+        app.removeExcludedSupplyAddress(address(managedToken), address(10_018));
+        assertEq(app.getExcludedSupplyAccounts(address(managedToken)).length, 18);
+        assertEq(app.marketStats(address(managedToken)).circulatingSupply, 10e9);
     }
 
     function test_ApproverSlotValidationAndReuse() public {
@@ -316,7 +331,7 @@ contract OnReConfigTest is OnReAppTestBase {
             PricingVector({startTime: 2, baseTime: 2, basePrice: 500_000_000, apr: 0, priceFixDuration: 1 days})
         );
         vm.warp(2);
-        assertEq(app.marketStats(address(onReToken)).navAdjustment, -500_000_000);
+        assertEq(app.marketStats(address(managedToken)).navAdjustment, -500_000_000);
     }
 
     function test_DisabledComponentsAndKillSwitchStopExecution() public {
@@ -381,7 +396,7 @@ contract OnReConfigTest is OnReAppTestBase {
             )
         );
         vm.prank(user);
-        app.configurePropRfq(propRfqId, address(usd), address(onReToken), _basePropRfqTestConfig());
+        app.configurePropRfq(propRfqId, address(usd), address(managedToken), _basePropRfqTestConfig());
 
         vm.expectRevert(
             abi.encodeWithSelector(

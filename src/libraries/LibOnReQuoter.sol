@@ -45,9 +45,12 @@ library LibOnReQuoter {
         emit QuoterCreated(quoterId, kind, quoterInstanceId);
     }
 
-    function _configurePropRfq(bytes32 quoterId, address assetToken, address onReToken, PropRfqConfig calldata config)
-        internal
-    {
+    function _configurePropRfq(
+        bytes32 quoterId,
+        address assetToken,
+        address managedToken,
+        PropRfqConfig calldata config
+    ) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
         if (quoter.kind != QuoterKind.PropRfq) {
@@ -56,17 +59,17 @@ library LibOnReQuoter {
 
         LibOnRePropRfq._validateConfig(config);
         PropRfqState storage state = LibOnReStorage._appStorage().propRfqStates[quoterId];
-        if (state.assetToken == address(0) && state.onReToken == address(0)) {
-            if (assetToken == address(0) || onReToken == address(0)) revert ZeroAddressError();
-            if (assetToken == onReToken) revert InvalidTokenError();
-            LibOnReValidation._requireEnabledOnReToken(onReToken);
+        if (state.assetToken == address(0) && state.managedToken == address(0)) {
+            if (assetToken == address(0) || managedToken == address(0)) revert ZeroAddressError();
+            if (assetToken == managedToken) revert InvalidTokenError();
+            LibOnReValidation._requireEnabledManagedToken(managedToken);
             state.assetToken = assetToken;
-            state.onReToken = onReToken;
+            state.managedToken = managedToken;
             // forge-lint: disable-next-line(unsafe-typecast)
             state.epochStart = uint64(block.timestamp);
         } else {
-            if (assetToken != state.assetToken || onReToken != state.onReToken) {
-                revert InvalidPropRfqPairError(quoterId, assetToken, onReToken);
+            if (assetToken != state.assetToken || managedToken != state.managedToken) {
+                revert InvalidPropRfqPairError(quoterId, assetToken, managedToken);
             }
             if (keccak256(abi.encode(state.config)) == keccak256(abi.encode(config))) revert NoChangeError();
         }
@@ -87,8 +90,8 @@ library LibOnReQuoter {
     function _quote(OfferConfig storage offer, uint256 netInputAmount) internal view returns (QuoteResult memory) {
         Quoter storage quoter = LibOnReValidation._requireExecutableQuoter(offer.quoterId);
         QuoterKind kind = quoter.kind;
-        address onReToken = LibOnReValidation._offerOnReToken(offer);
-        uint256 price = LibOnRePricer._currentPrice(OnReIds._usdPricerId(onReToken));
+        address managedToken = LibOnReValidation._offerManagedToken(offer);
+        uint256 price = LibOnRePricer._currentPrice(OnReIds._usdPricerId(managedToken));
 
         if (kind == QuoterKind.Nav) {
             return _quoteNav(offer, netInputAmount, price);
@@ -110,11 +113,11 @@ library LibOnReQuoter {
         if (kind != QuoterKind.PropRfq) revert UnsupportedQuoterKindError(offer.quoterId, uint8(kind));
 
         PropRfqState storage state = LibOnReStorage._appStorage().propRfqStates[offer.quoterId];
-        if (offer.direction == OfferDirection.AssetToOnRe) {
+        if (offer.direction == OfferDirection.AssetToManaged) {
             LibOnRePropRfq._recordBuy(state, netInputAmount);
             return;
         }
-        if (offer.direction == OfferDirection.OnReToAsset) {
+        if (offer.direction == OfferDirection.ManagedToAsset) {
             LibOnRePropRfq._recordSell(state, _quoteByDirection(offer, netInputAmount, price));
             return;
         }
@@ -126,7 +129,7 @@ library LibOnReQuoter {
         emit PropRfqConfigured(
             quoterId,
             state.assetToken,
-            state.onReToken,
+            state.managedToken,
             config.curvePegHaircutBps,
             config.curveExponentScaled,
             config.cadenceThreshold,
@@ -161,8 +164,8 @@ library LibOnReQuoter {
         returns (QuoteResult memory)
     {
         uint256 rawAmountOut = _quoteByDirection(offer, netInputAmount, price);
-        if (offer.direction == OfferDirection.AssetToOnRe) return _quoteResult(price, rawAmountOut);
-        if (offer.direction == OfferDirection.OnReToAsset) {
+        if (offer.direction == OfferDirection.AssetToManaged) return _quoteResult(price, rawAmountOut);
+        if (offer.direction == OfferDirection.ManagedToAsset) {
             PropRfqState storage state = LibOnReStorage._appStorage().propRfqStates[offer.quoterId];
             uint256 amountOut = LibOnRePropRfq._quoteSell(state, offer, rawAmountOut);
             return _quoteResult(price, amountOut);
@@ -180,11 +183,11 @@ library LibOnReQuoter {
         view
         returns (uint256)
     {
-        if (offer.direction == OfferDirection.AssetToOnRe) {
+        if (offer.direction == OfferDirection.AssetToManaged) {
             return
                 OnReMath._calculateTokenOutAmount(netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals);
         }
-        if (offer.direction == OfferDirection.OnReToAsset) {
+        if (offer.direction == OfferDirection.ManagedToAsset) {
             return OnReMath._calculateRedemptionAssetOutAmount(
                 netInputAmount, price, offer.tokenInDecimals, offer.tokenOutDecimals
             );

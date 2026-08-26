@@ -3,12 +3,12 @@ pragma solidity 0.8.35;
 
 import {ConfigurableVaultKind, OfferDirection, OfferFlow, PricingDenomination, QuoterKind} from "./OnReTypes.sol";
 
-event OnReTokenRegistered(address indexed onReToken, uint8 decimals);
-event OnReTokenEnabledSet(address indexed onReToken, bool enabled);
-event ExcludedSupplyAddressAdded(address indexed onReToken, address indexed account);
-event ExcludedSupplyAddressRemoved(address indexed onReToken, address indexed account);
+event ManagedTokenRegistered(address indexed managedToken, uint8 decimals);
+event ManagedTokenEnabledSet(address indexed managedToken, bool enabled);
+event ExcludedSupplyAddressAdded(address indexed managedToken, address indexed account);
+event ExcludedSupplyAddressRemoved(address indexed managedToken, address indexed account);
 
-event PricerCreated(bytes32 indexed pricerId, address indexed onReToken, PricingDenomination denomination);
+event PricerCreated(bytes32 indexed pricerId, address indexed managedToken, PricingDenomination denomination);
 event PricingVectorAdded(
     bytes32 indexed pricerId, uint64 startTime, uint64 baseTime, uint256 basePrice, uint256 apr, uint64 priceFixDuration
 );
@@ -22,7 +22,7 @@ event QuoterEnabledSet(bytes32 indexed quoterId, bool enabled);
 event PropRfqConfigured(
     bytes32 indexed quoterId,
     address indexed assetToken,
-    address indexed onReToken,
+    address indexed managedToken,
     uint16 curvePegHaircutBps,
     uint32 curveExponentScaled,
     uint32 cadenceThreshold,
@@ -113,15 +113,15 @@ event ConfigurableVaultWithdrawn(
 );
 
 event BufferInitialized(
-    address indexed onReToken,
+    address indexed managedToken,
     bytes32 indexed reserveVaultId,
     bytes32 managementFeeVaultId,
     bytes32 performanceFeeVaultId,
     uint64 timestamp
 );
-event BufferGrossAprUpdated(address indexed onReToken, uint64 oldGrossApr, uint64 newGrossApr);
+event BufferGrossAprUpdated(address indexed managedToken, uint64 oldGrossApr, uint64 newGrossApr);
 event BufferFeeConfigUpdated(
-    address indexed onReToken,
+    address indexed managedToken,
     uint16 oldManagementFeeBasisPoints,
     uint16 newManagementFeeBasisPoints,
     uint16 oldPerformanceFeeBasisPoints,
@@ -130,7 +130,7 @@ event BufferFeeConfigUpdated(
     bool newPerformanceFeeHighWatermarkEnabled
 );
 event BufferAccrued(
-    address indexed onReToken,
+    address indexed managedToken,
     uint256 secondsElapsed,
     uint256 aprDelta,
     uint256 bufferMintAmount,
@@ -145,7 +145,11 @@ event BufferAccrued(
     uint64 timestamp
 );
 event BufferSupplyChangeRecorded(
-    address indexed onReToken, bool indexed isMint, uint256 amount, uint256 oldPreviousSupply, uint256 newPreviousSupply
+    address indexed managedToken,
+    bool indexed isMint,
+    uint256 amount,
+    uint256 oldPreviousSupply,
+    uint256 newPreviousSupply
 );
 
 event ApproverAdded(address indexed approver);

@@ -57,14 +57,18 @@ wallet can no longer upgrade the diamond** unless it was named as
 `ONRE_UPGRADER`. For local and testnet iteration, set `ONRE_UPGRADER` to the
 deployment wallet. For mainnet, set it to the upgrade multisig.
 
-## Registering an OnRe token
+## Registering a managed token
 
-OnRe tokens are issued and redeemed by the Diamond; they are not pre-minted.
+Managed tokens are issued and redeemed by the Diamond; they are not pre-minted.
 Before enabling offers for a token, its token administrator must call
-`grantMintAndBurnRoles(diamond)` on the `OnReToken`, then the application boss
-calls `registerOnReToken(onReToken)` on the Diamond. A missing mint role makes
-`AssetToOnRe` execution revert atomically, and a missing burn role makes
-`OnReToAsset` execution revert atomically.
+`grantMintAndBurnRoles(diamond)` on the `ManagedToken`, then the application boss
+calls `registerManagedToken(managedToken)` on the Diamond. A missing mint role makes
+`AssetToManaged` execution revert atomically, and a missing burn role makes
+`ManagedToAsset` execution revert atomically.
+
+The Diamond accepts ManagedToken deployments configured with 0 through 18
+decimals. Larger values remain valid at the standalone token layer but cannot be
+registered because the Diamond's fixed-point arithmetic is bounded to 18 decimals.
 
 Before enabling permissionless offers, the application boss calls
 `setPermissionlessSettlementAccount(account)`. That dedicated account must

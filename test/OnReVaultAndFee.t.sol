@@ -4,7 +4,6 @@ pragma solidity 0.8.35;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import "../src/types/OnReAppErrors.sol";
 import "../src/types/OnReTypes.sol";
-import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
 contract OnReVaultAndFeeTest is OnReAppTestBase {
@@ -28,37 +27,8 @@ contract OnReVaultAndFeeTest is OnReAppTestBase {
         app.previewExecution(permissionedOfferId, 10e6);
     }
 
-    function test_FeeConfigMinimumAppendPreservesMainStorageLayout() public {
-        uint64 legacyInstanceId = 77;
-        uint16 legacyBasisPoints = 250;
-        bytes32 legacyFeeConfigId = OnReIds._feeConfigId(legacyInstanceId);
-        bytes32 feeConfigsMappingSlot = bytes32(uint256(APP_STORAGE_LOCATION) + 3);
-        bytes32 legacyFeeConfigSlot = keccak256(abi.encode(legacyFeeConfigId, feeConfigsMappingSlot));
-        uint256 packedMainFields =
-            uint256(legacyInstanceId) | uint256(legacyBasisPoints) << 64 | uint256(1) << 80 | uint256(1) << 88;
-
-        vm.store(address(app), legacyFeeConfigSlot, feeVaultId);
-        vm.store(address(app), bytes32(uint256(legacyFeeConfigSlot) + 1), bytes32(packedMainFields));
-
-        FeeConfig memory legacyFeeConfig = app.getFeeConfig(legacyFeeConfigId);
-        assertEq(legacyFeeConfig.feeVaultId, feeVaultId);
-        assertEq(legacyFeeConfig.feeConfigId, legacyInstanceId);
-        assertEq(legacyFeeConfig.basisPoints, legacyBasisPoints);
-        assertTrue(legacyFeeConfig.enabled);
-        assertTrue(legacyFeeConfig.exists);
-        assertEq(legacyFeeConfig.minimumFeeAmount, 0);
-
-        app.updateFeeConfig(legacyFeeConfigId, legacyBasisPoints, 300_000, feeVaultId);
-        legacyFeeConfig = app.getFeeConfig(legacyFeeConfigId);
-        assertEq(legacyFeeConfig.feeConfigId, legacyInstanceId);
-        assertEq(legacyFeeConfig.basisPoints, legacyBasisPoints);
-        assertTrue(legacyFeeConfig.enabled);
-        assertTrue(legacyFeeConfig.exists);
-        assertEq(legacyFeeConfig.minimumFeeAmount, 300_000);
-    }
-
     function test_ForwardExecutionRefillsLiquidityBeforeProceeds() public {
-        onReToken.mint(address(this), 1_000e9);
+        managedToken.mint(address(this), 1_000e9);
         bytes32 refillVault = app.createConfigurableVault(ConfigurableVaultKind.Liquidity, 1, vaultDestination, 1_000);
         bytes32 zeroFee = app.createFeeConfig(2, 0, 0, feeVaultId);
         app.updateOfferConfigReferences(

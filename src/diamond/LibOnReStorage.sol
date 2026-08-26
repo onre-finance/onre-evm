@@ -7,7 +7,7 @@ import {
     FeeConfig,
     FulfillmentRequest,
     OfferConfig,
-    OnReTokenConfig,
+    ManagedTokenConfig,
     Pricer,
     PropRfqState,
     Quoter
@@ -16,7 +16,7 @@ import {
 library LibOnReStorage {
     /// @custom:storage-location erc7201:onre.storage.App
     struct AppStorage {
-        mapping(address onReToken => OnReTokenConfig config) onReTokenConfigs;
+        mapping(address managedToken => ManagedTokenConfig config) managedTokenConfigs;
         mapping(bytes32 pricerId => Pricer pricer) pricers;
         mapping(bytes32 quoterId => Quoter quoter) quoters;
         mapping(bytes32 feeConfigId => FeeConfig feeConfig) feeConfigs;
@@ -24,15 +24,15 @@ library LibOnReStorage {
         mapping(bytes32 vaultId => mapping(address token => uint256 amount)) configurableVaultBalances;
         mapping(bytes32 offerConfigId => OfferConfig offerConfig) offerConfigs;
         mapping(bytes32 requestId => FulfillmentRequest request) fulfillmentRequests;
-        mapping(address onReToken => address[] accounts) excludedSupplyAccounts;
-        mapping(address onReToken => mapping(address account => uint256 indexPlusOne)) excludedSupplyIndexPlusOne;
+        mapping(address managedToken => address[] accounts) excludedSupplyAccounts;
+        mapping(address managedToken => mapping(address account => uint256 indexPlusOne)) excludedSupplyIndexPlusOne;
         bool initialized;
         bool isKilled;
         address approver1;
         address approver2;
         mapping(bytes32 quoterId => PropRfqState state) propRfqStates;
         address permissionlessSettlementAccount;
-        mapping(address onReToken => BufferState state) bufferStates;
+        mapping(address managedToken => BufferState state) bufferStates;
     }
 
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;

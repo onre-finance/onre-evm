@@ -43,19 +43,19 @@ library OnReMath {
     }
 
     function _calculateRedemptionAssetOutAmount(
-        uint256 onReTokenNetAmount,
+        uint256 managedTokenNetAmount,
         uint256 price,
-        uint8 onReTokenDecimals,
+        uint8 managedTokenDecimals,
         uint8 assetDecimals
     ) internal pure returns (uint256) {
-        if (assetDecimals >= onReTokenDecimals) {
+        if (assetDecimals >= managedTokenDecimals) {
             uint256 decimalMultiplier =
-                10 ** (uint256(assetDecimals) - uint256(onReTokenDecimals));
-            return Math.mulDiv(onReTokenNetAmount, price * decimalMultiplier, 10 ** PRICE_DECIMALS);
+                10 ** (uint256(assetDecimals) - uint256(managedTokenDecimals));
+            return Math.mulDiv(managedTokenNetAmount, price * decimalMultiplier, 10 ** PRICE_DECIMALS);
         }
 
-        uint256 decimalDivisor = 10 ** (uint256(onReTokenDecimals) - uint256(assetDecimals) + PRICE_DECIMALS);
-        return Math.mulDiv(onReTokenNetAmount, price, decimalDivisor);
+        uint256 decimalDivisor = 10 ** (uint256(managedTokenDecimals) - uint256(assetDecimals) + PRICE_DECIMALS);
+        return Math.mulDiv(managedTokenNetAmount, price, decimalDivisor);
     }
 
     function _calculateVectorPrice(uint256 apr, uint256 basePrice, uint256 elapsedTime)
@@ -119,7 +119,7 @@ library OnReMath {
         uint16 vaultTargetBps,
         uint16 maxBasisPoints,
         uint8 assetDecimals,
-        uint8 onReTokenDecimals,
+        uint8 managedTokenDecimals,
         uint256 currentRedemptionVaultBalance,
         uint256 assetNetAmount
     ) internal pure returns (uint256) {
@@ -128,7 +128,7 @@ library OnReMath {
         }
 
         uint256 targetInAssetDecimals = Math.mulDiv(
-            tvl, uint256(vaultTargetBps) * 10 ** assetDecimals, uint256(maxBasisPoints) * 10 ** onReTokenDecimals
+            tvl, uint256(vaultTargetBps) * 10 ** assetDecimals, uint256(maxBasisPoints) * 10 ** managedTokenDecimals
         );
 
         if (targetInAssetDecimals <= currentRedemptionVaultBalance) {

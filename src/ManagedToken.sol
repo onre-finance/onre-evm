@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {IOnReToken} from "./IOnReToken.sol";
-import {IOnReBufferController} from "./IOnReBufferController.sol";
-import {NoChangeError, ZeroAddressError} from "./types/OnReAppErrors.sol";
-import {InitializeParams} from "./types/OnReTypes.sol";
+import {IManagedToken} from "./IManagedToken.sol";
+import {IBufferController} from "./IBufferController.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -16,7 +14,7 @@ import {
     IERC20 as ChainlinkIERC20
 } from "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
-contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
@@ -27,12 +25,14 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     address private _ccipAdmin;
     address private _bufferController;
 
+    uint8 private _decimals;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(InitializeParams calldata params) external initializer {
+    function initialize(IManagedToken.InitializeParams calldata params) external initializer {
         if (params.admin == address(0) || params.ccipAdmin == address(0)) {
             revert ZeroAddressError();
         }
@@ -40,6 +40,7 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         __ERC20_init(params.name, params.symbol);
         __AccessControl_init();
 
+        _decimals = params.decimals;
         _ccipAdmin = params.ccipAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, params.admin);
         _grantRole(UPGRADER_ROLE, params.admin);
@@ -61,8 +62,8 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
         }
     }
 
-    function decimals() public pure override returns (uint8) {
-        return 9;
+    function decimals() public view override returns (uint8) {
+        return _decimals;
     }
 
     function getCCIPAdmin() external view override returns (address) {
@@ -170,8 +171,9 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     }
 
     function supportsInterface(bytes4 interfaceId) public view override(AccessControlUpgradeable) returns (bool) {
-        return interfaceId == type(ChainlinkIERC20).interfaceId || interfaceId == type(IBurnMintERC20).interfaceId
-            || interfaceId == type(IGetCCIPAdmin).interfaceId || super.supportsInterface(interfaceId);
+        return interfaceId == type(IManagedToken).interfaceId || interfaceId == type(ChainlinkIERC20).interfaceId
+            || interfaceId == type(IBurnMintERC20).interfaceId || interfaceId == type(IGetCCIPAdmin).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 
     modifier onlyMinter() {
@@ -226,6 +228,6 @@ contract OnReToken is Initializable, IOnReToken, ERC20Upgradeable, AccessControl
     function _notifyBufferController(uint256 amount, bool isMint) private {
         address controller = _bufferController;
         if (controller == address(0)) return;
-        IOnReBufferController(controller).onBeforeSupplyChange(amount, isMint);
+        IBufferController(controller).onBeforeSupplyChange(amount, isMint);
     }
 }

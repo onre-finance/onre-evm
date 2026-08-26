@@ -2,10 +2,13 @@
 pragma solidity 0.8.35;
 
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {IManagedToken} from "../IManagedToken.sol";
 import {
     ExcludedSupplyAddressAlreadyExistsError,
     ExcludedSupplyAddressNotFoundError,
+    InvalidDecimalsError,
     InvalidTokenError,
     NoChangeError,
     TokenAlreadyRegisteredError,
@@ -15,83 +18,85 @@ import {
 import {
     ExcludedSupplyAddressAdded,
     ExcludedSupplyAddressRemoved,
-    OnReTokenEnabledSet,
-    OnReTokenRegistered
+    ManagedTokenEnabledSet,
+    ManagedTokenRegistered
 } from "../types/OnReAppEvents.sol";
-import {OnReTokenConfig} from "../types/OnReTypes.sol";
+import {ManagedTokenConfig} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
+import {OnReMath} from "./OnReMath.sol";
 
-/// @notice OnRe-token registration and supply-exclusion configuration.
+/// @notice managed-token registration and supply-exclusion configuration.
 library LibOnReConfig {
-    uint8 internal constant ONRE_TOKEN_DECIMALS = 9;
     uint8 internal constant MAX_EXCLUDED_SUPPLY_ADDRESSES = 20;
 
-    function _registerOnReToken(address onReToken) internal {
+    function _registerManagedToken(address managedToken) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        if (onReToken == address(0)) revert ZeroAddressError();
+        if (managedToken == address(0)) revert ZeroAddressError();
 
-        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
-        if (config.enabled || config.decimals != 0) {
-            revert TokenAlreadyRegisteredError(onReToken);
+        ManagedTokenConfig storage config = LibOnReStorage._appStorage().managedTokenConfigs[managedToken];
+        if (config.exists) revert TokenAlreadyRegisteredError(managedToken);
+        if (!ERC165Checker.supportsInterface(managedToken, type(IManagedToken).interfaceId)) {
+            revert InvalidTokenError();
         }
 
-        uint8 decimals = IERC20Metadata(onReToken).decimals();
-        if (decimals != ONRE_TOKEN_DECIMALS) revert InvalidTokenError();
+        uint8 decimals = IERC20Metadata(managedToken).decimals();
+        if (decimals > OnReMath.MAX_TOKEN_DECIMALS) revert InvalidDecimalsError();
 
-        config.enabled = true;
         config.decimals = decimals;
-        emit OnReTokenRegistered(onReToken, decimals);
+        config.enabled = true;
+        config.exists = true;
+        emit ManagedTokenRegistered(managedToken, decimals);
     }
 
-    function _setOnReTokenEnabled(address onReToken, bool enabled) internal {
+    function _setManagedTokenEnabled(address managedToken, bool enabled) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation._requireRegisteredOnReToken(onReToken);
+        LibOnReValidation._requireRegisteredManagedToken(managedToken);
 
-        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
+        ManagedTokenConfig storage config = LibOnReStorage._appStorage().managedTokenConfigs[managedToken];
         if (config.enabled == enabled) revert NoChangeError();
         config.enabled = enabled;
-        emit OnReTokenEnabledSet(onReToken, enabled);
+        emit ManagedTokenEnabledSet(managedToken, enabled);
     }
 
-    function _addExcludedSupplyAddress(address onReToken, address account) internal {
+    function _addExcludedSupplyAddress(address managedToken, address account) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation._requireRegisteredOnReToken(onReToken);
+        LibOnReValidation._requireRegisteredManagedToken(managedToken);
         if (account == address(0)) revert ZeroAddressError();
-        if (LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account] != 0) {
-            revert ExcludedSupplyAddressAlreadyExistsError(onReToken, account);
+        if (LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[managedToken][account] != 0) {
+            revert ExcludedSupplyAddressAlreadyExistsError(managedToken, account);
         }
 
-        address[] storage accounts = LibOnReStorage._appStorage().excludedSupplyAccounts[onReToken];
+        address[] storage accounts = LibOnReStorage._appStorage().excludedSupplyAccounts[managedToken];
         if (accounts.length >= MAX_EXCLUDED_SUPPLY_ADDRESSES) {
-            revert TooManyExcludedSupplyAddressesError(onReToken);
+            revert TooManyExcludedSupplyAddressesError(managedToken);
         }
         accounts.push(account);
-        LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account] = accounts.length;
-        emit ExcludedSupplyAddressAdded(onReToken, account);
+        LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[managedToken][account] = accounts.length;
+        emit ExcludedSupplyAddressAdded(managedToken, account);
     }
 
-    function _removeExcludedSupplyAddress(address onReToken, address account) internal {
+    function _removeExcludedSupplyAddress(address managedToken, address account) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation._requireRegisteredOnReToken(onReToken);
+        LibOnReValidation._requireRegisteredManagedToken(managedToken);
         if (account == address(0)) revert ZeroAddressError();
 
-        uint256 indexPlusOne = LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account];
+        uint256 indexPlusOne = LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[managedToken][account];
         if (indexPlusOne == 0) {
-            revert ExcludedSupplyAddressNotFoundError(onReToken, account);
+            revert ExcludedSupplyAddressNotFoundError(managedToken, account);
         }
 
-        address[] storage accounts = LibOnReStorage._appStorage().excludedSupplyAccounts[onReToken];
+        address[] storage accounts = LibOnReStorage._appStorage().excludedSupplyAccounts[managedToken];
         uint256 index = indexPlusOne - 1;
         uint256 lastIndex = accounts.length - 1;
         if (index != lastIndex) {
             address lastAccount = accounts[lastIndex];
             accounts[index] = lastAccount;
-            LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][lastAccount] = index + 1;
+            LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[managedToken][lastAccount] = index + 1;
         }
         accounts.pop();
-        delete LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[onReToken][account];
-        emit ExcludedSupplyAddressRemoved(onReToken, account);
+        delete LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[managedToken][account];
+        emit ExcludedSupplyAddressRemoved(managedToken, account);
     }
 }

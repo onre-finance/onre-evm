@@ -18,12 +18,12 @@ library OnReIds {
     bytes32 internal constant OFFER_CONFIG_SEED = keccak256("onre.offer_config");
     bytes32 internal constant FULFILLMENT_REQUEST_SEED = keccak256("onre.fulfillment_request");
 
-    function _pricerId(address onReToken, PricingDenomination denomination) internal pure returns (bytes32) {
-        return keccak256(abi.encode(PRICER_SEED, onReToken, denomination));
+    function _pricerId(address managedToken, PricingDenomination denomination) internal pure returns (bytes32) {
+        return keccak256(abi.encode(PRICER_SEED, managedToken, denomination));
     }
 
-    function _usdPricerId(address onReToken) internal pure returns (bytes32) {
-        return _pricerId(onReToken, PricingDenomination.Usd);
+    function _usdPricerId(address managedToken) internal pure returns (bytes32) {
+        return _pricerId(managedToken, PricingDenomination.Usd);
     }
 
     function _quoterId(QuoterKind kind, uint64 quoterId_) internal pure returns (bytes32) {
@@ -38,16 +38,16 @@ library OnReIds {
         return keccak256(abi.encode(CONFIGURABLE_VAULT_SEED, kind, vaultId_));
     }
 
-    function _bufferReserveVaultId(address onReToken) internal pure returns (bytes32) {
-        return keccak256(abi.encode(BUFFER_RESERVE_VAULT_SEED, onReToken));
+    function _bufferReserveVaultId(address managedToken) internal pure returns (bytes32) {
+        return keccak256(abi.encode(BUFFER_RESERVE_VAULT_SEED, managedToken));
     }
 
-    function _bufferManagementFeeVaultId(address onReToken) internal pure returns (bytes32) {
-        return keccak256(abi.encode(BUFFER_MANAGEMENT_FEE_VAULT_SEED, onReToken));
+    function _bufferManagementFeeVaultId(address managedToken) internal pure returns (bytes32) {
+        return keccak256(abi.encode(BUFFER_MANAGEMENT_FEE_VAULT_SEED, managedToken));
     }
 
-    function _bufferPerformanceFeeVaultId(address onReToken) internal pure returns (bytes32) {
-        return keccak256(abi.encode(BUFFER_PERFORMANCE_FEE_VAULT_SEED, onReToken));
+    function _bufferPerformanceFeeVaultId(address managedToken) internal pure returns (bytes32) {
+        return keccak256(abi.encode(BUFFER_PERFORMANCE_FEE_VAULT_SEED, managedToken));
     }
 
     function _offerConfigId(address tokenIn, address tokenOut, OfferFlow flow) internal pure returns (bytes32) {

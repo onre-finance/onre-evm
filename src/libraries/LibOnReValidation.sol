@@ -26,7 +26,7 @@ import {
     FulfillmentRequest,
     OfferConfig,
     OfferDirection,
-    OnReTokenConfig,
+    ManagedTokenConfig,
     Pricer,
     Quoter
 } from "../types/OnReTypes.sol";
@@ -39,16 +39,20 @@ library LibOnReValidation {
         LibOnReAccessControl._checkRole(role);
     }
 
-    function _requireRegisteredOnReToken(address onReToken) internal view {
-        if (LibOnReStorage._appStorage().onReTokenConfigs[onReToken].decimals == 0) {
-            revert TokenNotRegisteredError(onReToken);
+    function _requireRegisteredManagedToken(address managedToken) internal view {
+        if (!_isManagedToken(managedToken)) {
+            revert TokenNotRegisteredError(managedToken);
         }
     }
 
-    function _requireEnabledOnReToken(address onReToken) internal view {
-        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
-        if (config.decimals == 0) revert TokenNotRegisteredError(onReToken);
+    function _requireEnabledManagedToken(address managedToken) internal view {
+        ManagedTokenConfig storage config = LibOnReStorage._appStorage().managedTokenConfigs[managedToken];
+        if (!config.exists) revert TokenNotRegisteredError(managedToken);
         if (!config.enabled) revert InvalidTokenError();
+    }
+
+    function _isManagedToken(address token) internal view returns (bool) {
+        return LibOnReStorage._appStorage().managedTokenConfigs[token].exists;
     }
 
     function _requirePricer(bytes32 pricerId) internal view returns (Pricer storage pricer) {
@@ -59,7 +63,7 @@ library LibOnReValidation {
     function _requireExecutablePricer(bytes32 pricerId) internal view returns (Pricer storage pricer) {
         pricer = _requirePricer(pricerId);
         if (pricer.disabled) revert PricerDisabledError(pricerId);
-        _requireEnabledOnReToken(pricer.onReToken);
+        _requireEnabledManagedToken(pricer.managedToken);
     }
 
     function _requireQuoter(bytes32 quoterId) internal view returns (Quoter storage quoter) {
@@ -113,14 +117,14 @@ library LibOnReValidation {
         }
         offerConfig = _requireOfferConfig(offerConfigId);
         if (offerConfig.disabled) revert OfferConfigDisabledError(offerConfigId);
-        _requireExecutablePricer(OnReIds._usdPricerId(_offerOnReToken(offerConfig)));
+        _requireExecutablePricer(OnReIds._usdPricerId(_offerManagedToken(offerConfig)));
         _requireExecutableQuoter(offerConfig.quoterId);
         _requireExecutableFeeConfig(offerConfig.feeConfigId);
     }
 
-    function _offerOnReToken(OfferConfig storage offerConfig) internal view returns (address) {
-        if (offerConfig.direction == OfferDirection.AssetToOnRe) return offerConfig.tokenOut;
-        if (offerConfig.direction == OfferDirection.OnReToAsset) return offerConfig.tokenIn;
+    function _offerManagedToken(OfferConfig storage offerConfig) internal view returns (address) {
+        if (offerConfig.direction == OfferDirection.AssetToManaged) return offerConfig.tokenOut;
+        if (offerConfig.direction == OfferDirection.ManagedToAsset) return offerConfig.tokenIn;
         revert InvalidOfferDirectionError();
     }
 

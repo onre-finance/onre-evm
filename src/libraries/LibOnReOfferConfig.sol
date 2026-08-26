@@ -112,7 +112,7 @@ library LibOnReOfferConfig {
         bytes32 proceedsVaultId,
         bytes32 liquidityVaultId
     ) private {
-        LibOnReValidation._requirePricer(OnReIds._usdPricerId(LibOnReValidation._offerOnReToken(offer)));
+        LibOnReValidation._requirePricer(OnReIds._usdPricerId(LibOnReValidation._offerManagedToken(offer)));
         Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
         _validateFlowQuoter(offer, quoterId, quoter);
         FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
@@ -121,7 +121,7 @@ library LibOnReOfferConfig {
         if (liquidityVaultId != bytes32(0)) {
             LibOnReValidation._requireVaultKind(liquidityVaultId, ConfigurableVaultKind.Liquidity);
         }
-        if (offer.direction == OfferDirection.OnReToAsset && liquidityVaultId == bytes32(0)) {
+        if (offer.direction == OfferDirection.ManagedToAsset && liquidityVaultId == bytes32(0)) {
             revert LiquidityVaultRequiredError(offerConfigId);
         }
 
@@ -165,15 +165,15 @@ library LibOnReOfferConfig {
 
     function _validateWorkerQuoter(OfferConfig storage offer, Quoter storage quoter) private view {
         _validateNavQuoter(quoter);
-        if (offer.direction != OfferDirection.OnReToAsset) revert InvalidOfferDirectionError();
+        if (offer.direction != OfferDirection.ManagedToAsset) revert InvalidOfferDirectionError();
     }
 
     function _deriveDirection(address tokenIn, address tokenOut) private view returns (OfferDirection) {
-        bool inputIsOnRe = LibOnReStorage._appStorage().onReTokenConfigs[tokenIn].decimals != 0;
-        bool outputIsOnRe = LibOnReStorage._appStorage().onReTokenConfigs[tokenOut].decimals != 0;
-        if (inputIsOnRe == outputIsOnRe) revert InvalidOfferDirectionError();
-        address onReToken = inputIsOnRe ? tokenIn : tokenOut;
-        LibOnReValidation._requireEnabledOnReToken(onReToken);
-        return inputIsOnRe ? OfferDirection.OnReToAsset : OfferDirection.AssetToOnRe;
+        bool inputIsManaged = LibOnReValidation._isManagedToken(tokenIn);
+        bool outputIsManaged = LibOnReValidation._isManagedToken(tokenOut);
+        if (inputIsManaged == outputIsManaged) revert InvalidOfferDirectionError();
+        address managedToken = inputIsManaged ? tokenIn : tokenOut;
+        LibOnReValidation._requireEnabledManagedToken(managedToken);
+        return inputIsManaged ? OfferDirection.ManagedToAsset : OfferDirection.AssetToManaged;
     }
 }

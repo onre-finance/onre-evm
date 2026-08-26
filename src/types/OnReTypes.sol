@@ -12,8 +12,8 @@ enum OfferFlow {
 }
 
 enum OfferDirection {
-    AssetToOnRe,
-    OnReToAsset
+    AssetToManaged,
+    ManagedToAsset
 }
 
 enum QuoterKind {
@@ -41,11 +41,10 @@ struct InitializeParams {
     address[] approvers;
 }
 
-struct OnReTokenConfig {
-    /// @dev Preserves the first 20 bytes of the already-deployed struct layout.
-    uint160 reserved;
-    bool enabled;
+struct ManagedTokenConfig {
     uint8 decimals;
+    bool enabled;
+    bool exists;
 }
 
 struct PricingVector {
@@ -58,7 +57,7 @@ struct PricingVector {
 
 struct Pricer {
     PricingVector[10] vectors;
-    address onReToken;
+    address managedToken;
     PricingDenomination denomination;
     uint8 vectorCount;
     bool disabled;
@@ -86,7 +85,7 @@ struct PropRfqState {
     uint256 currentBuyValueStable;
     uint256 previousNetSellValueStable;
     PropRfqConfig config;
-    address onReToken;
+    address managedToken;
     uint64 epochStart;
     uint32 currentSellTradeCount;
     address assetToken;

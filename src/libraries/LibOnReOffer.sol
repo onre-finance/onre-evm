@@ -14,7 +14,7 @@ import {
     WorkerOfferRequiresFulfillmentRequestError
 } from "../types/OnReAppErrors.sol";
 import {OfferExecuted} from "../types/OnReAppEvents.sol";
-import {IOnReToken} from "../IOnReToken.sol";
+import {IManagedToken} from "../IManagedToken.sol";
 import {
     ConfigurableVault,
     ExecutionAccounting,
@@ -135,10 +135,10 @@ library LibOnReOffer {
         FeeConfig storage feeConfig = LibOnReValidation._requireExecutableFeeConfig(offer.feeConfigId);
         LibOnReVault._accrue(feeConfig.feeVaultId, offer.tokenIn, accounting.feeAmount);
 
-        if (offer.direction == OfferDirection.AssetToOnRe) {
-            _settleAssetToOnRe(offer, outputRecipient, accounting);
-        } else if (offer.direction == OfferDirection.OnReToAsset) {
-            _settleOnReToAsset(offer, outputRecipient, accounting);
+        if (offer.direction == OfferDirection.AssetToManaged) {
+            _settleAssetToManaged(offer, outputRecipient, accounting);
+        } else if (offer.direction == OfferDirection.ManagedToAsset) {
+            _settleManagedToAsset(offer, outputRecipient, accounting);
         } else {
             revert InvalidOfferDirectionError();
         }
@@ -164,20 +164,20 @@ library LibOnReOffer {
         );
     }
 
-    function _settleAssetToOnRe(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
+    function _settleAssetToManaged(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
         private
     {
         accounting.liquidityRefillAmount = _calculateLiquidityRefill(offer, accounting.netInputAmount);
         accounting.proceedsAmount = accounting.netInputAmount - accounting.liquidityRefillAmount;
         LibOnReVault._accrue(offer.liquidityVaultId, offer.tokenIn, accounting.liquidityRefillAmount);
         LibOnReVault._accrue(offer.proceedsVaultId, offer.tokenIn, accounting.proceedsAmount);
-        IOnReToken(offer.tokenOut).mint(recipient, accounting.amountOut);
+        IManagedToken(offer.tokenOut).mint(recipient, accounting.amountOut);
     }
 
-    function _settleOnReToAsset(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
+    function _settleManagedToAsset(OfferConfig storage offer, address recipient, ExecutionAccounting memory accounting)
         private
     {
-        IOnReToken(offer.tokenIn).burn(accounting.netInputAmount);
+        IManagedToken(offer.tokenIn).burn(accounting.netInputAmount);
         LibOnReVault._consumeLiquidity(offer.liquidityVaultId, offer.tokenOut, recipient, accounting.amountOut);
     }
 
@@ -191,14 +191,14 @@ library LibOnReOffer {
             LibOnReStorage._appStorage().configurableVaults[offer.liquidityVaultId];
         if (liquidityVault.refillTargetBps == 0) return 0;
 
-        address onReToken = LibOnReValidation._offerOnReToken(offer);
-        uint256 tvl = LibOnReMarketStats._currentTvl(onReToken);
+        address managedToken = LibOnReValidation._offerManagedToken(offer);
+        uint256 tvl = LibOnReMarketStats._currentTvl(managedToken);
         return OnReMath._calculateRedemptionVaultRefillAmount(
             tvl,
             liquidityVault.refillTargetBps,
             MAX_BASIS_POINTS,
             offer.tokenInDecimals,
-            LibOnReStorage._appStorage().onReTokenConfigs[onReToken].decimals,
+            LibOnReStorage._appStorage().managedTokenConfigs[managedToken].decimals,
             LibOnReVault._balance(offer.liquidityVaultId, offer.tokenIn),
             netInputAmount
         );

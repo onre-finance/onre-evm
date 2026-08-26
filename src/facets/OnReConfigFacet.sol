@@ -5,20 +5,20 @@ import {LibOnReConfig} from "../libraries/LibOnReConfig.sol";
 import {LibOnReAppConfig} from "../libraries/LibOnReAppConfig.sol";
 
 contract OnReConfigFacet {
-    function registerOnReToken(address onReToken) external {
-        LibOnReConfig._registerOnReToken(onReToken);
+    function registerManagedToken(address managedToken) external {
+        LibOnReConfig._registerManagedToken(managedToken);
     }
 
-    function setOnReTokenEnabled(address onReToken, bool enabled) external {
-        LibOnReConfig._setOnReTokenEnabled(onReToken, enabled);
+    function setManagedTokenEnabled(address managedToken, bool enabled) external {
+        LibOnReConfig._setManagedTokenEnabled(managedToken, enabled);
     }
 
-    function addExcludedSupplyAddress(address onReToken, address account) external {
-        LibOnReConfig._addExcludedSupplyAddress(onReToken, account);
+    function addExcludedSupplyAddress(address managedToken, address account) external {
+        LibOnReConfig._addExcludedSupplyAddress(managedToken, account);
     }
 
-    function removeExcludedSupplyAddress(address onReToken, address account) external {
-        LibOnReConfig._removeExcludedSupplyAddress(onReToken, account);
+    function removeExcludedSupplyAddress(address managedToken, address account) external {
+        LibOnReConfig._removeExcludedSupplyAddress(managedToken, account);
     }
 
     function addApprover(address approver) external {

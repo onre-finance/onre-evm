@@ -13,7 +13,7 @@ contract OnReFulfillmentTest is OnReAppTestBase {
         vm.expectRevert(InvalidFlowQuoterError.selector);
         _makeOffer(
             address(alternativeUsd),
-            address(onReToken),
+            address(managedToken),
             OfferFlow.Permissionless,
             navQuoterId,
             feeConfigId,
@@ -23,7 +23,7 @@ contract OnReFulfillmentTest is OnReAppTestBase {
         bytes32 secondFee = app.createFeeConfig(1, 0, 0, feeVaultId);
         vm.expectRevert(InvalidOfferDirectionError.selector);
         _makeOffer(
-            address(alternativeUsd), address(onReToken), OfferFlow.Worker, navQuoterId, secondFee, liquidityVaultId
+            address(alternativeUsd), address(managedToken), OfferFlow.Worker, navQuoterId, secondFee, liquidityVaultId
         );
     }
 
@@ -48,14 +48,14 @@ contract OnReFulfillmentTest is OnReAppTestBase {
 
     function test_WorkerRequestPartiallyFillsAtCurrentPriceAndFullyCloses() public {
         _depositLiquidity(300e6);
-        onReToken.mint(user, 100e9);
+        managedToken.mint(user, 100e9);
         vm.prank(user);
-        onReToken.approve(address(app), 100e9);
+        managedToken.approve(address(app), 100e9);
 
         vm.prank(user);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 7, 100e9);
         assertEq(requestKey, OnReIds._fulfillmentRequestId(workerOfferId, user, 7));
-        assertEq(onReToken.balanceOf(address(app)), 100e9);
+        assertEq(managedToken.balanceOf(address(app)), 100e9);
 
         vm.prank(worker);
         uint256 firstAmountOut = app.fulfillWorkerRequest(requestKey, 40e9);
@@ -72,16 +72,16 @@ contract OnReFulfillmentTest is OnReAppTestBase {
 
         assertEq(secondAmountOut, 118_800_000);
         assertEq(usd.balanceOf(user), 158_400_000);
-        assertEq(onReToken.totalSupply(), 1e9);
-        assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
+        assertEq(managedToken.totalSupply(), 1e9);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(managedToken)), 1e9);
         assertFalse(app.getFulfillmentRequest(requestKey).exists);
     }
 
     function test_WorkerRequestCancellationReturnsOnlyUnfilledInput() public {
         _depositLiquidity(100e6);
-        onReToken.mint(user, 100e9);
+        managedToken.mint(user, 100e9);
         vm.startPrank(user);
-        onReToken.approve(address(app), 100e9);
+        managedToken.approve(address(app), 100e9);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 8, 100e9);
         vm.stopPrank();
 
@@ -90,13 +90,13 @@ contract OnReFulfillmentTest is OnReAppTestBase {
         vm.prank(user);
         app.cancelFulfillmentRequest(requestKey);
 
-        assertEq(onReToken.balanceOf(user), 60e9);
+        assertEq(managedToken.balanceOf(user), 60e9);
         assertFalse(app.getFulfillmentRequest(requestKey).exists);
     }
 
     function test_WorkerCancellationRejectsExcessDiamondDebit() public {
         MockSenderPaysFeeToken taxedToken = new MockSenderPaysFeeToken(address(app));
-        app.registerOnReToken(address(taxedToken));
+        app.registerManagedToken(address(taxedToken));
         bytes32 taxedPricerId = app.createPricer(address(taxedToken), PricingDenomination.Usd);
         app.addPricingVector(
             taxedPricerId, PricingVector({startTime: 1, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})
@@ -123,9 +123,9 @@ contract OnReFulfillmentTest is OnReAppTestBase {
     }
 
     function test_WorkerFlowEnforcesRoleAndRemainingAmount() public {
-        onReToken.mint(user, 10e9);
+        managedToken.mint(user, 10e9);
         vm.startPrank(user);
-        onReToken.approve(address(app), 10e9);
+        managedToken.approve(address(app), 10e9);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 9, 10e9);
 
         vm.expectRevert(
@@ -140,9 +140,9 @@ contract OnReFulfillmentTest is OnReAppTestBase {
     }
 
     function test_FulfillmentRequestIdentityAuthorizationAndDuplicateGuards() public {
-        onReToken.mint(user, 20e9);
+        managedToken.mint(user, 20e9);
         vm.startPrank(user);
-        onReToken.approve(address(app), 20e9);
+        managedToken.approve(address(app), 20e9);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 55, 10e9);
         vm.expectRevert(abi.encodeWithSelector(FulfillmentRequestAlreadyExistsError.selector, requestKey));
         app.createFulfillmentRequest(workerOfferId, 55, 10e9);
@@ -160,7 +160,7 @@ contract OnReFulfillmentTest is OnReAppTestBase {
 
         vm.prank(worker);
         app.cancelFulfillmentRequest(requestKey);
-        assertEq(onReToken.balanceOf(user), 20e9);
+        assertEq(managedToken.balanceOf(user), 20e9);
     }
 
     function test_FulfillmentRejectsNonWorkerOffersAndZeroAmounts() public {
@@ -172,9 +172,9 @@ contract OnReFulfillmentTest is OnReAppTestBase {
         vm.prank(user);
         app.createFulfillmentRequest(workerOfferId, 1, 0);
 
-        onReToken.mint(user, 1e9);
+        managedToken.mint(user, 1e9);
         vm.startPrank(user);
-        onReToken.approve(address(app), 1e9);
+        managedToken.approve(address(app), 1e9);
         bytes32 requestKey = app.createFulfillmentRequest(workerOfferId, 2, 1e9);
         vm.stopPrank();
 

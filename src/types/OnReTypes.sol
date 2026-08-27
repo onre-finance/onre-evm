@@ -38,6 +38,8 @@ struct InitializeParams {
     address worker;
     /// @dev Initial UPGRADER_ROLE holder; can execute Diamond cuts.
     address upgrader;
+    /// @dev UpgradeableBeacon used by the Diamond to deploy managed tokens.
+    address managedTokenBeacon;
     address[] approvers;
 }
 

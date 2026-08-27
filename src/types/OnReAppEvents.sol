@@ -4,6 +4,15 @@ pragma solidity 0.8.35;
 import {ConfigurableVaultKind, OfferDirection, OfferFlow, PricingDenomination, QuoterKind} from "./OnReTypes.sol";
 
 event ManagedTokenRegistered(address indexed managedToken, uint8 decimals);
+event ManagedTokenBeaconConfigured(address indexed beacon);
+event ManagedTokenDeployed(
+    address indexed managedToken,
+    address indexed admin,
+    address indexed ccipAdmin,
+    string name,
+    string symbol,
+    uint8 decimals
+);
 event ManagedTokenEnabledSet(address indexed managedToken, bool enabled);
 event ExcludedSupplyAddressAdded(address indexed managedToken, address indexed account);
 event ExcludedSupplyAddressRemoved(address indexed managedToken, address indexed account);

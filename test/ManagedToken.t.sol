@@ -4,7 +4,9 @@ pragma solidity 0.8.35;
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {Test} from "forge-std/Test.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
 import {IBufferController} from "../src/IBufferController.sol";
@@ -12,7 +14,9 @@ import {ManagedToken} from "../src/ManagedToken.sol";
 
 contract ManagedTokenTest is Test {
     ManagedToken private token;
+    UpgradeableBeacon private beacon;
 
+    address private beaconOwner = makeAddr("beaconOwner");
     address private admin = makeAddr("admin");
     address private ccipAdmin = makeAddr("ccipAdmin");
     address private minter = makeAddr("minter");
@@ -21,6 +25,7 @@ contract ManagedTokenTest is Test {
     address private user = makeAddr("user");
 
     function setUp() public {
+        beacon = new UpgradeableBeacon(address(new ManagedToken()), beaconOwner);
         token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
     }
 
@@ -287,15 +292,34 @@ contract ManagedTokenTest is Test {
         assertEq(token.balanceOf(address(controller)), 7e9);
     }
 
-    function test_OnlyUpgraderCanUpgrade() public {
-        ManagedToken newImplementation = new ManagedToken();
+    function test_OnlyBeaconOwnerCanUpgradeAllTokensAndPreserveState() public {
+        ManagedToken secondToken = _deployToken(6, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
 
-        vm.expectRevert();
-        vm.prank(user);
-        token.upgradeToAndCall(address(newImplementation), "");
+        vm.prank(minter);
+        token.mint(user, 100e9);
 
+        ManagedTokenV2 newImplementation = new ManagedTokenV2();
+
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, admin));
         vm.prank(admin);
-        token.upgradeToAndCall(address(newImplementation), "");
+        beacon.upgradeTo(address(newImplementation));
+
+        vm.prank(beaconOwner);
+        beacon.upgradeTo(address(newImplementation));
+
+        assertEq(beacon.implementation(), address(newImplementation));
+        assertEq(ManagedTokenV2(address(token)).version(), 2);
+        assertEq(ManagedTokenV2(address(secondToken)).version(), 2);
+        assertEq(token.decimals(), 9);
+        assertEq(secondToken.decimals(), 6);
+        assertEq(token.balanceOf(user), 100e9);
+        assertTrue(token.isMinter(minter));
+        assertTrue(token.isBurner(burner));
+        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), admin));
+
+        vm.prank(minter);
+        token.mint(user, 1);
+        assertEq(token.balanceOf(user), 100e9 + 1);
     }
 
     function _deployToken(
@@ -305,7 +329,6 @@ contract ManagedTokenTest is Test {
         address[] memory initialMinters,
         address[] memory initialBurners
     ) private returns (ManagedToken) {
-        ManagedToken implementation = new ManagedToken();
         IManagedToken.InitializeParams memory params = IManagedToken.InitializeParams({
             name: "OnRe USD",
             symbol: "ONusd",
@@ -316,8 +339,7 @@ contract ManagedTokenTest is Test {
             initialBurners: initialBurners
         });
 
-        ERC1967Proxy proxy =
-            new ERC1967Proxy(address(implementation), abi.encodeCall(ManagedToken.initialize, (params)));
+        BeaconProxy proxy = new BeaconProxy(address(beacon), abi.encodeCall(ManagedToken.initialize, (params)));
         return ManagedToken(address(proxy));
     }
 
@@ -327,7 +349,6 @@ contract ManagedTokenTest is Test {
         address[] memory initialMinters,
         address[] memory initialBurners
     ) private {
-        ManagedToken implementation = new ManagedToken();
         IManagedToken.InitializeParams memory params = IManagedToken.InitializeParams({
             name: "OnRe USD",
             symbol: "ONusd",
@@ -339,12 +360,18 @@ contract ManagedTokenTest is Test {
         });
 
         vm.expectRevert(IManagedToken.ZeroAddressError.selector);
-        new ERC1967Proxy(address(implementation), abi.encodeCall(ManagedToken.initialize, (params)));
+        new BeaconProxy(address(beacon), abi.encodeCall(ManagedToken.initialize, (params)));
     }
 
     function _singleAddress(address account) private pure returns (address[] memory accounts) {
         accounts = new address[](1);
         accounts[0] = account;
+    }
+}
+
+contract ManagedTokenV2 is ManagedToken {
+    function version() external pure returns (uint256) {
+        return 2;
     }
 }
 

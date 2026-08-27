@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {Test} from "forge-std/Test.sol";
 import {OnReDiamondInit} from "../src/diamond/OnReDiamondInit.sol";
 import {Diamond} from "../src/diamond/contracts/Diamond.sol";
@@ -10,6 +11,7 @@ import {DiamondCutFacet} from "../src/diamond/contracts/facets/DiamondCutFacet.s
 import {IDiamondCut} from "../src/diamond/contracts/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../src/diamond/contracts/interfaces/IDiamondLoupe.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
+import {ManagedToken} from "../src/ManagedToken.sol";
 import {LibDiamond} from "../src/diamond/contracts/libraries/LibDiamond.sol";
 import {LibOnReStorage} from "../src/diamond/LibOnReStorage.sol";
 import {DiamondProxy} from "../src/generated/DiamondProxy.sol";
@@ -18,6 +20,7 @@ import {
     ApproverAlreadyExistsError,
     BossRoleManagedSeparatelyError,
     BothApproversFilledError,
+    InvalidManagedTokenBeaconError,
     NoChangeError,
     NotPendingBossError,
     UnsupportedRoleError,
@@ -34,10 +37,17 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     address private upgrader = makeAddr("upgrader");
     address private other = makeAddr("other");
     IDiamondProxy private app;
+    UpgradeableBeacon private managedTokenBeacon;
 
     function setUp() public {
+        managedTokenBeacon = new UpgradeableBeacon(address(new ManagedToken()), upgrader);
         InitializeParams memory params = InitializeParams({
-            boss: boss, admin: admin, worker: worker, upgrader: upgrader, approvers: new address[](0)
+            boss: boss,
+            admin: admin,
+            worker: worker,
+            upgrader: upgrader,
+            managedTokenBeacon: address(managedTokenBeacon),
+            approvers: new address[](0)
         });
         app = _deployDiamondApp(params);
     }
@@ -49,8 +59,9 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
     function test_AtomicDeploymentInstallsStandardAndApplicationFacets() public view {
         IDiamondLoupe loupe = IDiamondLoupe(address(app));
-        assertEq(loupe.facetAddresses().length, 12);
-        assertEq(loupe.facets().length, 12);
+        assertEq(loupe.facetAddresses().length, 13);
+        assertEq(loupe.facets().length, 13);
+        assertTrue(loupe.facetAddress(IDiamondProxy.deployManagedToken.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.registerManagedToken.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.initializeBuffer.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.marketStats.selector) != address(0));
@@ -381,7 +392,12 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
         // A deployer that is itself the configured upgrader keeps the role.
         InitializeParams memory params = InitializeParams({
-            boss: boss, admin: admin, worker: worker, upgrader: address(this), approvers: new address[](0)
+            boss: boss,
+            admin: admin,
+            worker: worker,
+            upgrader: address(this),
+            managedTokenBeacon: address(managedTokenBeacon),
+            approvers: new address[](0)
         });
         IDiamondProxy retained = _deployDiamondApp(params);
         assertTrue(retained.hasRole(upgraderRole, address(this)));
@@ -414,6 +430,21 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.upgrader = upgrader;
+        params.managedTokenBeacon = address(0);
+        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenBeaconError.selector, params.managedTokenBeacon));
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.managedTokenBeacon = other;
+        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenBeaconError.selector, params.managedTokenBeacon));
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        UpgradeableBeacon incompatibleBeacon =
+            new UpgradeableBeacon(address(new DiamondIncompatibleManagedToken()), upgrader);
+        params.managedTokenBeacon = address(incompatibleBeacon);
+        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenBeaconError.selector, params.managedTokenBeacon));
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.managedTokenBeacon = address(managedTokenBeacon);
         params.approvers = new address[](3);
         params.approvers[0] = makeAddr("approverA");
         params.approvers[1] = makeAddr("approverB");
@@ -566,10 +597,13 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
             admin: makeAddr("initAdmin"),
             worker: makeAddr("initWorker"),
             upgrader: makeAddr("initUpgrader"),
+            managedTokenBeacon: address(managedTokenBeacon),
             approvers: new address[](0)
         });
     }
 }
+
+contract DiamondIncompatibleManagedToken {}
 
 contract DiamondTestFacetV1 {
     function version() external pure returns (uint256) {

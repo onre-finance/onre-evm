@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
@@ -31,6 +32,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
 
     IDiamondProxy internal app;
     ManagedToken internal managedToken;
+    UpgradeableBeacon internal managedTokenBeacon;
     MockUsd internal usd;
 
     address internal worker = makeAddr("worker");
@@ -57,20 +59,24 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
 
         address[] memory approvers = new address[](1);
         approvers[0] = approver;
+        managedTokenBeacon = new UpgradeableBeacon(address(new ManagedToken()), address(this));
         app = _deployDiamondApp(
             InitializeParams({
-                boss: address(this), admin: admin, worker: worker, upgrader: makeAddr("upgrader"), approvers: approvers
+                boss: address(this),
+                admin: admin,
+                worker: worker,
+                upgrader: makeAddr("upgrader"),
+                managedTokenBeacon: address(managedTokenBeacon),
+                approvers: approvers
             })
         );
 
-        managedToken = _deployToken(address(app));
+        managedToken = _deployManagedTokenThroughDiamond(9);
         usd = new MockUsd();
 
         app.setPermissionlessSettlementAccount(permissionlessSettlementAccount);
         _approvePermissionlessSettlementToken(address(usd));
         _approvePermissionlessSettlementToken(address(managedToken));
-        app.registerManagedToken(address(managedToken));
-
         pricerId = app.createPricer(address(managedToken), PricingDenomination.Usd);
         app.addPricingVector(
             pricerId, PricingVector({startTime: 1, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})
@@ -201,7 +207,6 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
     }
 
     function _deployToken(address burner, uint8 decimals_) internal returns (ManagedToken token) {
-        ManagedToken implementation = new ManagedToken();
         address[] memory initialMinters = new address[](2);
         initialMinters[0] = address(this);
         initialMinters[1] = burner;
@@ -217,7 +222,17 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
             initialBurners: initialBurners
         });
         token = ManagedToken(
-            address(new ERC1967Proxy(address(implementation), abi.encodeCall(ManagedToken.initialize, (params))))
+            address(new BeaconProxy(address(managedTokenBeacon), abi.encodeCall(ManagedToken.initialize, (params))))
+        );
+    }
+
+    function _deployManagedTokenThroughDiamond(uint8 decimals_) internal returns (ManagedToken token) {
+        address[] memory initialMinters = new address[](1);
+        initialMinters[0] = address(this);
+        token = ManagedToken(
+            app.deployManagedToken(
+                "OnRe USD", "ONusd", decimals_, address(this), address(this), initialMinters, new address[](0)
+            )
         );
     }
 }

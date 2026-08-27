@@ -45,12 +45,12 @@ are generated and git-ignored. `pnpm test` does both in order.
 2. The proxy constructor installs `DiamondCutFacet` and `DiamondLoupeFacet`,
    registers the ERC-165 ids, and grants `UPGRADER_ROLE` to the deployment
    wallet so it can sign the next step.
-3. Deploys the nine application facets and `OnReDiamondInit`.
+3. Deploys the eleven application facets and `OnReDiamondInit`.
 4. Sends one `diamondCut` that adds every application selector and delegatecalls
    `OnReDiamondInit.init` with `initArgs`.
-5. `init` seeds boss/admin/worker/upgrader and the approvers, then revokes the
-   deployer's bootstrap `UPGRADER_ROLE` — unless the deployer *is*
-   `ONRE_UPGRADER`.
+5. `init` validates and stores the managed-token beacon, seeds
+   boss/admin/worker/upgrader and the approvers, then revokes the deployer's
+   bootstrap `UPGRADER_ROLE` — unless the deployer *is* `ONRE_UPGRADER`.
 
 Step 5 is the one to keep in mind: **after a fresh deployment, the deployment
 wallet can no longer upgrade the diamond** unless it was named as
@@ -60,10 +60,33 @@ deployment wallet. For mainnet, set it to the upgrade multisig.
 ## Registering a managed token
 
 Managed tokens are issued and redeemed by the Diamond; they are not pre-minted.
-Before enabling offers for a token, its token administrator must call
-`grantMintAndBurnRoles(diamond)` on the `ManagedToken`, then the application boss
-calls `registerManagedToken(managedToken)` on the Diamond. A missing mint role makes
-`AssetToManaged` execution revert atomically, and a missing burn role makes
+Deploy one `ManagedToken` implementation and one OpenZeppelin
+`UpgradeableBeacon` per chain and release cohort before the Diamond. Set
+`ONRE_MANAGED_TOKEN_BEACON` to that beacon when deploying the Diamond. The
+Diamond initializer validates and stores it for the managed-token factory facet.
+The beacon owner must be the token-upgrade multisig or timelock; the Diamond does
+not receive beacon-upgrade authority.
+
+After verifying the Diamond, connect the application boss through the block
+explorer's **Write Contract** page and call `deployManagedToken` with the name,
+symbol, decimals, token administrator, CCIP administrator, and any additional
+initial minters and burners. The facet atomically deploys and initializes a
+`BeaconProxy`, grants the Diamond mint and burn authority, registers the token,
+records it in the Diamond's deployment registry, and emits
+`ManagedTokenDeployed`. No per-token deployment code, initializer transaction,
+role-grant transaction, or registration transaction is required.
+
+To upgrade the managed-token fleet, the beacon owner calls
+`UpgradeableBeacon.upgradeTo(newImplementation)` once. Every proxy pointing to
+that beacon begins using the new implementation while retaining its own state.
+Token administrators do not control implementation upgrades. Use separate
+beacons when token groups require independent release schedules.
+
+For an externally deployed compatible token, its token administrator must call
+`grantMintAndBurnRoles(diamond)` and the application boss must call
+`registerManagedToken(managedToken)`. Tokens deployed through the Diamond facet
+already have both permissions and are already registered. A missing mint role
+makes `AssetToManaged` execution revert atomically, and a missing burn role makes
 `ManagedToAsset` execution revert atomically.
 
 The Diamond accepts ManagedToken deployments configured with 0 through 18

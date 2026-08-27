@@ -33,6 +33,9 @@ library LibOnReStorage {
         mapping(bytes32 quoterId => PropRfqState state) propRfqStates;
         address permissionlessSettlementAccount;
         mapping(address managedToken => BufferState state) bufferStates;
+        address managedTokenBeacon;
+        address[] deployedManagedTokens;
+        mapping(address managedToken => bool deployedByDiamond) managedTokenDeployedByDiamond;
     }
 
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;

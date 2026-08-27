@@ -45,6 +45,7 @@ contract OnReConfigTest is OnReAppTestBase {
         assertTrue(tokenConfig.exists);
         assertEq(tokenConfig.decimals, 9);
         assertEq(managedToken.totalSupply(), 0);
+        assertTrue(app.isManagedTokenDeployed(address(managedToken)));
 
         Pricer memory pricer = app.getPricer(pricerId);
         assertEq(pricerId, OnReIds._pricerId(address(managedToken), PricingDenomination.Usd));

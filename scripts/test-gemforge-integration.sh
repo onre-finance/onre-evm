@@ -7,9 +7,11 @@ cd "$(dirname "$0")/.."
 readonly RPC_URL="http://127.0.0.1:18545"
 readonly MNEMONIC="test test test test test test test test test test test junk"
 readonly DEPLOYER="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+readonly DEPLOYER_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 readonly UPGRADER="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 readonly UPGRADER_KEY="0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
 readonly BOSS="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
+readonly BOSS_KEY="$(cast wallet private-key "$MNEMONIC" 2)"
 readonly ADMIN="0x90F79bf6EB2c4f870365E785982E1f101E93b906"
 readonly WORKER="0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65"
 readonly APPROVER_1="0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
@@ -20,6 +22,7 @@ readonly GEMFORGE_CONFIG="test/integration/gemforge.config.cjs"
 test_dir="$(mktemp -d)"
 deployments="$test_dir/deployments.json"
 anvil_pid=""
+managed_token_beacon=""
 
 cleanup() {
   if [[ -n "$anvil_pid" ]]; then
@@ -67,6 +70,7 @@ run_fixture() {
     ONRE_ADMIN="$ADMIN" \
     ONRE_WORKER="$WORKER" \
     ONRE_UPGRADER="$UPGRADER" \
+    ONRE_MANAGED_TOKEN_BEACON="$managed_token_beacon" \
     ONRE_APPROVER_1="$APPROVER_1" \
     ONRE_APPROVER_2="$APPROVER_2" \
     "$@"
@@ -88,6 +92,17 @@ send() {
   cast send --rpc-url "$RPC_URL" --private-key "$UPGRADER_KEY" "$@" >/dev/null
 }
 
+send_as_boss() {
+  cast send --rpc-url "$RPC_URL" --private-key "$BOSS_KEY" "$@" >/dev/null
+}
+
+deploy_contract() {
+  local output
+  output="$(forge create --broadcast --rpc-url "$RPC_URL" --private-key "$DEPLOYER_KEY" "$@")"
+  printf '%s\n' "$output" >&2
+  printf '%s\n' "$output" | sed -n 's/^Deployed to: //p' | tail -1
+}
+
 manual_cut_data() {
   printf '%s\n' "$1" | sed -n 's/^GEMFORGE: Tx data: //p' | tail -1
 }
@@ -101,6 +116,20 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 cast chain-id --rpc-url "$RPC_URL" >/dev/null 2>&1 || fail "Anvil did not start"
+
+echo "Deploying managed-token implementation and beacon..."
+managed_token_implementation="$(deploy_contract src/ManagedToken.sol:ManagedToken)"
+[[ "$managed_token_implementation" == 0x* ]] || fail "ManagedToken implementation deployment failed"
+managed_token_beacon="$(
+  deploy_contract \
+    lib/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon \
+    --constructor-args "$managed_token_implementation" "$UPGRADER"
+)"
+[[ "$managed_token_beacon" == 0x* ]] || fail "UpgradeableBeacon deployment failed"
+assert_address_eq \
+  "$managed_token_implementation" \
+  "$(call "$managed_token_beacon" 'implementation()(address)')" \
+  "beacon implementation"
 
 echo "Deploying fixture v1 through CREATE3..."
 build_fixture v1
@@ -133,9 +162,49 @@ assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$admin_rol
 assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$worker_role" "$WORKER")" "worker role"
 assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$upgrader_role" "$UPGRADER")" "final upgrader role"
 assert_eq "false" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$upgrader_role" "$DEPLOYER")" "bootstrap upgrader handoff"
+assert_address_eq "$managed_token_beacon" "$(call "$diamond" 'managedTokenBeacon()(address)')" "managed-token beacon"
 app_config="$(call "$diamond" 'appConfig()(bool,address,address)')"
 printf '%s\n' "$app_config" | grep -qi "$APPROVER_1" || fail "initializer approver 1 was not stored"
 printf '%s\n' "$app_config" | grep -qi "$APPROVER_2" || fail "initializer approver 2 was not stored"
+
+send_as_boss \
+  "$diamond" \
+  'deployManagedToken(string,string,uint8,address,address,address[],address[])(address)' \
+  'Managed USD' \
+  'MUSD' \
+  6 \
+  "$BOSS" \
+  "$BOSS" \
+  '[]' \
+  '[]'
+assert_eq "1" "$(call "$diamond" 'deployedManagedTokenCount()(uint256)')" "deployed managed-token count"
+managed_token="$(call "$diamond" 'deployedManagedTokenAt(uint256)(address)' 0)"
+[[ "$(cast code --rpc-url "$RPC_URL" "$managed_token")" != "0x" ]] || fail "managed token has no runtime code"
+assert_eq "6" "$(call "$managed_token" 'decimals()(uint8)')" "managed-token decimals"
+assert_eq "true" "$(call "$managed_token" 'isMinter(address)(bool)' "$diamond")" "diamond mint authority"
+assert_eq "true" "$(call "$managed_token" 'isBurner(address)(bool)' "$diamond")" "diamond burn authority"
+assert_eq "true" "$(call "$diamond" 'isManagedTokenDeployed(address)(bool)' "$managed_token")" "deployment registry"
+
+send_as_boss \
+  "$diamond" \
+  'deployManagedToken(string,string,uint8,address,address,address[],address[])(address)' \
+  'Managed EUR' \
+  'MEUR' \
+  9 \
+  "$BOSS" \
+  "$BOSS" \
+  '[]' \
+  '[]'
+assert_eq "2" "$(call "$diamond" 'deployedManagedTokenCount()(uint256)')" "deployed managed-token count"
+second_managed_token="$(call "$diamond" 'deployedManagedTokenAt(uint256)(address)' 1)"
+
+managed_token_v2_implementation="$(deploy_contract test/integration/ManagedTokenV2.sol:ManagedTokenV2)"
+[[ "$managed_token_v2_implementation" == 0x* ]] || fail "ManagedToken V2 implementation deployment failed"
+send "$managed_token_beacon" 'upgradeTo(address)' "$managed_token_v2_implementation"
+assert_eq "2" "$(call "$managed_token" 'version()(uint256)')" "first managed-token version"
+assert_eq "2" "$(call "$second_managed_token" 'version()(uint256)')" "second managed-token version"
+assert_eq "6" "$(call "$managed_token" 'decimals()(uint8)')" "first managed-token decimals after upgrade"
+assert_eq "9" "$(call "$second_managed_token" 'decimals()(uint8)')" "second managed-token decimals after upgrade"
 
 zero_address="0x0000000000000000000000000000000000000000"
 protected_signatures=(

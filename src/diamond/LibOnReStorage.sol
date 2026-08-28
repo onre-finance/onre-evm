@@ -33,7 +33,7 @@ library LibOnReStorage {
         mapping(bytes32 quoterId => PropRfqState state) propRfqStates;
         address permissionlessSettlementAccount;
         mapping(address managedToken => BufferState state) bufferStates;
-        address managedTokenBeacon;
+        address managedTokenImplementation;
         address[] deployedManagedTokens;
         mapping(address managedToken => bool deployedByDiamond) managedTokenDeployedByDiamond;
     }

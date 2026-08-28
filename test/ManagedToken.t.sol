@@ -4,19 +4,18 @@ pragma solidity 0.8.35;
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
 import {IBufferController} from "../src/IBufferController.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
 
 contract ManagedTokenTest is Test {
-    ManagedToken private token;
-    UpgradeableBeacon private beacon;
+    bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
-    address private beaconOwner = makeAddr("beaconOwner");
+    ManagedToken private token;
+    address private implementation;
+
     address private admin = makeAddr("admin");
     address private ccipAdmin = makeAddr("ccipAdmin");
     address private minter = makeAddr("minter");
@@ -25,7 +24,7 @@ contract ManagedTokenTest is Test {
     address private user = makeAddr("user");
 
     function setUp() public {
-        beacon = new UpgradeableBeacon(address(new ManagedToken()), beaconOwner);
+        implementation = address(new ManagedToken());
         token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
     }
 
@@ -34,6 +33,7 @@ contract ManagedTokenTest is Test {
         assertEq(token.symbol(), "ONusd");
         assertEq(token.decimals(), 9);
         assertEq(token.getCCIPAdmin(), ccipAdmin);
+        assertTrue(token.hasRole(token.UPGRADER_ROLE(), admin));
         assertTrue(token.supportsInterface(type(IBurnMintERC20).interfaceId));
         assertTrue(token.supportsInterface(type(IGetCCIPAdmin).interfaceId));
         assertTrue(token.supportsInterface(type(IManagedToken).interfaceId));
@@ -292,7 +292,7 @@ contract ManagedTokenTest is Test {
         assertEq(token.balanceOf(address(controller)), 7e9);
     }
 
-    function test_OnlyBeaconOwnerCanUpgradeAllTokensAndPreserveState() public {
+    function test_AdminUpgradesOnlySelectedTokenAndPreservesState() public {
         ManagedToken secondToken = _deployToken(6, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
 
         vm.prank(minter);
@@ -300,16 +300,25 @@ contract ManagedTokenTest is Test {
 
         ManagedTokenV2 newImplementation = new ManagedTokenV2();
 
-        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, admin));
+        assertEq(_implementationOf(address(token)), implementation);
+        assertEq(_implementationOf(address(secondToken)), implementation);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user, token.UPGRADER_ROLE()
+            )
+        );
+        vm.prank(user);
+        token.upgradeToAndCall(address(newImplementation), "");
+
         vm.prank(admin);
-        beacon.upgradeTo(address(newImplementation));
+        token.upgradeToAndCall(address(newImplementation), "");
 
-        vm.prank(beaconOwner);
-        beacon.upgradeTo(address(newImplementation));
-
-        assertEq(beacon.implementation(), address(newImplementation));
+        assertEq(_implementationOf(address(token)), address(newImplementation));
+        assertEq(_implementationOf(address(secondToken)), implementation);
         assertEq(ManagedTokenV2(address(token)).version(), 2);
-        assertEq(ManagedTokenV2(address(secondToken)).version(), 2);
+        (bool secondUpgraded,) = address(secondToken).staticcall(abi.encodeCall(ManagedTokenV2.version, ())); // selector is absent on V1
+        assertFalse(secondUpgraded);
         assertEq(token.decimals(), 9);
         assertEq(secondToken.decimals(), 6);
         assertEq(token.balanceOf(user), 100e9);
@@ -339,7 +348,7 @@ contract ManagedTokenTest is Test {
             initialBurners: initialBurners
         });
 
-        BeaconProxy proxy = new BeaconProxy(address(beacon), abi.encodeCall(ManagedToken.initialize, (params)));
+        ERC1967Proxy proxy = new ERC1967Proxy(implementation, abi.encodeCall(ManagedToken.initialize, (params)));
         return ManagedToken(address(proxy));
     }
 
@@ -360,7 +369,11 @@ contract ManagedTokenTest is Test {
         });
 
         vm.expectRevert(IManagedToken.ZeroAddressError.selector);
-        new BeaconProxy(address(beacon), abi.encodeCall(ManagedToken.initialize, (params)));
+        new ERC1967Proxy(implementation, abi.encodeCall(ManagedToken.initialize, (params)));
+    }
+
+    function _implementationOf(address proxy) private view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, IMPLEMENTATION_SLOT))));
     }
 
     function _singleAddress(address account) private pure returns (address[] memory accounts) {

@@ -35,10 +35,10 @@ contract OnReDiamondInit {
             revert BothApproversFilledError();
         }
 
-        // Lock initialization before validating the externally supplied beacon.
+        // Lock initialization before validating the externally supplied implementation.
         // Any revert below rolls this write back with the rest of the transaction.
         s.initialized = true;
-        LibOnReManagedTokenFactory._initialize(params.managedTokenBeacon);
+        LibOnReManagedTokenFactory._initialize(params.managedTokenImplementation);
         LibOnReAccessControl._initialize(params.boss, params.admin, params.worker, params.upgrader);
 
         uint256 approverLength = params.approvers.length;

@@ -7,14 +7,17 @@ import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGe
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {
     IERC20 as ChainlinkIERC20
 } from "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
-contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessControlUpgradeable {
+contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
+
+    bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     EnumerableSet.AddressSet private _minters;
     EnumerableSet.AddressSet private _burners;
@@ -40,6 +43,7 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         _decimals = params.decimals;
         _ccipAdmin = params.ccipAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, params.admin);
+        _grantRole(UPGRADER_ROLE, params.admin);
 
         uint256 initialMintersLength = params.initialMinters.length;
         for (uint256 i = 0; i < initialMintersLength;) {
@@ -187,6 +191,9 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         }
         _;
     }
+
+    // solhint-disable-next-line no-empty-blocks
+    function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
 
     function _addMinter(address account) internal {
         if (account == address(0)) {

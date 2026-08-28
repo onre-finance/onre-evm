@@ -1,24 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
-import {IBeacon} from "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {IManagedToken} from "../IManagedToken.sol";
 import {ManagedToken} from "../ManagedToken.sol";
-import {InvalidManagedTokenBeaconError} from "../types/OnReAppErrors.sol";
-import {ManagedTokenBeaconConfigured, ManagedTokenDeployed} from "../types/OnReAppEvents.sol";
+import {InvalidManagedTokenImplementationError, NoChangeError} from "../types/OnReAppErrors.sol";
+import {ManagedTokenDeployed, ManagedTokenImplementationSet} from "../types/OnReAppEvents.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReConfig} from "./LibOnReConfig.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 
 /// @notice Diamond-owned deployment and enumeration of canonical managed tokens.
 library LibOnReManagedTokenFactory {
-    function _initialize(address beacon) internal {
-        _validateBeacon(beacon);
-        LibOnReStorage._appStorage().managedTokenBeacon = beacon;
-        emit ManagedTokenBeaconConfigured(beacon);
+    function _initialize(address implementation) internal {
+        _validateImplementation(implementation);
+        LibOnReStorage._appStorage().managedTokenImplementation = implementation;
+        emit ManagedTokenImplementationSet(address(0), implementation);
+    }
+
+    function _setManagedTokenImplementation(address newImplementation) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        _validateImplementation(newImplementation);
+
+        LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
+        address previousImplementation = s.managedTokenImplementation;
+        if (newImplementation == previousImplementation) revert NoChangeError();
+
+        s.managedTokenImplementation = newImplementation;
+        emit ManagedTokenImplementationSet(previousImplementation, newImplementation);
     }
 
     function _deployManagedToken(
@@ -45,7 +56,8 @@ library LibOnReManagedTokenFactory {
         });
 
         LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
-        managedToken = address(new BeaconProxy(s.managedTokenBeacon, abi.encodeCall(ManagedToken.initialize, (params))));
+        managedToken =
+            address(new ERC1967Proxy(s.managedTokenImplementation, abi.encodeCall(ManagedToken.initialize, (params))));
 
         s.deployedManagedTokens.push(managedToken);
         s.managedTokenDeployedByDiamond[managedToken] = true;
@@ -54,8 +66,8 @@ library LibOnReManagedTokenFactory {
         emit ManagedTokenDeployed(managedToken, admin, ccipAdmin, name, symbol, decimals);
     }
 
-    function _managedTokenBeacon() internal view returns (address) {
-        return LibOnReStorage._appStorage().managedTokenBeacon;
+    function _managedTokenImplementation() internal view returns (address) {
+        return LibOnReStorage._appStorage().managedTokenImplementation;
     }
 
     function _deployedManagedTokenCount() internal view returns (uint256) {
@@ -74,20 +86,12 @@ library LibOnReManagedTokenFactory {
         return LibOnReStorage._appStorage().managedTokenDeployedByDiamond[managedToken];
     }
 
-    function _validateBeacon(address beacon) private view {
-        if (beacon == address(0) || beacon.code.length == 0) {
-            revert InvalidManagedTokenBeaconError(beacon);
-        }
-
-        try IBeacon(beacon).implementation() returns (address implementation) {
-            if (
-                implementation.code.length == 0
-                    || !ERC165Checker.supportsInterface(implementation, type(IManagedToken).interfaceId)
-            ) {
-                revert InvalidManagedTokenBeaconError(beacon);
-            }
-        } catch {
-            revert InvalidManagedTokenBeaconError(beacon);
+    function _validateImplementation(address implementation) private view {
+        if (
+            implementation == address(0) || implementation.code.length == 0
+                || !ERC165Checker.supportsInterface(implementation, type(IManagedToken).interfaceId)
+        ) {
+            revert InvalidManagedTokenImplementationError(implementation);
         }
     }
 

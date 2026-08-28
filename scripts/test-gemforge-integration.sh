@@ -18,11 +18,12 @@ readonly APPROVER_1="0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc"
 readonly APPROVER_2="0x976EA74026E726554dB657fA54763abd0C3a0aa9"
 readonly CREATE3_SALT="0x1111111111111111111111111111111111111111111111111111111111111111"
 readonly GEMFORGE_CONFIG="test/integration/gemforge.config.cjs"
+readonly IMPLEMENTATION_SLOT="0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
 
 test_dir="$(mktemp -d)"
 deployments="$test_dir/deployments.json"
 anvil_pid=""
-managed_token_beacon=""
+managed_token_implementation=""
 
 cleanup() {
   if [[ -n "$anvil_pid" ]]; then
@@ -70,7 +71,7 @@ run_fixture() {
     ONRE_ADMIN="$ADMIN" \
     ONRE_WORKER="$WORKER" \
     ONRE_UPGRADER="$UPGRADER" \
-    ONRE_MANAGED_TOKEN_BEACON="$managed_token_beacon" \
+    ONRE_MANAGED_TOKEN_IMPLEMENTATION="$managed_token_implementation" \
     ONRE_APPROVER_1="$APPROVER_1" \
     ONRE_APPROVER_2="$APPROVER_2" \
     "$@"
@@ -103,6 +104,12 @@ deploy_contract() {
   printf '%s\n' "$output" | sed -n 's/^Deployed to: //p' | tail -1
 }
 
+implementation_of() {
+  local value
+  value="$(cast storage --rpc-url "$RPC_URL" "$1" "$IMPLEMENTATION_SLOT")"
+  printf '0x%s\n' "${value: -40}"
+}
+
 manual_cut_data() {
   printf '%s\n' "$1" | sed -n 's/^GEMFORGE: Tx data: //p' | tail -1
 }
@@ -117,19 +124,9 @@ for _ in $(seq 1 50); do
 done
 cast chain-id --rpc-url "$RPC_URL" >/dev/null 2>&1 || fail "Anvil did not start"
 
-echo "Deploying managed-token implementation and beacon..."
+echo "Deploying managed-token UUPS implementation..."
 managed_token_implementation="$(deploy_contract src/ManagedToken.sol:ManagedToken)"
 [[ "$managed_token_implementation" == 0x* ]] || fail "ManagedToken implementation deployment failed"
-managed_token_beacon="$(
-  deploy_contract \
-    lib/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon \
-    --constructor-args "$managed_token_implementation" "$UPGRADER"
-)"
-[[ "$managed_token_beacon" == 0x* ]] || fail "UpgradeableBeacon deployment failed"
-assert_address_eq \
-  "$managed_token_implementation" \
-  "$(call "$managed_token_beacon" 'implementation()(address)')" \
-  "beacon implementation"
 
 echo "Deploying fixture v1 through CREATE3..."
 build_fixture v1
@@ -162,7 +159,10 @@ assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$admin_rol
 assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$worker_role" "$WORKER")" "worker role"
 assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$upgrader_role" "$UPGRADER")" "final upgrader role"
 assert_eq "false" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$upgrader_role" "$DEPLOYER")" "bootstrap upgrader handoff"
-assert_address_eq "$managed_token_beacon" "$(call "$diamond" 'managedTokenBeacon()(address)')" "managed-token beacon"
+assert_address_eq \
+  "$managed_token_implementation" \
+  "$(call "$diamond" 'managedTokenImplementation()(address)')" \
+  "managed-token implementation"
 app_config="$(call "$diamond" 'appConfig()(bool,address,address)')"
 printf '%s\n' "$app_config" | grep -qi "$APPROVER_1" || fail "initializer approver 1 was not stored"
 printf '%s\n' "$app_config" | grep -qi "$APPROVER_2" || fail "initializer approver 2 was not stored"
@@ -200,9 +200,16 @@ second_managed_token="$(call "$diamond" 'deployedManagedTokenAt(uint256)(address
 
 managed_token_v2_implementation="$(deploy_contract test/integration/ManagedTokenV2.sol:ManagedTokenV2)"
 [[ "$managed_token_v2_implementation" == 0x* ]] || fail "ManagedToken V2 implementation deployment failed"
-send "$managed_token_beacon" 'upgradeTo(address)' "$managed_token_v2_implementation"
+send_as_boss "$managed_token" 'upgradeToAndCall(address,bytes)' "$managed_token_v2_implementation" '0x'
+assert_address_eq \
+  "$managed_token_v2_implementation" \
+  "$(implementation_of "$managed_token")" \
+  "first managed-token implementation after upgrade"
+assert_address_eq \
+  "$managed_token_implementation" \
+  "$(implementation_of "$second_managed_token")" \
+  "second managed-token implementation after first upgrade"
 assert_eq "2" "$(call "$managed_token" 'version()(uint256)')" "first managed-token version"
-assert_eq "2" "$(call "$second_managed_token" 'version()(uint256)')" "second managed-token version"
 assert_eq "6" "$(call "$managed_token" 'decimals()(uint8)')" "first managed-token decimals after upgrade"
 assert_eq "9" "$(call "$second_managed_token" 'decimals()(uint8)')" "second managed-token decimals after upgrade"
 

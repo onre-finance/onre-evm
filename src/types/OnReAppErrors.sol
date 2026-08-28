@@ -6,7 +6,7 @@ error InvalidAmountError();
 error InvalidFeeError();
 error InvalidBasisPointsError();
 error InvalidTokenError();
-error InvalidManagedTokenBeaconError(address beacon);
+error InvalidManagedTokenImplementationError(address implementation);
 error InvalidDecimalsError();
 error InvalidApprovalError();
 error InvalidPermissionlessSettlementAccountError(address account);

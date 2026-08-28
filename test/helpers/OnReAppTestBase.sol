@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
-import {BeaconProxy} from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
@@ -32,7 +31,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
 
     IDiamondProxy internal app;
     ManagedToken internal managedToken;
-    UpgradeableBeacon internal managedTokenBeacon;
+    address internal managedTokenImplementation;
     MockUsd internal usd;
 
     address internal worker = makeAddr("worker");
@@ -59,14 +58,14 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
 
         address[] memory approvers = new address[](1);
         approvers[0] = approver;
-        managedTokenBeacon = new UpgradeableBeacon(address(new ManagedToken()), address(this));
+        managedTokenImplementation = address(new ManagedToken());
         app = _deployDiamondApp(
             InitializeParams({
                 boss: address(this),
                 admin: admin,
                 worker: worker,
                 upgrader: makeAddr("upgrader"),
-                managedTokenBeacon: address(managedTokenBeacon),
+                managedTokenImplementation: managedTokenImplementation,
                 approvers: approvers
             })
         );
@@ -222,7 +221,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
             initialBurners: initialBurners
         });
         token = ManagedToken(
-            address(new BeaconProxy(address(managedTokenBeacon), abi.encodeCall(ManagedToken.initialize, (params))))
+            address(new ERC1967Proxy(managedTokenImplementation, abi.encodeCall(ManagedToken.initialize, (params))))
         );
     }
 

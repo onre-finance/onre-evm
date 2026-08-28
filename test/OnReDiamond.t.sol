@@ -3,7 +3,6 @@ pragma solidity 0.8.35;
 
 import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
-import {UpgradeableBeacon} from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import {Test} from "forge-std/Test.sol";
 import {OnReDiamondInit} from "../src/diamond/OnReDiamondInit.sol";
 import {Diamond} from "../src/diamond/contracts/Diamond.sol";
@@ -20,7 +19,7 @@ import {
     ApproverAlreadyExistsError,
     BossRoleManagedSeparatelyError,
     BothApproversFilledError,
-    InvalidManagedTokenBeaconError,
+    InvalidManagedTokenImplementationError,
     NoChangeError,
     NotPendingBossError,
     UnsupportedRoleError,
@@ -37,16 +36,16 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     address private upgrader = makeAddr("upgrader");
     address private other = makeAddr("other");
     IDiamondProxy private app;
-    UpgradeableBeacon private managedTokenBeacon;
+    address private managedTokenImplementation;
 
     function setUp() public {
-        managedTokenBeacon = new UpgradeableBeacon(address(new ManagedToken()), upgrader);
+        managedTokenImplementation = address(new ManagedToken());
         InitializeParams memory params = InitializeParams({
             boss: boss,
             admin: admin,
             worker: worker,
             upgrader: upgrader,
-            managedTokenBeacon: address(managedTokenBeacon),
+            managedTokenImplementation: managedTokenImplementation,
             approvers: new address[](0)
         });
         app = _deployDiamondApp(params);
@@ -396,7 +395,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
             admin: admin,
             worker: worker,
             upgrader: address(this),
-            managedTokenBeacon: address(managedTokenBeacon),
+            managedTokenImplementation: managedTokenImplementation,
             approvers: new address[](0)
         });
         IDiamondProxy retained = _deployDiamondApp(params);
@@ -430,21 +429,26 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.upgrader = upgrader;
-        params.managedTokenBeacon = address(0);
-        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenBeaconError.selector, params.managedTokenBeacon));
+        params.managedTokenImplementation = address(0);
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
+        );
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
-        params.managedTokenBeacon = other;
-        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenBeaconError.selector, params.managedTokenBeacon));
+        params.managedTokenImplementation = other;
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
+        );
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
-        UpgradeableBeacon incompatibleBeacon =
-            new UpgradeableBeacon(address(new DiamondIncompatibleManagedToken()), upgrader);
-        params.managedTokenBeacon = address(incompatibleBeacon);
-        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenBeaconError.selector, params.managedTokenBeacon));
+        DiamondIncompatibleManagedToken incompatibleImplementation = new DiamondIncompatibleManagedToken();
+        params.managedTokenImplementation = address(incompatibleImplementation);
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
+        );
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
-        params.managedTokenBeacon = address(managedTokenBeacon);
+        params.managedTokenImplementation = managedTokenImplementation;
         params.approvers = new address[](3);
         params.approvers[0] = makeAddr("approverA");
         params.approvers[1] = makeAddr("approverB");
@@ -597,7 +601,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
             admin: makeAddr("initAdmin"),
             worker: makeAddr("initWorker"),
             upgrader: makeAddr("initUpgrader"),
-            managedTokenBeacon: address(managedTokenBeacon),
+            managedTokenImplementation: managedTokenImplementation,
             approvers: new address[](0)
         });
     }

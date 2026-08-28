@@ -20,8 +20,13 @@ contract OnReManagedTokenFactoryFacet {
         );
     }
 
-    function managedTokenBeacon() external view returns (address) {
-        return LibOnReManagedTokenFactory._managedTokenBeacon();
+    /// @notice Changes the UUPS implementation used only for future deployments.
+    function setManagedTokenImplementation(address newImplementation) external {
+        LibOnReManagedTokenFactory._setManagedTokenImplementation(newImplementation);
+    }
+
+    function managedTokenImplementation() external view returns (address) {
+        return LibOnReManagedTokenFactory._managedTokenImplementation();
     }
 
     function deployedManagedTokenCount() external view returns (uint256) {

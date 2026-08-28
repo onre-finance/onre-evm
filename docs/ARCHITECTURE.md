@@ -150,20 +150,22 @@ then routes output as Diamond or mint to settlement account to user. The
 settlement account is boss-configured, pre-approves the Diamond for every
 supported token, and retains no balance after a successful transaction.
 
-Managed-token instances are `BeaconProxy` contracts behind one
-`UpgradeableBeacon` per chain and release cohort. The beacon owner controls
-implementation upgrades for the entire cohort; token administrators retain only
-per-token operational authority. Each proxy keeps independent token metadata,
-decimals, balances, roles, CCIP administration, and Buffer configuration.
+Managed-token instances are independent `ERC1967Proxy` contracts using the UUPS
+upgrade mechanism implemented by `ManagedToken`. Each token administrator holds
+that proxy's `UPGRADER_ROLE`, so one token can move to a new implementation
+without changing any other token. Each proxy also keeps independent metadata,
+decimals, balances, operational roles, CCIP administration, and Buffer
+configuration.
 
 The Diamond's `OnReManagedTokenFactoryFacet` deploys and atomically initializes
 canonical proxies through the Diamond's block-explorer or Safe interface. Every
 factory deployment automatically grants the Diamond mint and burn authority,
 registers the token, appends it to the Diamond's deployment registry, and emits
-`ManagedTokenDeployed`. The application boss controls deployment, while the
-separate beacon owner controls implementation upgrades for the entire cohort.
-Externally deployed compatible tokens can still be registered, but are not
-reported as Diamond-deployed tokens.
+`ManagedTokenDeployed`. The application boss controls deployment and may change
+the implementation template used by future deployments. Changing that template
+does not upgrade existing tokens; each existing proxy must be upgraded
+individually by its token administrator. Externally deployed compatible tokens
+can still be registered, but are not reported as Diamond-deployed tokens.
 
 All minted supply is circulating unless governance explicitly registers an
 excluded-supply address. Operational vault assets remain physically held by the

@@ -48,7 +48,7 @@ are generated and git-ignored. `pnpm test` does both in order.
 3. Deploys the eleven application facets and `OnReDiamondInit`.
 4. Sends one `diamondCut` that adds every application selector and delegatecalls
    `OnReDiamondInit.init` with `initArgs`.
-5. `init` validates and stores the managed-token beacon, seeds
+5. `init` validates and stores the managed-token implementation, seeds
    boss/admin/worker/upgrader and the approvers, then revokes the deployer's
    bootstrap `UPGRADER_ROLE` — unless the deployer *is* `ONRE_UPGRADER`.
 
@@ -60,27 +60,26 @@ deployment wallet. For mainnet, set it to the upgrade multisig.
 ## Registering a managed token
 
 Managed tokens are issued and redeemed by the Diamond; they are not pre-minted.
-Deploy one `ManagedToken` implementation and one OpenZeppelin
-`UpgradeableBeacon` per chain and release cohort before the Diamond. Set
-`ONRE_MANAGED_TOKEN_BEACON` to that beacon when deploying the Diamond. The
-Diamond initializer validates and stores it for the managed-token factory facet.
-The beacon owner must be the token-upgrade multisig or timelock; the Diamond does
-not receive beacon-upgrade authority.
+Deploy one `ManagedToken` implementation before the Diamond. Set
+`ONRE_MANAGED_TOKEN_IMPLEMENTATION` to that address when deploying the Diamond.
+The Diamond initializer validates and stores it as the UUPS implementation
+template used by the managed-token factory facet.
 
 After verifying the Diamond, connect the application boss through the block
 explorer's **Write Contract** page and call `deployManagedToken` with the name,
 symbol, decimals, token administrator, CCIP administrator, and any additional
-initial minters and burners. The facet atomically deploys and initializes a
-`BeaconProxy`, grants the Diamond mint and burn authority, registers the token,
+initial minters and burners. The facet atomically deploys and initializes an
+`ERC1967Proxy`, grants the Diamond mint and burn authority, registers the token,
 records it in the Diamond's deployment registry, and emits
 `ManagedTokenDeployed`. No per-token deployment code, initializer transaction,
 role-grant transaction, or registration transaction is required.
 
-To upgrade the managed-token fleet, the beacon owner calls
-`UpgradeableBeacon.upgradeTo(newImplementation)` once. Every proxy pointing to
-that beacon begins using the new implementation while retaining its own state.
-Token administrators do not control implementation upgrades. Use separate
-beacons when token groups require independent release schedules.
+Each managed token upgrades independently. Its token administrator calls
+`upgradeToAndCall(newImplementation, data)` on that token proxy. Other managed
+tokens remain on their current implementations. To use a new implementation for
+future factory deployments, the application boss separately calls
+`setManagedTokenImplementation(newImplementation)` on the Diamond. Updating the
+factory template never upgrades an existing token.
 
 For an externally deployed compatible token, its token administrator must call
 `grantMintAndBurnRoles(diamond)` and the application boss must call

@@ -191,7 +191,6 @@ function initArgs() {
     process.env.ONRE_ADMIN,
     process.env.ONRE_WORKER,
     process.env.ONRE_UPGRADER,
-    process.env.ONRE_MANAGED_TOKEN_IMPLEMENTATION,
     approvers,
   ]
 }

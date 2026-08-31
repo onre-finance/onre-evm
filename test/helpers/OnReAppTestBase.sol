@@ -61,12 +61,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         managedTokenImplementation = address(new ManagedToken());
         app = _deployDiamondApp(
             InitializeParams({
-                boss: address(this),
-                admin: admin,
-                worker: worker,
-                upgrader: makeAddr("upgrader"),
-                managedTokenImplementation: managedTokenImplementation,
-                approvers: approvers
+                boss: address(this), admin: admin, worker: worker, upgrader: makeAddr("upgrader"), approvers: approvers
             })
         );
 
@@ -230,7 +225,14 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         initialMinters[0] = address(this);
         token = ManagedToken(
             app.deployManagedToken(
-                "OnRe USD", "ONusd", decimals_, address(this), address(this), initialMinters, new address[](0)
+                managedTokenImplementation,
+                "OnRe USD",
+                "ONusd",
+                decimals_,
+                address(this),
+                address(this),
+                initialMinters,
+                new address[](0)
             )
         );
     }

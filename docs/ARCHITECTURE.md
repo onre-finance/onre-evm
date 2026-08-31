@@ -161,11 +161,11 @@ The Diamond's `OnReManagedTokenFactoryFacet` deploys and atomically initializes
 canonical proxies through the Diamond's block-explorer or Safe interface. Every
 factory deployment automatically grants the Diamond mint and burn authority,
 registers the token, appends it to the Diamond's deployment registry, and emits
-`ManagedTokenDeployed`. The application boss controls deployment and may change
-the implementation template used by future deployments. Changing that template
-does not upgrade existing tokens; each existing proxy must be upgraded
-individually by its token administrator. Externally deployed compatible tokens
-can still be registered, but are not reported as Diamond-deployed tokens.
+`ManagedTokenDeployed`. The application boss supplies a previously deployed and
+validated implementation address for each deployment; the Diamond does not keep
+an implementation template. Each existing proxy is upgraded independently by
+its token administrator. Externally deployed compatible tokens can still be
+registered, but are not reported as Diamond-deployed tokens.
 
 All minted supply is circulating unless governance explicitly registers an
 excluded-supply address. Operational vault assets remain physically held by the

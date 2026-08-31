@@ -71,7 +71,6 @@ run_fixture() {
     ONRE_ADMIN="$ADMIN" \
     ONRE_WORKER="$WORKER" \
     ONRE_UPGRADER="$UPGRADER" \
-    ONRE_MANAGED_TOKEN_IMPLEMENTATION="$managed_token_implementation" \
     ONRE_APPROVER_1="$APPROVER_1" \
     ONRE_APPROVER_2="$APPROVER_2" \
     "$@"
@@ -159,17 +158,14 @@ assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$admin_rol
 assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$worker_role" "$WORKER")" "worker role"
 assert_eq "true" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$upgrader_role" "$UPGRADER")" "final upgrader role"
 assert_eq "false" "$(call "$diamond" 'hasRole(bytes32,address)(bool)' "$upgrader_role" "$DEPLOYER")" "bootstrap upgrader handoff"
-assert_address_eq \
-  "$managed_token_implementation" \
-  "$(call "$diamond" 'managedTokenImplementation()(address)')" \
-  "managed-token implementation"
 app_config="$(call "$diamond" 'appConfig()(bool,address,address)')"
 printf '%s\n' "$app_config" | grep -qi "$APPROVER_1" || fail "initializer approver 1 was not stored"
 printf '%s\n' "$app_config" | grep -qi "$APPROVER_2" || fail "initializer approver 2 was not stored"
 
 send_as_boss \
   "$diamond" \
-  'deployManagedToken(string,string,uint8,address,address,address[],address[])(address)' \
+  'deployManagedToken(address,string,string,uint8,address,address,address[],address[])(address)' \
+  "$managed_token_implementation" \
   'Managed USD' \
   'MUSD' \
   6 \
@@ -187,7 +183,8 @@ assert_eq "true" "$(call "$diamond" 'isManagedTokenDeployed(address)(bool)' "$ma
 
 send_as_boss \
   "$diamond" \
-  'deployManagedToken(string,string,uint8,address,address,address[],address[])(address)' \
+  'deployManagedToken(address,string,string,uint8,address,address,address[],address[])(address)' \
+  "$managed_token_implementation" \
   'Managed EUR' \
   'MEUR' \
   9 \

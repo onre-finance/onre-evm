@@ -1,6 +1,6 @@
 # Buffer accounting
 
-Buffer accounting is configured independently for every registered OnRe token.
+Buffer accounting is configured independently for every registered managed token.
 It mints the difference between the configured gross APR and the APR already
 represented by the token's active USD pricing vector. Settlement happens before
 every ordinary mint or burn, and may also be triggered manually by a worker.
@@ -31,7 +31,7 @@ circulating supply and TVL and compound as part of the token's total supply.
 
 ## Supply-change callback
 
-`OnReToken.mint`, `burn`, and `burnFrom` call the configured controller before
+`ManagedToken.mint`, `burn`, and `burnFrom` call the configured controller before
 changing supply. The Diamond settles the interval using the old supply and then
 records the expected post-operation supply. The token operation reverts if
 settlement or reconciliation fails.
@@ -47,9 +47,9 @@ strict; it does not fall back to an untracked mint or burn.
 
 Configure a token in this order:
 
-1. Register and enable the OnRe token in the Diamond.
+1. Register and enable the managed token in the Diamond.
 2. Create its deterministic USD Pricer and add an active pricing vector.
-3. Call `initializeBuffer(onReToken)`. It derives token-specific reserve,
+3. Call `initializeBuffer(managedToken)`. It derives token-specific reserve,
    management-fee, and performance-fee vault IDs and creates their configurable
    vault records.
 4. Read the derived IDs from `getBufferState` and set each vault's withdrawal

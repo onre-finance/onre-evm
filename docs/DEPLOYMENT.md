@@ -45,26 +45,52 @@ are generated and git-ignored. `pnpm test` does both in order.
 2. The proxy constructor installs `DiamondCutFacet` and `DiamondLoupeFacet`,
    registers the ERC-165 ids, and grants `UPGRADER_ROLE` to the deployment
    wallet so it can sign the next step.
-3. Deploys the nine application facets and `OnReDiamondInit`.
+3. Deploys the eleven application facets and `OnReDiamondInit`.
 4. Sends one `diamondCut` that adds every application selector and delegatecalls
    `OnReDiamondInit.init` with `initArgs`.
-5. `init` seeds boss/admin/worker/upgrader and the approvers, then revokes the
-   deployer's bootstrap `UPGRADER_ROLE` — unless the deployer *is*
-   `ONRE_UPGRADER`.
+5. `init` validates and stores the managed-token implementation, seeds
+   boss/admin/worker/upgrader and the approvers, then revokes the deployer's
+   bootstrap `UPGRADER_ROLE` — unless the deployer *is* `ONRE_UPGRADER`.
 
 Step 5 is the one to keep in mind: **after a fresh deployment, the deployment
 wallet can no longer upgrade the diamond** unless it was named as
 `ONRE_UPGRADER`. For local and testnet iteration, set `ONRE_UPGRADER` to the
 deployment wallet. For mainnet, set it to the upgrade multisig.
 
-## Registering an OnRe token
+## Registering a managed token
 
-OnRe tokens are issued and redeemed by the Diamond; they are not pre-minted.
-Before enabling offers for a token, its token administrator must call
-`grantMintAndBurnRoles(diamond)` on the `OnReToken`, then the application boss
-calls `registerOnReToken(onReToken)` on the Diamond. A missing mint role makes
-`AssetToOnRe` execution revert atomically, and a missing burn role makes
-`OnReToAsset` execution revert atomically.
+Managed tokens are issued and redeemed by the Diamond; they are not pre-minted.
+Deploy one `ManagedToken` implementation before the Diamond. Set
+`ONRE_MANAGED_TOKEN_IMPLEMENTATION` to that address when deploying the Diamond.
+The Diamond initializer validates and stores it as the UUPS implementation
+template used by the managed-token factory facet.
+
+After verifying the Diamond, connect the application boss through the block
+explorer's **Write Contract** page and call `deployManagedToken` with the name,
+symbol, decimals, token administrator, CCIP administrator, and any additional
+initial minters and burners. The facet atomically deploys and initializes an
+`ERC1967Proxy`, grants the Diamond mint and burn authority, registers the token,
+records it in the Diamond's deployment registry, and emits
+`ManagedTokenDeployed`. No per-token deployment code, initializer transaction,
+role-grant transaction, or registration transaction is required.
+
+Each managed token upgrades independently. Its token administrator calls
+`upgradeToAndCall(newImplementation, data)` on that token proxy. Other managed
+tokens remain on their current implementations. To use a new implementation for
+future factory deployments, the application boss separately calls
+`setManagedTokenImplementation(newImplementation)` on the Diamond. Updating the
+factory template never upgrades an existing token.
+
+For an externally deployed compatible token, its token administrator must call
+`grantMintAndBurnRoles(diamond)` and the application boss must call
+`registerManagedToken(managedToken)`. Tokens deployed through the Diamond facet
+already have both permissions and are already registered. A missing mint role
+makes `AssetToManaged` execution revert atomically, and a missing burn role makes
+`ManagedToAsset` execution revert atomically.
+
+The Diamond accepts ManagedToken deployments configured with 0 through 18
+decimals. Larger values remain valid at the standalone token layer but cannot be
+registered because the Diamond's fixed-point arithmetic is bounded to 18 decimals.
 
 Before enabling permissionless offers, the application boss calls
 `setPermissionlessSettlementAccount(account)`. That dedicated account must

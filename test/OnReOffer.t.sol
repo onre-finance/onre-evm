@@ -4,23 +4,25 @@ pragma solidity 0.8.35;
 import "../src/types/OnReAppErrors.sol";
 import "../src/types/OnReTypes.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
-import {IOnReToken} from "../src/IOnReToken.sol";
+import {IManagedToken} from "../src/IManagedToken.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
 contract OnReOfferTest is OnReAppTestBase {
     function test_OfferIdentityIncludesDirectedPairAndFlow() public view {
-        assertEq(permissionedOfferId, OnReIds._offerConfigId(address(usd), address(onReToken), OfferFlow.Permissioned));
         assertEq(
-            permissionlessOfferId, OnReIds._offerConfigId(address(usd), address(onReToken), OfferFlow.Permissionless)
+            permissionedOfferId, OnReIds._offerConfigId(address(usd), address(managedToken), OfferFlow.Permissioned)
         );
-        assertEq(workerOfferId, OnReIds._offerConfigId(address(onReToken), address(usd), OfferFlow.Worker));
+        assertEq(
+            permissionlessOfferId, OnReIds._offerConfigId(address(usd), address(managedToken), OfferFlow.Permissionless)
+        );
+        assertEq(workerOfferId, OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Worker));
         assertTrue(permissionedOfferId != permissionlessOfferId);
 
         OfferConfig memory permissioned = app.getOfferConfig(permissionedOfferId);
         OfferConfig memory workerConfig = app.getOfferConfig(workerOfferId);
-        assertEq(uint8(permissioned.direction), uint8(OfferDirection.AssetToOnRe));
-        assertEq(uint8(workerConfig.direction), uint8(OfferDirection.OnReToAsset));
+        assertEq(uint8(permissioned.direction), uint8(OfferDirection.AssetToManaged));
+        assertEq(uint8(workerConfig.direction), uint8(OfferDirection.ManagedToAsset));
         assertEq(permissioned.tokenInDecimals, 6);
         assertEq(permissioned.tokenOutDecimals, 9);
         assertEq(workerConfig.tokenInDecimals, 9);
@@ -53,11 +55,11 @@ contract OnReOfferTest is OnReAppTestBase {
             app.takeOffer(_permissionedTakeOfferParams(permissionedOfferId, inputAmount, approval, signature));
 
         assertEq(amountOut, 99e9);
-        assertEq(onReToken.balanceOf(user), 99e9);
+        assertEq(managedToken.balanceOf(user), 99e9);
         assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 1e6);
         assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 99e6);
         assertEq(usd.balanceOf(address(app)), inputAmount);
-        assertEq(onReToken.totalSupply(), amountOut);
+        assertEq(managedToken.totalSupply(), amountOut);
 
         _fundAndApproveUsd(user, inputAmount);
         TakeOfferParams memory missingSignature =
@@ -74,11 +76,11 @@ contract OnReOfferTest is OnReAppTestBase {
         uint256 amountOut = app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
 
         assertEq(amountOut, 49_500_000_000);
-        assertEq(onReToken.balanceOf(user), amountOut);
+        assertEq(managedToken.balanceOf(user), amountOut);
         assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
-        assertEq(onReToken.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(managedToken.balanceOf(permissionlessSettlementAccount), 0);
         assertEq(usd.allowance(permissionlessSettlementAccount, address(app)), type(uint256).max);
-        assertEq(onReToken.allowance(permissionlessSettlementAccount, address(app)), type(uint256).max);
+        assertEq(managedToken.allowance(permissionlessSettlementAccount, address(app)), type(uint256).max);
 
         ExecutionAccounting memory preview = app.previewExecution(permissionlessOfferId, inputAmount);
         assertEq(preview.price, 1e9);
@@ -107,7 +109,7 @@ contract OnReOfferTest is OnReAppTestBase {
         assertEq(usd.balanceOf(user), inputAmount);
         assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
         assertEq(usd.balanceOf(address(app)), 0);
-        assertEq(onReToken.totalSupply(), 0);
+        assertEq(managedToken.totalSupply(), 0);
     }
 
     function test_TakeOfferPermissionlessRequiresConfiguredSettlementAccount() public {
@@ -124,13 +126,13 @@ contract OnReOfferTest is OnReAppTestBase {
 
         assertEq(usd.balanceOf(user), inputAmount);
         assertEq(usd.balanceOf(address(app)), 0);
-        assertEq(onReToken.totalSupply(), 0);
+        assertEq(managedToken.totalSupply(), 0);
     }
 
     function test_TakeOfferPermissionlessRequiresSettlementOutputAllowance() public {
         uint256 inputAmount = 50e6;
         vm.prank(permissionlessSettlementAccount);
-        onReToken.approve(address(app), 0);
+        managedToken.approve(address(app), 0);
         _fundAndApproveUsd(user, inputAmount);
 
         vm.expectRevert(
@@ -142,8 +144,8 @@ contract OnReOfferTest is OnReAppTestBase {
         assertEq(usd.balanceOf(user), inputAmount);
         assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
         assertEq(usd.balanceOf(address(app)), 0);
-        assertEq(onReToken.balanceOf(permissionlessSettlementAccount), 0);
-        assertEq(onReToken.totalSupply(), 0);
+        assertEq(managedToken.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(managedToken.totalSupply(), 0);
         assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 0);
         assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 0);
     }
@@ -161,16 +163,16 @@ contract OnReOfferTest is OnReAppTestBase {
         app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
     }
 
-    function test_TakeOfferAssetToOnReRequiresDiamondMintAuthority() public {
-        onReToken.revokeMintRole(address(app));
+    function test_TakeOfferAssetToManagedRequiresDiamondMintAuthority() public {
+        managedToken.revokeMintRole(address(app));
         uint256 inputAmount = 50e6;
         _fundAndApproveUsd(user, inputAmount);
 
-        vm.expectRevert(abi.encodeWithSelector(IOnReToken.SenderNotMinterError.selector, address(app)));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotMinterError.selector, address(app)));
         vm.prank(user);
         app.takeOffer(_takeOfferParams(permissionlessOfferId, inputAmount));
 
-        assertEq(onReToken.totalSupply(), 0);
+        assertEq(managedToken.totalSupply(), 0);
         assertEq(usd.balanceOf(user), inputAmount);
         assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 0);
         assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 0);
@@ -178,12 +180,12 @@ contract OnReOfferTest is OnReAppTestBase {
 
     function test_TakeOfferPermissionedReverseBurnsInputAndPaysFromLiquidity() public {
         bytes32 reversePermissioned = _makeOffer(
-            address(onReToken), address(usd), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
         );
         _depositLiquidity(200e6);
-        onReToken.mint(user, 100e9);
+        managedToken.mint(user, 100e9);
         vm.prank(user);
-        onReToken.approve(address(app), 100e9);
+        managedToken.approve(address(app), 100e9);
 
         ApprovalMessage memory approval = ApprovalMessage({user: user, expiry: 1 days});
         vm.prank(user);
@@ -192,14 +194,14 @@ contract OnReOfferTest is OnReAppTestBase {
 
         assertEq(amountOut, 99e6);
         assertEq(usd.balanceOf(user), 99e6);
-        assertEq(onReToken.totalSupply(), 1e9);
-        assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
+        assertEq(managedToken.totalSupply(), 1e9);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(managedToken)), 1e9);
         assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 101e6);
     }
 
     function test_TakeOfferPermissionlessReverseRoutesBothLegsThroughSettlementAccount() public {
         bytes32 reversePermissionless = _makeOffer(
-            address(onReToken),
+            address(managedToken),
             address(usd),
             OfferFlow.Permissionless,
             navPermissionlessQuoterId,
@@ -207,25 +209,27 @@ contract OnReOfferTest is OnReAppTestBase {
             liquidityVaultId
         );
         _depositLiquidity(200e6);
-        onReToken.mint(user, 100e9);
+        managedToken.mint(user, 100e9);
         vm.prank(user);
-        onReToken.approve(address(app), 100e9);
+        managedToken.approve(address(app), 100e9);
 
         vm.prank(user);
         uint256 amountOut = app.takeOffer(_takeOfferParams(reversePermissionless, 100e9));
 
         assertEq(amountOut, 99e6);
         assertEq(usd.balanceOf(user), amountOut);
-        assertEq(onReToken.totalSupply(), 1e9);
-        assertEq(onReToken.balanceOf(permissionlessSettlementAccount), 0);
+        assertEq(managedToken.totalSupply(), 1e9);
+        assertEq(managedToken.balanceOf(permissionlessSettlementAccount), 0);
         assertEq(usd.balanceOf(permissionlessSettlementAccount), 0);
-        assertEq(app.configurableVaultBalance(feeVaultId, address(onReToken)), 1e9);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(managedToken)), 1e9);
         assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 101e6);
     }
 
     function test_OfferAndComponentNoChangeDuplicateAndLiquidityGuards() public {
         vm.expectRevert(abi.encodeWithSelector(OfferConfigAlreadyExistsError.selector, permissionedOfferId));
-        _makeOffer(address(usd), address(onReToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId);
+        _makeOffer(
+            address(usd), address(managedToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
+        );
 
         vm.expectRevert(NoChangeError.selector);
         app.updateOfferConfigReferences(
@@ -244,11 +248,11 @@ contract OnReOfferTest is OnReAppTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 LiquidityVaultRequiredError.selector,
-                OnReIds._offerConfigId(address(onReToken), address(usd), OfferFlow.Permissionless)
+                OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Permissionless)
             )
         );
         _makeOffer(
-            address(onReToken),
+            address(managedToken),
             address(usd),
             OfferFlow.Permissionless,
             navPermissionlessQuoterId,
@@ -261,7 +265,9 @@ contract OnReOfferTest is OnReAppTestBase {
         MockUsd alternativeUsd = new MockUsd();
 
         vm.expectRevert(ZeroAddressError.selector);
-        _makeOffer(address(0), address(onReToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId);
+        _makeOffer(
+            address(0), address(managedToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
+        );
         vm.expectRevert(ZeroAddressError.selector);
         _makeOffer(
             address(alternativeUsd), address(0), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
@@ -280,7 +286,7 @@ contract OnReOfferTest is OnReAppTestBase {
         vm.expectRevert(InvalidDecimalsError.selector);
         _makeOffer(
             address(highDecimals),
-            address(onReToken),
+            address(managedToken),
             OfferFlow.Permissioned,
             navQuoterId,
             feeConfigId,
@@ -288,7 +294,7 @@ contract OnReOfferTest is OnReAppTestBase {
         );
         vm.expectRevert(InvalidDecimalsError.selector);
         _makeOffer(
-            address(onReToken),
+            address(managedToken),
             address(highDecimals),
             OfferFlow.Permissioned,
             navQuoterId,
@@ -299,15 +305,25 @@ contract OnReOfferTest is OnReAppTestBase {
         bytes32 missing = keccak256("missingReference");
         vm.expectRevert(abi.encodeWithSelector(QuoterNotFoundError.selector, missing));
         _makeOffer(
-            address(alternativeUsd), address(onReToken), OfferFlow.Permissioned, missing, feeConfigId, liquidityVaultId
+            address(alternativeUsd),
+            address(managedToken),
+            OfferFlow.Permissioned,
+            missing,
+            feeConfigId,
+            liquidityVaultId
         );
         vm.expectRevert(abi.encodeWithSelector(FeeConfigNotFoundError.selector, missing));
         _makeOffer(
-            address(alternativeUsd), address(onReToken), OfferFlow.Permissioned, navQuoterId, missing, liquidityVaultId
+            address(alternativeUsd),
+            address(managedToken),
+            OfferFlow.Permissioned,
+            navQuoterId,
+            missing,
+            liquidityVaultId
         );
         vm.expectRevert(abi.encodeWithSelector(ConfigurableVaultNotFoundError.selector, missing));
         _makeOffer(
-            address(alternativeUsd), address(onReToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, missing
+            address(alternativeUsd), address(managedToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, missing
         );
 
         vm.expectRevert(abi.encodeWithSelector(QuoterAlreadyExistsError.selector, navQuoterId));
@@ -356,7 +372,7 @@ contract OnReOfferTest is OnReAppTestBase {
         app.takeOffer(signatureOnly);
 
         bytes32 reversePermissionless = _makeOffer(
-            address(onReToken),
+            address(managedToken),
             address(usd),
             OfferFlow.Permissionless,
             navPermissionlessQuoterId,
@@ -364,9 +380,9 @@ contract OnReOfferTest is OnReAppTestBase {
             liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
-        onReToken.mint(user, 1e9);
+        managedToken.mint(user, 1e9);
         vm.prank(user);
-        onReToken.approve(address(app), 1e9);
+        managedToken.approve(address(app), 1e9);
         vm.expectRevert(
             abi.encodeWithSelector(InsufficientLiquidityError.selector, liquidityVaultId, address(usd), 0, 1e6)
         );

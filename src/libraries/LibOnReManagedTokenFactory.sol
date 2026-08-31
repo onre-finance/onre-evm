@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.35;
+
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
+import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
+import {IManagedToken} from "../IManagedToken.sol";
+import {ManagedToken} from "../ManagedToken.sol";
+import {InvalidManagedTokenImplementationError, NoChangeError} from "../types/OnReAppErrors.sol";
+import {ManagedTokenDeployed, ManagedTokenImplementationSet} from "../types/OnReAppEvents.sol";
+import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
+import {LibOnReConfig} from "./LibOnReConfig.sol";
+import {LibOnReRoles} from "./LibOnReRoles.sol";
+
+/// @notice Diamond-owned deployment and enumeration of canonical managed tokens.
+library LibOnReManagedTokenFactory {
+    function _initialize(address implementation) internal {
+        _validateImplementation(implementation);
+        LibOnReStorage._appStorage().managedTokenImplementation = implementation;
+        emit ManagedTokenImplementationSet(address(0), implementation);
+    }
+
+    function _setManagedTokenImplementation(address newImplementation) internal {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        _validateImplementation(newImplementation);
+
+        LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
+        address previousImplementation = s.managedTokenImplementation;
+        if (newImplementation == previousImplementation) revert NoChangeError();
+
+        s.managedTokenImplementation = newImplementation;
+        emit ManagedTokenImplementationSet(previousImplementation, newImplementation);
+    }
+
+    function _deployManagedToken(
+        string calldata name,
+        string calldata symbol,
+        uint8 decimals,
+        address admin,
+        address ccipAdmin,
+        address[] calldata initialMinters,
+        address[] calldata initialBurners
+    ) internal returns (address managedToken) {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+
+        address[] memory minters = _withDiamond(initialMinters);
+        address[] memory burners = _withDiamond(initialBurners);
+        IManagedToken.InitializeParams memory params = IManagedToken.InitializeParams({
+            name: name,
+            symbol: symbol,
+            decimals: decimals,
+            admin: admin,
+            ccipAdmin: ccipAdmin,
+            initialMinters: minters,
+            initialBurners: burners
+        });
+
+        LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
+        managedToken =
+            address(new ERC1967Proxy(s.managedTokenImplementation, abi.encodeCall(ManagedToken.initialize, (params))));
+
+        s.deployedManagedTokens.push(managedToken);
+        s.managedTokenDeployedByDiamond[managedToken] = true;
+        LibOnReConfig._registerManagedToken(managedToken);
+
+        emit ManagedTokenDeployed(managedToken, admin, ccipAdmin, name, symbol, decimals);
+    }
+
+    function _managedTokenImplementation() internal view returns (address) {
+        return LibOnReStorage._appStorage().managedTokenImplementation;
+    }
+
+    function _deployedManagedTokenCount() internal view returns (uint256) {
+        return LibOnReStorage._appStorage().deployedManagedTokens.length;
+    }
+
+    function _deployedManagedTokenAt(uint256 index) internal view returns (address) {
+        return LibOnReStorage._appStorage().deployedManagedTokens[index];
+    }
+
+    function _getDeployedManagedTokens() internal view returns (address[] memory) {
+        return LibOnReStorage._appStorage().deployedManagedTokens;
+    }
+
+    function _isManagedTokenDeployed(address managedToken) internal view returns (bool) {
+        return LibOnReStorage._appStorage().managedTokenDeployedByDiamond[managedToken];
+    }
+
+    function _validateImplementation(address implementation) private view {
+        if (
+            implementation == address(0) || implementation.code.length == 0
+                || !ERC165Checker.supportsInterface(implementation, type(IManagedToken).interfaceId)
+        ) {
+            revert InvalidManagedTokenImplementationError(implementation);
+        }
+    }
+
+    function _withDiamond(address[] calldata accounts) private view returns (address[] memory result) {
+        uint256 length = accounts.length;
+        result = new address[](length + 1);
+        result[0] = address(this);
+        for (uint256 i = 0; i < length;) {
+            result[i + 1] = accounts[i];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+}

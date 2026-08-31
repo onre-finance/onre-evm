@@ -4,10 +4,11 @@ pragma solidity 0.8.35;
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import {Test} from "forge-std/Test.sol";
 import {IDiamondProxy} from "../../src/generated/IDiamondProxy.sol";
-import {IOnReToken} from "../../src/IOnReToken.sol";
-import {OnReToken} from "../../src/OnReToken.sol";
+import {IManagedToken} from "../../src/IManagedToken.sol";
+import {ManagedToken} from "../../src/ManagedToken.sol";
 import {LibOnRePropRfqMath} from "../../src/libraries/LibOnRePropRfqMath.sol";
 import {
     ApprovalMessage,
@@ -29,7 +30,8 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
     uint256 internal constant APPROVER_KEY = 0xA11CE;
 
     IDiamondProxy internal app;
-    OnReToken internal onReToken;
+    ManagedToken internal managedToken;
+    address internal managedTokenImplementation;
     MockUsd internal usd;
 
     address internal worker = makeAddr("worker");
@@ -56,21 +58,25 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
 
         address[] memory approvers = new address[](1);
         approvers[0] = approver;
+        managedTokenImplementation = address(new ManagedToken());
         app = _deployDiamondApp(
             InitializeParams({
-                boss: address(this), admin: admin, worker: worker, upgrader: makeAddr("upgrader"), approvers: approvers
+                boss: address(this),
+                admin: admin,
+                worker: worker,
+                upgrader: makeAddr("upgrader"),
+                managedTokenImplementation: managedTokenImplementation,
+                approvers: approvers
             })
         );
 
-        onReToken = _deployToken(address(app));
+        managedToken = _deployManagedTokenThroughDiamond(9);
         usd = new MockUsd();
 
         app.setPermissionlessSettlementAccount(permissionlessSettlementAccount);
         _approvePermissionlessSettlementToken(address(usd));
-        _approvePermissionlessSettlementToken(address(onReToken));
-        app.registerOnReToken(address(onReToken));
-
-        pricerId = app.createPricer(address(onReToken), PricingDenomination.Usd);
+        _approvePermissionlessSettlementToken(address(managedToken));
+        pricerId = app.createPricer(address(managedToken), PricingDenomination.Usd);
         app.addPricingVector(
             pricerId, PricingVector({startTime: 1, baseTime: 1, basePrice: 1e9, apr: 0, priceFixDuration: 1 days})
         );
@@ -84,18 +90,19 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         feeConfigId = app.createFeeConfig(0, 100, 0, feeVaultId);
 
         permissionedOfferId = _makeOffer(
-            address(usd), address(onReToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
+            address(usd), address(managedToken), OfferFlow.Permissioned, navQuoterId, feeConfigId, liquidityVaultId
         );
         permissionlessOfferId = _makeOffer(
             address(usd),
-            address(onReToken),
+            address(managedToken),
             OfferFlow.Permissionless,
             navPermissionlessQuoterId,
             feeConfigId,
             liquidityVaultId
         );
-        workerOfferId =
-            _makeOffer(address(onReToken), address(usd), OfferFlow.Worker, navQuoterId, feeConfigId, liquidityVaultId);
+        workerOfferId = _makeOffer(
+            address(managedToken), address(usd), OfferFlow.Worker, navQuoterId, feeConfigId, liquidityVaultId
+        );
     }
 
     function _makeOffer(
@@ -124,7 +131,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         returns (bytes32 quoterId)
     {
         quoterId = app.createQuoter(QuoterKind.PropRfq, instanceId);
-        app.configurePropRfq(quoterId, address(usd), address(onReToken), config);
+        app.configurePropRfq(quoterId, address(usd), address(managedToken), config);
     }
 
     function _fundAndApproveUsd(address account, uint256 amount) internal {
@@ -194,23 +201,37 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         return keccak256(abi.encodePacked(hex"1901", domainSeparator, structHash));
     }
 
-    function _deployToken(address burner) internal returns (OnReToken token) {
-        OnReToken implementation = new OnReToken();
+    function _deployToken(address burner) internal returns (ManagedToken token) {
+        return _deployToken(burner, 9);
+    }
+
+    function _deployToken(address burner, uint8 decimals_) internal returns (ManagedToken token) {
         address[] memory initialMinters = new address[](2);
         initialMinters[0] = address(this);
         initialMinters[1] = burner;
         address[] memory initialBurners = new address[](1);
         initialBurners[0] = burner;
-        IOnReToken.InitializeParams memory params = IOnReToken.InitializeParams({
+        IManagedToken.InitializeParams memory params = IManagedToken.InitializeParams({
             name: "OnRe USD",
             symbol: "ONusd",
+            decimals: decimals_,
             admin: address(this),
             ccipAdmin: address(this),
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
-        token = OnReToken(
-            address(new ERC1967Proxy(address(implementation), abi.encodeCall(OnReToken.initialize, (params))))
+        token = ManagedToken(
+            address(new ERC1967Proxy(managedTokenImplementation, abi.encodeCall(ManagedToken.initialize, (params))))
+        );
+    }
+
+    function _deployManagedTokenThroughDiamond(uint8 decimals_) internal returns (ManagedToken token) {
+        address[] memory initialMinters = new address[](1);
+        initialMinters[0] = address(this);
+        token = ManagedToken(
+            app.deployManagedToken(
+                "OnRe USD", "ONusd", decimals_, address(this), address(this), initialMinters, new address[](0)
+            )
         );
     }
 }
@@ -270,6 +291,10 @@ contract MockSenderPaysFeeToken is ERC20 {
 
     function mint(address account, uint256 amount) external {
         _mint(account, amount);
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IERC165).interfaceId || interfaceId == type(IManagedToken).interfaceId;
     }
 
     function _update(address from, address to, uint256 amount) internal override {

@@ -17,9 +17,9 @@ import {
     PricingDenomination,
     PricingVector
 } from "../src/types/OnReTypes.sol";
-import {IOnReToken} from "../src/IOnReToken.sol";
-import {IOnReBufferController} from "../src/IOnReBufferController.sol";
-import {OnReToken} from "../src/OnReToken.sol";
+import {IManagedToken} from "../src/IManagedToken.sol";
+import {IBufferController} from "../src/IBufferController.sol";
+import {ManagedToken} from "../src/ManagedToken.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import {OnReAppTestBase} from "./helpers/OnReAppTestBase.sol";
 
@@ -36,26 +36,26 @@ contract OnReBufferTest is OnReAppTestBase {
     function setUp() public override {
         super.setUp();
 
-        onReToken.mint(address(this), INITIAL_SUPPLY);
-        app.initializeBuffer(address(onReToken));
-        BufferState memory state = app.getBufferState(address(onReToken));
+        managedToken.mint(address(this), INITIAL_SUPPLY);
+        app.initializeBuffer(address(managedToken));
+        BufferState memory state = app.getBufferState(address(managedToken));
         bufferReserveVaultId = state.reserveVaultId;
         managementFeeVaultId = state.managementFeeVaultId;
         performanceFeeVaultId = state.performanceFeeVaultId;
         app.updateConfigurableVault(bufferReserveVaultId, vaultDestination, 0);
         app.updateConfigurableVault(managementFeeVaultId, vaultDestination, 0);
         app.updateConfigurableVault(performanceFeeVaultId, vaultDestination, 0);
-        onReToken.setBufferController(address(app));
-        app.setBufferGrossApr(address(onReToken), GROSS_APR);
-        app.setBufferFeeConfig(address(onReToken), MANAGEMENT_FEE_BPS, PERFORMANCE_FEE_BPS, true);
+        managedToken.setBufferController(address(app));
+        app.setBufferGrossApr(address(managedToken), GROSS_APR);
+        app.setBufferFeeConfig(address(managedToken), MANAGEMENT_FEE_BPS, PERFORMANCE_FEE_BPS, true);
     }
 
     function test_MintSettlesBufferOnceAndStoresPostMintSupply() public {
-        uint256 startingSupply = onReToken.totalSupply();
+        uint256 startingSupply = managedToken.totalSupply();
         uint256 mintAmount = 100e9;
         vm.warp(block.timestamp + 365 days / 2);
 
-        onReToken.mint(user, mintAmount);
+        managedToken.mint(user, mintAmount);
 
         uint256 expectedBufferMint = startingSupply * GROSS_APR * (365 days / 2) / (365 days * 1_000_000);
         uint256 expectedManagementFee = expectedBufferMint * 10_000 / GROSS_APR;
@@ -63,74 +63,74 @@ contract OnReBufferTest is OnReAppTestBase {
         uint256 expectedPerformanceFee = expectedAfterManagement * PERFORMANCE_FEE_BPS / 10_000;
         uint256 expectedReserveMint = expectedAfterManagement - expectedPerformanceFee;
 
-        assertEq(onReToken.balanceOf(address(app)), expectedBufferMint);
-        assertEq(app.configurableVaultBalance(bufferReserveVaultId, address(onReToken)), expectedReserveMint);
-        assertEq(app.configurableVaultBalance(managementFeeVaultId, address(onReToken)), expectedManagementFee);
-        assertEq(app.configurableVaultBalance(performanceFeeVaultId, address(onReToken)), expectedPerformanceFee);
+        assertEq(managedToken.balanceOf(address(app)), expectedBufferMint);
+        assertEq(app.configurableVaultBalance(bufferReserveVaultId, address(managedToken)), expectedReserveMint);
+        assertEq(app.configurableVaultBalance(managementFeeVaultId, address(managedToken)), expectedManagementFee);
+        assertEq(app.configurableVaultBalance(performanceFeeVaultId, address(managedToken)), expectedPerformanceFee);
 
         uint256 expectedPostMintSupply = startingSupply + expectedBufferMint + mintAmount;
-        BufferState memory state = app.getBufferState(address(onReToken));
+        BufferState memory state = app.getBufferState(address(managedToken));
         assertEq(state.previousSupply, expectedPostMintSupply);
-        assertEq(onReToken.totalSupply(), expectedPostMintSupply);
-        assertEq(onReToken.balanceOf(user), mintAmount);
-        assertEq(app.getExcludedSupplyAccounts(address(onReToken)).length, 0);
+        assertEq(managedToken.totalSupply(), expectedPostMintSupply);
+        assertEq(managedToken.balanceOf(user), mintAmount);
+        assertEq(app.getExcludedSupplyAccounts(address(managedToken)).length, 0);
 
-        MarketStats memory stats = app.marketStats(address(onReToken));
+        MarketStats memory stats = app.marketStats(address(managedToken));
         assertEq(stats.circulatingSupply, startingSupply + expectedBufferMint + mintAmount);
     }
 
     function test_BurnAndBurnFromSettleBeforeSupplyChange() public {
-        onReToken.grantBurnRole(address(this));
-        onReToken.mint(address(this), 200e9);
-        onReToken.mint(user, 100e9);
+        managedToken.grantBurnRole(address(this));
+        managedToken.mint(address(this), 200e9);
+        managedToken.mint(user, 100e9);
 
         vm.prank(user);
-        onReToken.approve(address(this), 40e9);
+        managedToken.approve(address(this), 40e9);
 
         vm.warp(block.timestamp + 30 days);
-        onReToken.burn(50e9);
-        BufferState memory afterDirectBurn = app.getBufferState(address(onReToken));
-        assertEq(afterDirectBurn.previousSupply, onReToken.totalSupply());
+        managedToken.burn(50e9);
+        BufferState memory afterDirectBurn = app.getBufferState(address(managedToken));
+        assertEq(afterDirectBurn.previousSupply, managedToken.totalSupply());
 
         vm.warp(block.timestamp + 30 days);
-        onReToken.burnFrom(user, 40e9);
-        BufferState memory afterBurnFrom = app.getBufferState(address(onReToken));
-        assertEq(afterBurnFrom.previousSupply, onReToken.totalSupply());
-        assertEq(onReToken.balanceOf(user), 60e9);
+        managedToken.burnFrom(user, 40e9);
+        BufferState memory afterBurnFrom = app.getBufferState(address(managedToken));
+        assertEq(afterBurnFrom.previousSupply, managedToken.totalSupply());
+        assertEq(managedToken.balanceOf(user), 60e9);
     }
 
     function test_ControllerOnlyMintBufferDoesNotRecursivelyAccrue() public {
-        vm.expectRevert(abi.encodeWithSelector(IOnReToken.SenderNotBufferControllerError.selector, address(this)));
-        onReToken.mintBuffer(1);
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBufferControllerError.selector, address(this)));
+        managedToken.mintBuffer(1);
 
-        uint256 startingSupply = onReToken.totalSupply();
+        uint256 startingSupply = managedToken.totalSupply();
         vm.warp(block.timestamp + 365 days);
-        onReToken.mint(user, 1);
+        managedToken.mint(user, 1);
 
         uint256 expectedBufferMint = startingSupply * GROSS_APR / 1_000_000;
-        assertEq(onReToken.balanceOf(address(app)), expectedBufferMint);
-        assertEq(onReToken.totalSupply(), startingSupply + expectedBufferMint + 1);
-        assertEq(app.getBufferState(address(onReToken)).previousSupply, onReToken.totalSupply());
+        assertEq(managedToken.balanceOf(address(app)), expectedBufferMint);
+        assertEq(managedToken.totalSupply(), startingSupply + expectedBufferMint + 1);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, managedToken.totalSupply());
     }
 
     function test_WorkerCanSettleWithoutAnExternalSupplyChange() public {
-        uint256 startingSupply = onReToken.totalSupply();
+        uint256 startingSupply = managedToken.totalSupply();
         vm.warp(block.timestamp + 90 days);
 
         vm.prank(worker);
-        uint256 mintedAmount = app.settleBuffer(address(onReToken));
+        uint256 mintedAmount = app.settleBuffer(address(managedToken));
 
         uint256 expectedMint = startingSupply * GROSS_APR * 90 days / (365 days * 1_000_000);
         assertEq(mintedAmount, expectedMint);
-        assertEq(onReToken.totalSupply(), startingSupply + expectedMint);
-        assertEq(app.getBufferState(address(onReToken)).previousSupply, onReToken.totalSupply());
+        assertEq(managedToken.totalSupply(), startingSupply + expectedMint);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, managedToken.totalSupply());
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector, address(this), app.WORKER_ROLE()
             )
         );
-        app.settleBuffer(address(onReToken));
+        app.settleBuffer(address(managedToken));
     }
 
     function test_PerformanceFeeHighWatermarkSkipsFeeBelowPriorNav() public {
@@ -146,15 +146,15 @@ contract OnReBufferTest is OnReAppTestBase {
         );
         vm.warp(block.timestamp + 365 days / 2);
 
-        onReToken.mint(user, 1);
+        managedToken.mint(user, 1);
 
-        assertEq(app.configurableVaultBalance(performanceFeeVaultId, address(onReToken)), 0);
-        BufferState memory state = app.getBufferState(address(onReToken));
+        assertEq(app.configurableVaultBalance(performanceFeeVaultId, address(managedToken)), 0);
+        BufferState memory state = app.getBufferState(address(managedToken));
         assertEq(state.performanceFeeHighWatermark, 1e9);
     }
 
     function test_AccrualDiscountsForNavAprAlreadyEarned() public {
-        app.setBufferGrossApr(address(onReToken), 150_000);
+        app.setBufferGrossApr(address(managedToken), 150_000);
         app.addPricingVector(
             pricerId,
             PricingVector({
@@ -165,14 +165,14 @@ contract OnReBufferTest is OnReAppTestBase {
                 priceFixDuration: 1 days
             })
         );
-        uint256 startingSupply = onReToken.totalSupply();
+        uint256 startingSupply = managedToken.totalSupply();
         uint256 elapsed = 365 days / 2;
         vm.warp(block.timestamp + elapsed);
 
-        onReToken.mint(user, 1);
+        managedToken.mint(user, 1);
 
         uint256 expectedBufferMint = startingSupply * 100_000 * elapsed / (365 days * 1_000_000 + 50_000 * elapsed);
-        assertEq(onReToken.balanceOf(address(app)), expectedBufferMint);
+        assertEq(managedToken.balanceOf(address(app)), expectedBufferMint);
     }
 
     function test_BufferGrossAccrualMatchesSolanaReferenceVectors() public {
@@ -183,9 +183,9 @@ contract OnReBufferTest is OnReAppTestBase {
     }
 
     function test_BufferFeeSplitMatchesSolanaReferenceVector() public {
-        OnReToken parityToken = _deployToken(address(app));
+        ManagedToken parityToken = _deployToken(address(app));
         parityToken.mint(address(this), 100_000);
-        app.registerOnReToken(address(parityToken));
+        app.registerManagedToken(address(parityToken));
 
         bytes32 parityPricerId = app.createPricer(address(parityToken), PricingDenomination.Usd);
         app.addPricingVector(
@@ -215,24 +215,26 @@ contract OnReBufferTest is OnReAppTestBase {
     }
 
     function test_UntrackedSupplyChangeFailsClosedAfterActivation() public {
-        onReToken.setBufferController(address(new NoopBufferController()));
-        onReToken.mint(user, 1e9);
-        onReToken.setBufferController(address(app));
+        managedToken.setBufferController(address(new NoopBufferController()));
+        managedToken.mint(user, 1e9);
+        managedToken.setBufferController(address(app));
 
-        uint256 expectedSupply = app.getBufferState(address(onReToken)).previousSupply;
-        uint256 actualSupply = onReToken.totalSupply();
+        uint256 expectedSupply = app.getBufferState(address(managedToken)).previousSupply;
+        uint256 actualSupply = managedToken.totalSupply();
         vm.expectRevert(
-            abi.encodeWithSelector(BufferSupplyMismatchError.selector, address(onReToken), expectedSupply, actualSupply)
+            abi.encodeWithSelector(
+                BufferSupplyMismatchError.selector, address(managedToken), expectedSupply, actualSupply
+            )
         );
-        onReToken.mint(user, 1);
+        managedToken.mint(user, 1);
     }
 
     function test_BufferInitializationAndConfigurationGuards() public {
-        vm.expectRevert(abi.encodeWithSelector(BufferAlreadyExistsError.selector, address(onReToken)));
-        app.initializeBuffer(address(onReToken));
+        vm.expectRevert(abi.encodeWithSelector(BufferAlreadyExistsError.selector, address(managedToken)));
+        app.initializeBuffer(address(managedToken));
 
-        OnReToken secondToken = _deployToken(address(app));
-        app.registerOnReToken(address(secondToken));
+        ManagedToken secondToken = _deployToken(address(app));
+        app.registerManagedToken(address(secondToken));
         app.initializeBuffer(address(secondToken));
 
         BufferState memory secondState = app.getBufferState(address(secondToken));
@@ -251,14 +253,14 @@ contract OnReBufferTest is OnReAppTestBase {
         assertEq(secondReserveVault.withdrawalDestination, secondVaultDestination);
 
         vm.expectRevert(abi.encodeWithSelector(InvalidBufferAprError.selector, 1_000_001));
-        app.setBufferGrossApr(address(onReToken), 1_000_001);
+        app.setBufferGrossApr(address(managedToken), 1_000_001);
 
         vm.expectRevert(InvalidBasisPointsError.selector);
-        app.setBufferFeeConfig(address(onReToken), 10_001, 0, true);
+        app.setBufferFeeConfig(address(managedToken), 10_001, 0, true);
     }
 
     function test_ControllerActivationBeforeBufferInitializationFailsClosed() public {
-        OnReToken unconfiguredToken = _deployToken(address(app));
+        ManagedToken unconfiguredToken = _deployToken(address(app));
         unconfiguredToken.setBufferController(address(app));
 
         vm.expectRevert(abi.encodeWithSelector(BufferNotFoundError.selector, address(unconfiguredToken)));
@@ -273,9 +275,9 @@ contract OnReBufferTest is OnReAppTestBase {
         uint256 expectedBufferMint
     ) private {
         vm.warp(1);
-        OnReToken parityToken = _deployToken(address(app));
+        ManagedToken parityToken = _deployToken(address(app));
         parityToken.mint(address(this), previousSupply);
-        app.registerOnReToken(address(parityToken));
+        app.registerManagedToken(address(parityToken));
 
         bytes32 parityPricerId = app.createPricer(address(parityToken), PricingDenomination.Usd);
         app.addPricingVector(
@@ -303,6 +305,6 @@ contract OnReBufferTest is OnReAppTestBase {
     }
 }
 
-contract NoopBufferController is IOnReBufferController {
+contract NoopBufferController is IBufferController {
     function onBeforeSupplyChange(uint256, bool) external pure {}
 }

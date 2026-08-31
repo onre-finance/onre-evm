@@ -29,23 +29,23 @@ import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
 import {OnReMath} from "./OnReMath.sol";
 
-/// @notice Reusable USD price production for OnRe tokens.
+/// @notice Reusable USD price production for managed tokens.
 library LibOnRePricer {
     uint8 internal constant MAX_VECTORS = 10;
     uint256 internal constant PRICE_SCALE = 1e9;
 
-    function _createPricer(address onReToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
+    function _createPricer(address managedToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation._requireEnabledOnReToken(onReToken);
+        LibOnReValidation._requireEnabledManagedToken(managedToken);
 
-        pricerId = OnReIds._pricerId(onReToken, denomination);
+        pricerId = OnReIds._pricerId(managedToken, denomination);
         Pricer storage pricer = LibOnReStorage._appStorage().pricers[pricerId];
         if (pricer.exists) revert PricerAlreadyExistsError(pricerId);
 
-        pricer.onReToken = onReToken;
+        pricer.managedToken = managedToken;
         pricer.denomination = denomination;
         pricer.exists = true;
-        emit PricerCreated(pricerId, onReToken, denomination);
+        emit PricerCreated(pricerId, managedToken, denomination);
     }
 
     function _addPricingVector(bytes32 pricerId, PricingVector calldata vector) internal {

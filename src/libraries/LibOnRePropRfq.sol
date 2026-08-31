@@ -47,11 +47,11 @@ library LibOnRePropRfq {
     }
 
     function _validatePair(bytes32 quoterId, PropRfqState storage state, OfferConfig storage offer) internal view {
-        if (state.assetToken == address(0) || state.onReToken == address(0)) {
+        if (state.assetToken == address(0) || state.managedToken == address(0)) {
             revert PropRfqConfigurationRequiredError();
         }
-        bool isBuy = offer.tokenIn == state.assetToken && offer.tokenOut == state.onReToken;
-        bool isSell = offer.tokenIn == state.onReToken && offer.tokenOut == state.assetToken;
+        bool isBuy = offer.tokenIn == state.assetToken && offer.tokenOut == state.managedToken;
+        bool isSell = offer.tokenIn == state.managedToken && offer.tokenOut == state.assetToken;
         if (!isBuy && !isSell) {
             revert InvalidPropRfqPairError(quoterId, offer.tokenIn, offer.tokenOut);
         }
@@ -110,10 +110,10 @@ library LibOnRePropRfq {
         ConfigurableVault storage vault = LibOnReStorage._appStorage().configurableVaults[offer.liquidityVaultId];
         if (vault.refillTargetBps == 0) return actualLiquidity;
 
-        uint256 tvl = LibOnReMarketStats._currentTvl(state.onReToken);
-        uint8 onReDecimals = LibOnReStorage._appStorage().onReTokenConfigs[state.onReToken].decimals;
+        uint256 tvl = LibOnReMarketStats._currentTvl(state.managedToken);
+        uint8 managedDecimals = LibOnReStorage._appStorage().managedTokenConfigs[state.managedToken].decimals;
         uint256 targetReserve = Math.mulDiv(
-            tvl, uint256(vault.refillTargetBps) * 10 ** offer.tokenOutDecimals, MAX_BASIS_POINTS * 10 ** onReDecimals
+            tvl, uint256(vault.refillTargetBps) * 10 ** offer.tokenOutDecimals, MAX_BASIS_POINTS * 10 ** managedDecimals
         );
         return actualLiquidity < targetReserve ? actualLiquidity : targetReserve;
     }

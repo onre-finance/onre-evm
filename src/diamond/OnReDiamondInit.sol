@@ -16,6 +16,7 @@ import {IDiamondLoupe} from "./contracts/interfaces/IDiamondLoupe.sol";
 import {LibDiamond} from "./contracts/libraries/LibDiamond.sol";
 import {LibOnReStorage} from "./LibOnReStorage.sol";
 import {LibOnReAccessControl} from "../libraries/LibOnReAccessControl.sol";
+import {LibOnReManagedTokenFactory} from "../libraries/LibOnReManagedTokenFactory.sol";
 import {LibOnReRoles} from "../libraries/LibOnReRoles.sol";
 
 contract OnReDiamondInit {
@@ -34,6 +35,10 @@ contract OnReDiamondInit {
             revert BothApproversFilledError();
         }
 
+        // Lock initialization before validating the externally supplied implementation.
+        // Any revert below rolls this write back with the rest of the transaction.
+        s.initialized = true;
+        LibOnReManagedTokenFactory._initialize(params.managedTokenImplementation);
         LibOnReAccessControl._initialize(params.boss, params.admin, params.worker, params.upgrader);
 
         uint256 approverLength = params.approvers.length;
@@ -49,8 +54,6 @@ contract OnReDiamondInit {
         ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
         ds.supportedInterfaces[type(IAccessControl).interfaceId] = true;
-        s.initialized = true;
-
         _handOffBootstrapUpgrader(params.upgrader);
     }
 

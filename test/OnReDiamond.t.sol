@@ -9,6 +9,8 @@ import {Diamond} from "../src/diamond/contracts/Diamond.sol";
 import {DiamondCutFacet} from "../src/diamond/contracts/facets/DiamondCutFacet.sol";
 import {IDiamondCut} from "../src/diamond/contracts/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../src/diamond/contracts/interfaces/IDiamondLoupe.sol";
+import {IManagedToken} from "../src/IManagedToken.sol";
+import {ManagedToken} from "../src/ManagedToken.sol";
 import {LibDiamond} from "../src/diamond/contracts/libraries/LibDiamond.sol";
 import {LibOnReStorage} from "../src/diamond/LibOnReStorage.sol";
 import {DiamondProxy} from "../src/generated/DiamondProxy.sol";
@@ -17,13 +19,14 @@ import {
     ApproverAlreadyExistsError,
     BossRoleManagedSeparatelyError,
     BothApproversFilledError,
+    InvalidManagedTokenImplementationError,
     NoChangeError,
     NotPendingBossError,
     UnsupportedRoleError,
     ZeroAddressError
 } from "../src/types/OnReAppErrors.sol";
 import {BossTransferCancelled, BossTransferStarted, BossTransferred} from "../src/types/OnReAppEvents.sol";
-import {InitializeParams, MarketStats, OnReTokenConfig} from "../src/types/OnReTypes.sol";
+import {InitializeParams, MarketStats, ManagedTokenConfig} from "../src/types/OnReTypes.sol";
 import {OnReDiamondTestHelper} from "./helpers/OnReDiamondTestHelper.sol";
 
 contract OnReDiamondTest is Test, OnReDiamondTestHelper {
@@ -33,10 +36,17 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     address private upgrader = makeAddr("upgrader");
     address private other = makeAddr("other");
     IDiamondProxy private app;
+    address private managedTokenImplementation;
 
     function setUp() public {
+        managedTokenImplementation = address(new ManagedToken());
         InitializeParams memory params = InitializeParams({
-            boss: boss, admin: admin, worker: worker, upgrader: upgrader, approvers: new address[](0)
+            boss: boss,
+            admin: admin,
+            worker: worker,
+            upgrader: upgrader,
+            managedTokenImplementation: managedTokenImplementation,
+            approvers: new address[](0)
         });
         app = _deployDiamondApp(params);
     }
@@ -48,13 +58,14 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
     function test_AtomicDeploymentInstallsStandardAndApplicationFacets() public view {
         IDiamondLoupe loupe = IDiamondLoupe(address(app));
-        assertEq(loupe.facetAddresses().length, 12);
-        assertEq(loupe.facets().length, 12);
-        assertTrue(loupe.facetAddress(IDiamondProxy.registerOnReToken.selector) != address(0));
+        assertEq(loupe.facetAddresses().length, 13);
+        assertEq(loupe.facets().length, 13);
+        assertTrue(loupe.facetAddress(IDiamondProxy.deployManagedToken.selector) != address(0));
+        assertTrue(loupe.facetAddress(IDiamondProxy.registerManagedToken.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.initializeBuffer.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.marketStats.selector) != address(0));
         assertNotEq(
-            loupe.facetAddress(IDiamondProxy.registerOnReToken.selector),
+            loupe.facetAddress(IDiamondProxy.registerManagedToken.selector),
             loupe.facetAddress(IDiamondProxy.marketStats.selector)
         );
         assertEq(loupe.facetFunctionSelectors(loupe.facetAddress(IDiamondProxy.marketStats.selector)).length, 1);
@@ -380,7 +391,12 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
         // A deployer that is itself the configured upgrader keeps the role.
         InitializeParams memory params = InitializeParams({
-            boss: boss, admin: admin, worker: worker, upgrader: address(this), approvers: new address[](0)
+            boss: boss,
+            admin: admin,
+            worker: worker,
+            upgrader: address(this),
+            managedTokenImplementation: managedTokenImplementation,
+            approvers: new address[](0)
         });
         IDiamondProxy retained = _deployDiamondApp(params);
         assertTrue(retained.hasRole(upgraderRole, address(this)));
@@ -413,6 +429,26 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.upgrader = upgrader;
+        params.managedTokenImplementation = address(0);
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
+        );
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.managedTokenImplementation = other;
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
+        );
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        DiamondIncompatibleManagedToken incompatibleImplementation = new DiamondIncompatibleManagedToken();
+        params.managedTokenImplementation = address(incompatibleImplementation);
+        vm.expectRevert(
+            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
+        );
+        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
+
+        params.managedTokenImplementation = managedTokenImplementation;
         params.approvers = new address[](3);
         params.approvers[0] = makeAddr("approverA");
         params.approvers[1] = makeAddr("approverB");
@@ -457,7 +493,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     function test_ReplacementFacetReadsExistingNamespacedApplicationState() public {
         NineDecimalToken token = new NineDecimalToken();
         vm.prank(boss);
-        app.registerOnReToken(address(token));
+        app.registerManagedToken(address(token));
 
         StorageAwareMarketStatsFacet replacement = new StorageAwareMarketStatsFacet();
         _cut(
@@ -565,10 +601,13 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
             admin: makeAddr("initAdmin"),
             worker: makeAddr("initWorker"),
             upgrader: makeAddr("initUpgrader"),
+            managedTokenImplementation: managedTokenImplementation,
             approvers: new address[](0)
         });
     }
 }
+
+contract DiamondIncompatibleManagedToken {}
 
 contract DiamondTestFacetV1 {
     function version() external pure returns (uint256) {
@@ -594,7 +633,7 @@ contract DiamondMultiSelectorFacet {
 
 contract StorageAwareMarketStatsFacet {
     function marketStats(address token) external view returns (MarketStats memory stats) {
-        OnReTokenConfig storage config = LibOnReStorage._appStorage().onReTokenConfigs[token];
+        ManagedTokenConfig storage config = LibOnReStorage._appStorage().managedTokenConfigs[token];
         stats.tvl = config.enabled ? 1 : 0;
         stats.nav = config.decimals;
     }
@@ -603,6 +642,10 @@ contract StorageAwareMarketStatsFacet {
 contract NineDecimalToken {
     function decimals() external pure returns (uint8) {
         return 9;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IERC165).interfaceId || interfaceId == type(IManagedToken).interfaceId;
     }
 }
 

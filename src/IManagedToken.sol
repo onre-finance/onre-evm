@@ -3,10 +3,11 @@ pragma solidity 0.8.35;
 
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 
-interface IOnReToken is IGetCCIPAdmin {
+interface IManagedToken is IGetCCIPAdmin {
     struct InitializeParams {
         string name;
         string symbol;
+        uint8 decimals;
         address admin;
         address ccipAdmin;
         address[] initialMinters;
@@ -24,6 +25,8 @@ interface IOnReToken is IGetCCIPAdmin {
     error SenderNotBurnerError(address sender);
     error SenderNotBufferControllerError(address sender);
     error BufferControllerHasNoCodeError(address controller);
+    error NoChangeError();
+    error ZeroAddressError();
 
     function mint(address to, uint256 amount) external;
 

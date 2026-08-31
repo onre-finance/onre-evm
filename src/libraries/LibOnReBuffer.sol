@@ -3,7 +3,7 @@ pragma solidity 0.8.35;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IOnReToken} from "../IOnReToken.sol";
+import {IManagedToken} from "../IManagedToken.sol";
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     BufferAlreadyExistsError,
@@ -53,16 +53,16 @@ library LibOnReBuffer {
         uint64 timestamp;
     }
 
-    function _initializeBuffer(address onReToken) internal {
+    function _initializeBuffer(address managedToken) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        LibOnReValidation._requireEnabledOnReToken(onReToken);
+        LibOnReValidation._requireEnabledManagedToken(managedToken);
 
-        BufferState storage state = LibOnReStorage._appStorage().bufferStates[onReToken];
-        if (state.exists) revert BufferAlreadyExistsError(onReToken);
+        BufferState storage state = LibOnReStorage._appStorage().bufferStates[managedToken];
+        if (state.exists) revert BufferAlreadyExistsError(managedToken);
 
-        bytes32 reserveVaultId = OnReIds._bufferReserveVaultId(onReToken);
-        bytes32 managementFeeVaultId = OnReIds._bufferManagementFeeVaultId(onReToken);
-        bytes32 performanceFeeVaultId = OnReIds._bufferPerformanceFeeVaultId(onReToken);
+        bytes32 reserveVaultId = OnReIds._bufferReserveVaultId(managedToken);
+        bytes32 managementFeeVaultId = OnReIds._bufferManagementFeeVaultId(managedToken);
+        bytes32 performanceFeeVaultId = OnReIds._bufferPerformanceFeeVaultId(managedToken);
 
         LibOnReVault._createDerivedConfigurableVault(
             reserveVaultId, ConfigurableVaultKind.BufferReserve, OnReIds.BUFFER_RESERVE_VAULT_INSTANCE_ID
@@ -83,24 +83,24 @@ library LibOnReBuffer {
         state.exists = true;
 
         emit BufferInitialized(
-            onReToken, reserveVaultId, managementFeeVaultId, performanceFeeVaultId, state.lastAccrualTimestamp
+            managedToken, reserveVaultId, managementFeeVaultId, performanceFeeVaultId, state.lastAccrualTimestamp
         );
     }
 
-    function _setBufferGrossApr(address onReToken, uint64 grossApr) internal {
+    function _setBufferGrossApr(address managedToken, uint64 grossApr) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         if (grossApr > MAX_GROSS_APR) revert InvalidBufferAprError(grossApr);
-        BufferState storage state = _requireBuffer(onReToken);
+        BufferState storage state = _requireBuffer(managedToken);
         if (state.grossApr == grossApr) revert NoChangeError();
 
-        _accrue(onReToken, state);
+        _accrue(managedToken, state);
         uint64 oldGrossApr = state.grossApr;
         state.grossApr = grossApr;
-        emit BufferGrossAprUpdated(onReToken, oldGrossApr, grossApr);
+        emit BufferGrossAprUpdated(managedToken, oldGrossApr, grossApr);
     }
 
     function _setBufferFeeConfig(
-        address onReToken,
+        address managedToken,
         uint16 managementFeeBasisPoints,
         uint16 performanceFeeBasisPoints,
         bool performanceFeeHighWatermarkEnabled
@@ -110,7 +110,7 @@ library LibOnReBuffer {
             revert InvalidBasisPointsError();
         }
 
-        BufferState storage state = _requireBuffer(onReToken);
+        BufferState storage state = _requireBuffer(managedToken);
         if (
             state.managementFeeBasisPoints == managementFeeBasisPoints
                 && state.performanceFeeBasisPoints == performanceFeeBasisPoints
@@ -119,7 +119,7 @@ library LibOnReBuffer {
             revert NoChangeError();
         }
 
-        _accrue(onReToken, state);
+        _accrue(managedToken, state);
         uint16 oldManagementFeeBasisPoints = state.managementFeeBasisPoints;
         uint16 oldPerformanceFeeBasisPoints = state.performanceFeeBasisPoints;
         bool oldPerformanceFeeHighWatermarkEnabled = state.performanceFeeHighWatermarkEnabled;
@@ -129,7 +129,7 @@ library LibOnReBuffer {
         state.performanceFeeHighWatermarkEnabled = performanceFeeHighWatermarkEnabled;
 
         emit BufferFeeConfigUpdated(
-            onReToken,
+            managedToken,
             oldManagementFeeBasisPoints,
             managementFeeBasisPoints,
             oldPerformanceFeeBasisPoints,
@@ -139,17 +139,17 @@ library LibOnReBuffer {
         );
     }
 
-    function _settleBuffer(address onReToken) internal returns (uint256 bufferMintAmount) {
+    function _settleBuffer(address managedToken) internal returns (uint256 bufferMintAmount) {
         LibOnReAccessControl._checkRole(LibOnReRoles.WORKER_ROLE);
         if (LibOnReStorage._appStorage().isKilled) revert KilledError();
-        bufferMintAmount = _accrue(onReToken, _requireBuffer(onReToken)).bufferMintAmount;
+        bufferMintAmount = _accrue(managedToken, _requireBuffer(managedToken)).bufferMintAmount;
     }
 
     function _onBeforeSupplyChange(uint256 amount, bool isMint) internal {
-        address onReToken = msg.sender;
-        BufferState storage state = _requireBuffer(onReToken);
-        _requireController(onReToken);
-        _accrue(onReToken, state);
+        address managedToken = msg.sender;
+        BufferState storage state = _requireBuffer(managedToken);
+        _requireController(managedToken);
+        _accrue(managedToken, state);
 
         uint256 oldPreviousSupply = state.previousSupply;
         uint256 newPreviousSupply;
@@ -160,29 +160,32 @@ library LibOnReBuffer {
             newPreviousSupply = oldPreviousSupply - amount;
         }
         state.previousSupply = newPreviousSupply;
-        emit BufferSupplyChangeRecorded(onReToken, isMint, amount, oldPreviousSupply, newPreviousSupply);
+        emit BufferSupplyChangeRecorded(managedToken, isMint, amount, oldPreviousSupply, newPreviousSupply);
     }
 
-    function _bufferState(address onReToken) internal view returns (BufferState storage state) {
-        state = _requireBuffer(onReToken);
+    function _bufferState(address managedToken) internal view returns (BufferState storage state) {
+        state = _requireBuffer(managedToken);
     }
 
-    function _accrue(address onReToken, BufferState storage state) private returns (BufferAccrualResult memory result) {
-        _requireController(onReToken);
-        (uint256 currentApr, uint256 currentNav) = _currentPricing(onReToken);
+    function _accrue(address managedToken, BufferState storage state)
+        private
+        returns (BufferAccrualResult memory result)
+    {
+        _requireController(managedToken);
+        (uint256 currentApr, uint256 currentNav) = _currentPricing(managedToken);
         // forge-lint: disable-next-line(unsafe-typecast)
         uint64 timestamp = uint64(block.timestamp);
-        uint256 currentSupply = IERC20(onReToken).totalSupply();
+        uint256 currentSupply = IERC20(managedToken).totalSupply();
         uint256 oldPreviousSupply = state.previousSupply;
         uint256 oldHighWatermark = state.performanceFeeHighWatermark;
         uint256 secondsElapsed = timestamp - state.lastAccrualTimestamp;
 
         if (oldPreviousSupply == 0) {
-            return _seedBaseline(onReToken, state, currentSupply, currentApr, currentNav, secondsElapsed, timestamp);
+            return _seedBaseline(managedToken, state, currentSupply, currentApr, currentNav, secondsElapsed, timestamp);
         }
 
         if (currentSupply != oldPreviousSupply) {
-            revert BufferSupplyMismatchError(onReToken, oldPreviousSupply, currentSupply);
+            revert BufferSupplyMismatchError(managedToken, oldPreviousSupply, currentSupply);
         }
         uint256 aprDelta = state.grossApr > currentApr ? state.grossApr - currentApr : 0;
         uint256 bufferMintAmount = _calculateGrossAccrual(oldPreviousSupply, aprDelta, currentApr, secondsElapsed);
@@ -196,10 +199,10 @@ library LibOnReBuffer {
         state.lastAccrualTimestamp = timestamp;
 
         if (bufferMintAmount > 0) {
-            LibOnReVault._accrue(state.reserveVaultId, onReToken, reserveMintAmount);
-            LibOnReVault._accrue(state.managementFeeVaultId, onReToken, managementFeeMintAmount);
-            LibOnReVault._accrue(state.performanceFeeVaultId, onReToken, performanceFeeMintAmount);
-            IOnReToken(onReToken).mintBuffer(bufferMintAmount);
+            LibOnReVault._accrue(state.reserveVaultId, managedToken, reserveMintAmount);
+            LibOnReVault._accrue(state.managementFeeVaultId, managedToken, managementFeeMintAmount);
+            LibOnReVault._accrue(state.performanceFeeVaultId, managedToken, performanceFeeMintAmount);
+            IManagedToken(managedToken).mintBuffer(bufferMintAmount);
         }
 
         result = BufferAccrualResult({
@@ -216,11 +219,11 @@ library LibOnReBuffer {
             currentNav: currentNav,
             timestamp: timestamp
         });
-        _emitAccrued(onReToken, result);
+        _emitAccrued(managedToken, result);
     }
 
     function _seedBaseline(
-        address onReToken,
+        address managedToken,
         BufferState storage state,
         uint256 currentSupply,
         uint256 currentApr,
@@ -246,7 +249,7 @@ library LibOnReBuffer {
             currentNav: currentNav,
             timestamp: timestamp
         });
-        _emitAccrued(onReToken, result);
+        _emitAccrued(managedToken, result);
     }
 
     function _calculateGrossAccrual(
@@ -286,27 +289,27 @@ library LibOnReBuffer {
         reserveAmount = afterManagement - performanceAmount;
     }
 
-    function _currentPricing(address onReToken) private view returns (uint256 currentApr, uint256 currentNav) {
-        bytes32 pricerId = OnReIds._usdPricerId(onReToken);
+    function _currentPricing(address managedToken) private view returns (uint256 currentApr, uint256 currentNav) {
+        bytes32 pricerId = OnReIds._usdPricerId(managedToken);
         Pricer storage pricer = LibOnReValidation._requireExecutablePricer(pricerId);
         PricingVector storage vector = LibOnRePricer._activePricingVector(pricerId, pricer);
         currentApr = vector.apr;
         currentNav = LibOnRePricer._calculatePricingVectorPriceAt(vector, block.timestamp);
     }
 
-    function _requireBuffer(address onReToken) private view returns (BufferState storage state) {
-        state = LibOnReStorage._appStorage().bufferStates[onReToken];
-        if (!state.exists) revert BufferNotFoundError(onReToken);
+    function _requireBuffer(address managedToken) private view returns (BufferState storage state) {
+        state = LibOnReStorage._appStorage().bufferStates[managedToken];
+        if (!state.exists) revert BufferNotFoundError(managedToken);
     }
 
-    function _requireController(address onReToken) private view {
-        address controller = IOnReToken(onReToken).bufferController();
-        if (controller != address(this)) revert InvalidBufferControllerError(onReToken, controller);
+    function _requireController(address managedToken) private view {
+        address controller = IManagedToken(managedToken).bufferController();
+        if (controller != address(this)) revert InvalidBufferControllerError(managedToken, controller);
     }
 
-    function _emitAccrued(address onReToken, BufferAccrualResult memory result) private {
+    function _emitAccrued(address managedToken, BufferAccrualResult memory result) private {
         emit BufferAccrued(
-            onReToken,
+            managedToken,
             result.secondsElapsed,
             result.aprDelta,
             result.bufferMintAmount,

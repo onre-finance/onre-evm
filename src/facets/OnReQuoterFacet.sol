@@ -9,10 +9,10 @@ contract OnReQuoterFacet {
         quoterId = LibOnReQuoter._createQuoter(kind, quoterInstanceId);
     }
 
-    function configurePropRfq(bytes32 quoterId, address assetToken, address onReToken, PropRfqConfig calldata config)
+    function configurePropRfq(bytes32 quoterId, address assetToken, address managedToken, PropRfqConfig calldata config)
         external
     {
-        LibOnReQuoter._configurePropRfq(quoterId, assetToken, onReToken, config);
+        LibOnReQuoter._configurePropRfq(quoterId, assetToken, managedToken, config);
     }
 
     function setQuoterEnabled(bytes32 quoterId, bool enabled) external {

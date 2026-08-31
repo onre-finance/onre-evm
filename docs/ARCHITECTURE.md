@@ -45,7 +45,7 @@ The internal libraries follow the same responsibility boundaries:
 - `LibOnReMarketStats` owns circulating supply, TVL, APY, and NAV-adjustment
   derivation. Offer settlement uses its canonical TVL calculation for
   liquidity-vault refill targets.
-- `LibOnReConfig` owns OnRe-token and supply-exclusion configuration, while
+- `LibOnReConfig` owns managed-token and supply-exclusion configuration, while
   `LibOnReAppConfig` owns approvers and emergency control.
 - `LibOnReFeeConfig` owns reusable basis-point and minimum input-token fee
   policy and fee calculation.
@@ -69,8 +69,8 @@ domain interface layer: Gemforge parses the facet sources and generates
 That interface is regenerated on every `gemforge build`, so it cannot drift from
 the deployed selector set.
 
-Each registered OnRe token has exactly one deterministic USD Pricer. Offers and
-MarketStats derive that Pricer from the OnRe token address; there is no mutable
+Each registered managed token has exactly one deterministic USD Pricer. Offers and
+MarketStats derive that Pricer from the managed token address; there is no mutable
 main-Pricer pointer or per-offer Pricer reference.
 
 ## Storage and upgrades
@@ -79,9 +79,8 @@ Diamond selector tables, OnRe application state, and application roles use
 separate ERC-7201 namespaces. Facets must access shared state through the
 corresponding storage library; they must not declare ordinary state variables.
 
-This layout targets a fresh, not-yet-deployed Diamond. It is a breaking storage
-and ABI replacement for the earlier combined offer/redemption prototype. Do not
-install it over that prototype without a purpose-built migration initializer.
+This layout targets a fresh, not-yet-deployed Diamond and does not preserve an
+earlier application storage layout.
 
 Fresh deployment is two transactions: `DiamondProxy`'s constructor installs
 `DiamondCutFacet` and `DiamondLoupeFacet`, then a single cut installs every
@@ -130,33 +129,50 @@ BufferReserve withdrawals require `DEFAULT_ADMIN_ROLE`, while Fee vaults retain
 their configured permissionless withdrawal path. Buffer accrual mints the full
 amount to the Diamond and divides that balance between one BufferReserve vault
 and two distinct Fee vaults for management and performance fees. Buffer
-initialization derives these vault IDs from the OnRe token and vault role, then
+initialization derives these vault IDs from the managed token and vault role, then
 creates independent configurable-vault records. Their withdrawal destinations
 are set through the standard configurable-vault update path.
 
 Prop RFQ is implemented as a quoter kind rather than a separate facet. Each
-instance is bound to one asset/OnRe pair, stores its own configuration and
+instance is bound to one asset/managed-token pair, stores its own configuration and
 rolling pressure, and can be shared by both directed permissionless
 OfferConfigs for that pair.
 
-## OnRe token issuance
+## Managed token issuance
 
-OnRe tokens are not pre-minted. The token administrator grants the Diamond mint
-and burn authority. Successful `AssetToOnRe` settlement mints the quoted output
-for the user, while `OnReToAsset` settlement burns the net OnRe input before
-releasing asset liquidity. Permissioned and worker settlement is direct.
+Managed tokens are not pre-minted. The token administrator grants the Diamond
+mint and burn authority. Successful `AssetToManaged` settlement mints the quoted
+output for the user, while `ManagedToAsset` settlement burns the net
+managed-token input before releasing asset liquidity. Permissioned and worker
+settlement is direct.
 Permissionless settlement routes input as user to settlement account to Diamond,
 then routes output as Diamond or mint to settlement account to user. The
 settlement account is boss-configured, pre-approves the Diamond for every
 supported token, and retains no balance after a successful transaction.
 
+Managed-token instances are independent `ERC1967Proxy` contracts using the UUPS
+upgrade mechanism implemented by `ManagedToken`. Each token administrator holds
+that proxy's `UPGRADER_ROLE`, so one token can move to a new implementation
+without changing any other token. Each proxy also keeps independent metadata,
+decimals, balances, operational roles, CCIP administration, and Buffer
+configuration.
+
+The Diamond's `OnReManagedTokenFactoryFacet` deploys and atomically initializes
+canonical proxies through the Diamond's block-explorer or Safe interface. Every
+factory deployment automatically grants the Diamond mint and burn authority,
+registers the token, appends it to the Diamond's deployment registry, and emits
+`ManagedTokenDeployed`. The application boss controls deployment and may change
+the implementation template used by future deployments. Changing that template
+does not upgrade existing tokens; each existing proxy must be upgraded
+individually by its token administrator. Externally deployed compatible tokens
+can still be registered, but are not reported as Diamond-deployed tokens.
+
 All minted supply is circulating unless governance explicitly registers an
 excluded-supply address. Operational vault assets remain physically held by the
 Diamond.
 
-`OnReTokenConfig` keeps a reserved `uint160` at its original first-field offset.
-It has no runtime meaning; it only preserves the already-deployed namespaced
-storage layout while the old inventory configuration is removed.
+`ManagedTokenConfig` uses an explicit `exists` flag, so tokens configured with
+zero decimals are distinguishable from unregistered addresses.
 
 Separately, a token may configure the Diamond as its Buffer controller. That
 controller has one narrow mint path: `mintBuffer` always mints to the Diamond

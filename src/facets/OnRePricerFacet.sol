@@ -5,8 +5,8 @@ import {LibOnRePricer} from "../libraries/LibOnRePricer.sol";
 import {PricingDenomination, PricingVector} from "../types/OnReTypes.sol";
 
 contract OnRePricerFacet {
-    function createPricer(address onReToken, PricingDenomination denomination) external returns (bytes32 pricerId) {
-        pricerId = LibOnRePricer._createPricer(onReToken, denomination);
+    function createPricer(address managedToken, PricingDenomination denomination) external returns (bytes32 pricerId) {
+        pricerId = LibOnRePricer._createPricer(managedToken, denomination);
     }
 
     function addPricingVector(bytes32 pricerId, PricingVector calldata vector) external {

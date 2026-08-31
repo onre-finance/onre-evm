@@ -8,7 +8,7 @@ import {
     FeeConfig,
     FulfillmentRequest,
     OfferConfig,
-    OnReTokenConfig,
+    ManagedTokenConfig,
     Pricer,
     PricingVector,
     PropRfqState,
@@ -18,8 +18,8 @@ import {
 
 /// @notice Read helpers shared by the view facet.
 library LibOnReView {
-    function _getOnReTokenConfig(address onReToken) internal view returns (OnReTokenConfig memory) {
-        return LibOnReStorage._appStorage().onReTokenConfigs[onReToken];
+    function _getManagedTokenConfig(address managedToken) internal view returns (ManagedTokenConfig memory) {
+        return LibOnReStorage._appStorage().managedTokenConfigs[managedToken];
     }
 
     function _getPricer(bytes32 pricerId) internal view returns (Pricer memory) {
@@ -63,8 +63,8 @@ library LibOnReView {
         return LibOnReStorage._appStorage().configurableVaults[vaultId];
     }
 
-    function _getExcludedSupplyAccounts(address onReToken) internal view returns (address[] memory) {
-        return LibOnReStorage._appStorage().excludedSupplyAccounts[onReToken];
+    function _getExcludedSupplyAccounts(address managedToken) internal view returns (address[] memory) {
+        return LibOnReStorage._appStorage().excludedSupplyAccounts[managedToken];
     }
 
     function _appConfig() internal view returns (bool isKilled, address approver1, address approver2) {

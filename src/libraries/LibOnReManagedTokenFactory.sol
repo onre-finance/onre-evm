@@ -2,37 +2,23 @@
 pragma solidity 0.8.35;
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC1822Proxiable} from "@openzeppelin/contracts/interfaces/draft-IERC1822.sol";
 import {ERC165Checker} from "@openzeppelin/contracts/utils/introspection/ERC165Checker.sol";
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {IManagedToken} from "../IManagedToken.sol";
 import {ManagedToken} from "../ManagedToken.sol";
-import {InvalidManagedTokenImplementationError, NoChangeError} from "../types/OnReAppErrors.sol";
-import {ManagedTokenDeployed, ManagedTokenImplementationSet} from "../types/OnReAppEvents.sol";
+import {InvalidManagedTokenImplementationError} from "../types/OnReAppErrors.sol";
+import {ManagedTokenDeployed} from "../types/OnReAppEvents.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReConfig} from "./LibOnReConfig.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 
 /// @notice Diamond-owned deployment and enumeration of canonical managed tokens.
 library LibOnReManagedTokenFactory {
-    function _initialize(address implementation) internal {
-        _validateImplementation(implementation);
-        LibOnReStorage._appStorage().managedTokenImplementation = implementation;
-        emit ManagedTokenImplementationSet(address(0), implementation);
-    }
-
-    function _setManagedTokenImplementation(address newImplementation) internal {
-        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
-        _validateImplementation(newImplementation);
-
-        LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
-        address previousImplementation = s.managedTokenImplementation;
-        if (newImplementation == previousImplementation) revert NoChangeError();
-
-        s.managedTokenImplementation = newImplementation;
-        emit ManagedTokenImplementationSet(previousImplementation, newImplementation);
-    }
+    bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     function _deployManagedToken(
+        address implementation,
         string calldata name,
         string calldata symbol,
         uint8 decimals,
@@ -42,6 +28,7 @@ library LibOnReManagedTokenFactory {
         address[] calldata initialBurners
     ) internal returns (address managedToken) {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        _validateImplementation(implementation);
 
         address[] memory minters = _withDiamond(initialMinters);
         address[] memory burners = _withDiamond(initialBurners);
@@ -56,18 +43,13 @@ library LibOnReManagedTokenFactory {
         });
 
         LibOnReStorage.AppStorage storage s = LibOnReStorage._appStorage();
-        managedToken =
-            address(new ERC1967Proxy(s.managedTokenImplementation, abi.encodeCall(ManagedToken.initialize, (params))));
+        managedToken = address(new ERC1967Proxy(implementation, abi.encodeCall(ManagedToken.initialize, (params))));
 
         s.deployedManagedTokens.push(managedToken);
         s.managedTokenDeployedByDiamond[managedToken] = true;
         LibOnReConfig._registerManagedToken(managedToken);
 
-        emit ManagedTokenDeployed(managedToken, admin, ccipAdmin, name, symbol, decimals);
-    }
-
-    function _managedTokenImplementation() internal view returns (address) {
-        return LibOnReStorage._appStorage().managedTokenImplementation;
+        emit ManagedTokenDeployed(managedToken, admin, ccipAdmin, implementation, name, symbol, decimals);
     }
 
     function _deployedManagedTokenCount() internal view returns (uint256) {
@@ -91,6 +73,12 @@ library LibOnReManagedTokenFactory {
             implementation == address(0) || implementation.code.length == 0
                 || !ERC165Checker.supportsInterface(implementation, type(IManagedToken).interfaceId)
         ) {
+            revert InvalidManagedTokenImplementationError(implementation);
+        }
+
+        try IERC1822Proxiable(implementation).proxiableUUID() returns (bytes32 slot) {
+            if (slot != IMPLEMENTATION_SLOT) revert InvalidManagedTokenImplementationError(implementation);
+        } catch {
             revert InvalidManagedTokenImplementationError(implementation);
         }
     }

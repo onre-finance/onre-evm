@@ -4,11 +4,7 @@ pragma solidity 0.8.35;
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
-import {
-    InvalidDecimalsError,
-    InvalidManagedTokenImplementationError,
-    NoChangeError
-} from "../src/types/OnReAppErrors.sol";
+import {InvalidDecimalsError, InvalidManagedTokenImplementationError} from "../src/types/OnReAppErrors.sol";
 import {ManagedTokenConfig} from "../src/types/OnReTypes.sol";
 import {OnReAppTestBase} from "./helpers/OnReAppTestBase.sol";
 
@@ -22,6 +18,7 @@ contract OnReManagedTokenFactoryFacetTest is OnReAppTestBase {
 
     function test_BossDeploysRegistersAndRecordsManagedToken() public {
         address tokenAddress = app.deployManagedToken(
+            managedTokenImplementation,
             "Managed EUR",
             "MEUR",
             6,
@@ -48,7 +45,6 @@ contract OnReManagedTokenFactoryFacetTest is OnReAppTestBase {
         assertTrue(config.enabled);
         assertEq(config.decimals, 6);
 
-        assertEq(app.managedTokenImplementation(), managedTokenImplementation);
         assertEq(_implementationOf(tokenAddress), managedTokenImplementation);
         assertEq(app.deployedManagedTokenCount(), 2);
         assertEq(app.deployedManagedTokenAt(1), tokenAddress);
@@ -63,26 +59,60 @@ contract OnReManagedTokenFactoryFacetTest is OnReAppTestBase {
             )
         );
         vm.prank(user);
-        app.deployManagedToken("Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0));
+        app.deployManagedToken(
+            managedTokenImplementation,
+            "Managed EUR",
+            "MEUR",
+            6,
+            tokenAdmin,
+            ccipAdmin,
+            new address[](0),
+            new address[](0)
+        );
     }
 
     function test_FailedDeploymentDoesNotRegisterOrRecordToken() public {
         uint256 countBefore = app.deployedManagedTokenCount();
 
         vm.expectRevert(InvalidDecimalsError.selector);
-        app.deployManagedToken("Managed EUR", "MEUR", 19, tokenAdmin, ccipAdmin, new address[](0), new address[](0));
+        app.deployManagedToken(
+            managedTokenImplementation,
+            "Managed EUR",
+            "MEUR",
+            19,
+            tokenAdmin,
+            ccipAdmin,
+            new address[](0),
+            new address[](0)
+        );
         assertEq(app.deployedManagedTokenCount(), countBefore);
 
         vm.expectRevert(IManagedToken.ZeroAddressError.selector);
         app.deployManagedToken(
-            "Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, _singleAddress(address(0)), new address[](0)
+            managedTokenImplementation,
+            "Managed EUR",
+            "MEUR",
+            6,
+            tokenAdmin,
+            ccipAdmin,
+            _singleAddress(address(0)),
+            new address[](0)
         );
         assertEq(app.deployedManagedTokenCount(), countBefore);
     }
 
     function test_TokenAdminUpgradesOnlyTheSelectedDiamondToken() public {
         ManagedToken secondToken = ManagedToken(
-            app.deployManagedToken("Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0))
+            app.deployManagedToken(
+                managedTokenImplementation,
+                "Managed EUR",
+                "MEUR",
+                6,
+                tokenAdmin,
+                ccipAdmin,
+                new address[](0),
+                new address[](0)
+            )
         );
         DiamondManagedTokenV2 newImplementation = new DiamondManagedTokenV2();
 
@@ -109,7 +139,7 @@ contract OnReManagedTokenFactoryFacetTest is OnReAppTestBase {
         assertEq(secondToken.decimals(), 6);
     }
 
-    function test_BossChangesImplementationOnlyForFutureDeployments() public {
+    function test_BossChoosesAndValidatesImplementationForEachDeployment() public {
         DiamondManagedTokenV2 newImplementation = new DiamondManagedTokenV2();
 
         vm.expectRevert(
@@ -118,27 +148,52 @@ contract OnReManagedTokenFactoryFacetTest is OnReAppTestBase {
             )
         );
         vm.prank(user);
-        app.setManagedTokenImplementation(address(newImplementation));
+        app.deployManagedToken(
+            address(newImplementation),
+            "Managed EUR",
+            "MEUR",
+            6,
+            tokenAdmin,
+            ccipAdmin,
+            new address[](0),
+            new address[](0)
+        );
 
         vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, address(0)));
-        app.setManagedTokenImplementation(address(0));
+        app.deployManagedToken(
+            address(0), "Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0)
+        );
 
         vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, user));
-        app.setManagedTokenImplementation(user);
+        app.deployManagedToken(
+            user, "Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0)
+        );
 
         IncompatibleManagedTokenImplementation incompatible = new IncompatibleManagedTokenImplementation();
         vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, address(incompatible)));
-        app.setManagedTokenImplementation(address(incompatible));
-
-        vm.expectRevert(NoChangeError.selector);
-        app.setManagedTokenImplementation(managedTokenImplementation);
-
-        app.setManagedTokenImplementation(address(newImplementation));
-        ManagedToken futureToken = ManagedToken(
-            app.deployManagedToken("Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0))
+        app.deployManagedToken(
+            address(incompatible), "Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0)
         );
 
-        assertEq(app.managedTokenImplementation(), address(newImplementation));
+        NonUupsManagedTokenImplementation nonUups = new NonUupsManagedTokenImplementation();
+        vm.expectRevert(abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, address(nonUups)));
+        app.deployManagedToken(
+            address(nonUups), "Managed EUR", "MEUR", 6, tokenAdmin, ccipAdmin, new address[](0), new address[](0)
+        );
+
+        ManagedToken futureToken = ManagedToken(
+            app.deployManagedToken(
+                address(newImplementation),
+                "Managed EUR",
+                "MEUR",
+                6,
+                tokenAdmin,
+                ccipAdmin,
+                new address[](0),
+                new address[](0)
+            )
+        );
+
         assertEq(_implementationOf(address(managedToken)), managedTokenImplementation);
         assertEq(_implementationOf(address(futureToken)), address(newImplementation));
         assertEq(DiamondManagedTokenV2(address(futureToken)).version(), 2);
@@ -172,3 +227,9 @@ contract DiamondManagedTokenV2 is ManagedToken {
 }
 
 contract IncompatibleManagedTokenImplementation {}
+
+contract NonUupsManagedTokenImplementation {
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IManagedToken).interfaceId;
+    }
+}

@@ -30,7 +30,7 @@ export function entityLabel(type, id) {
   const record = recordById(type, id);
   if (!record) return `Unknown ${type.toLowerCase()} · ${short(id)}`;
   const value = record.value;
-  if (type === "Pricer") return `${tokenLabel(value.onReToken)} / ${PRICING_DENOMINATIONS[enumValue(value.denomination)]}`;
+  if (type === "Pricer") return `${tokenLabel(value.managedToken)} / ${PRICING_DENOMINATIONS[enumValue(value.denomination)]}`;
   if (type === "Quoter") return `${QUOTER_KINDS[enumValue(value.kind)]} #${value.instanceId}`;
   if (type === "Vault") return `${VAULT_KINDS[enumValue(value.kind)]} vault #${value.vaultId}`;
   if (type === "Fee config") return `Fee config #${value.feeConfigId} · ${formatBps(value.basisPoints)}`;
@@ -40,18 +40,18 @@ export function entityLabel(type, id) {
 export function tokenUsage(address) {
   const lower = String(address).toLowerCase();
   const uses = [];
-  if (recordsOf("Pricer").some((record) => record.value.onReToken.toLowerCase() === lower)) uses.push("Pricing");
+  if (recordsOf("Pricer").some((record) => record.value.managedToken.toLowerCase() === lower)) uses.push("Pricing");
   if (recordsOf("Quoter").some((record) => {
     const rfqState = recordById("Prop RFQ", record.id)?.value;
-    return rfqState && [rfqState.assetToken, rfqState.onReToken].some((token) => token.toLowerCase() === lower);
+    return rfqState && [rfqState.assetToken, rfqState.managedToken].some((token) => token.toLowerCase() === lower);
   })) uses.push("Quoting");
   if (recordsOf("Offer").some((record) => [record.value.tokenIn, record.value.tokenOut].some((token) => token.toLowerCase() === lower))) uses.push("Offers");
   if (recordsOf("Buffer").some((record) => String(record.id).toLowerCase() === lower)) uses.push("Buffer");
   return uses.join(", ");
 }
 
-export function offerOnReToken(offer) {
-  return [offer.tokenIn, offer.tokenOut].find((token) => recordsOf("OnRe token").some((record) => String(record.id).toLowerCase() === token.toLowerCase()));
+export function offerManagedToken(offer) {
+  return [offer.tokenIn, offer.tokenOut].find((token) => recordsOf("Managed token").some((record) => String(record.id).toLowerCase() === token.toLowerCase()));
 }
 
 export function vaultPurpose(kind) {

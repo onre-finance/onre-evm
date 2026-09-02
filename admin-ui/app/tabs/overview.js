@@ -3,7 +3,7 @@ import { $, openTab } from "../ui.js";
 
 export function renderOverview(onTransactions) {
   const summaries = [
-    ["tokens", recordsOf("OnRe token").length, "OnRe tokens"],
+    ["tokens", recordsOf("Managed token").length, "Managed tokens"],
     ["pricing", recordsOf("Pricer").length, "Pricers"],
     ["buffer", recordsOf("Buffer").length, "Buffers"],
     ["quoters", recordsOf("Quoter").length, "Quoters"],

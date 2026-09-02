@@ -18,7 +18,7 @@ export function renderQuoters() {
       ["Compatible flow", kind === 0 ? "Permissioned or Worker" : "Permissionless"],
     ];
     if (kind === 2) facts.push(
-      ["Pair", configured ? `${tokenLabel(rfqState.assetToken)} ↔ ${tokenLabel(rfqState.onReToken)}` : "Not configured"],
+      ["Pair", configured ? `${tokenLabel(rfqState.assetToken)} ↔ ${tokenLabel(rfqState.managedToken)}` : "Not configured"],
       ["Peg haircut", configured ? formatBps(rfqState.config.curvePegHaircutBps) : "—"],
       ["Epoch", configured ? formatDuration(rfqState.config.epochDurationSeconds) : "—"],
       ["Current buy volume", configured ? rfqState.currentBuyValueStable.toString() : "—"],
@@ -27,7 +27,7 @@ export function renderQuoters() {
     return entityCard({
       eyebrow: QUOTER_KINDS[kind],
       title: `${QUOTER_KINDS[kind]} #${value.instanceId}`,
-      subtitle: kind === 2 && configured ? `${tokenLabel(rfqState.assetToken)} ↔ ${tokenLabel(rfqState.onReToken)}` : "Reusable quote engine",
+      subtitle: kind === 2 && configured ? `${tokenLabel(rfqState.assetToken)} ↔ ${tokenLabel(rfqState.managedToken)}` : "Reusable quote engine",
       status: value.disabled ? "Disabled" : configured ? "Ready" : "Needs configuration",
       statusClass: value.disabled || !configured ? "warning" : "",
       facts,

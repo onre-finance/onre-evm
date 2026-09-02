@@ -17,12 +17,12 @@ export function renderPricing() {
       : [["Pricing vectors", "None configured"]];
     return entityCard({
       eyebrow: "USD pricer",
-      title: `${tokenLabel(value.onReToken)} / ${PRICING_DENOMINATIONS[enumValue(value.denomination)]}`,
+      title: `${tokenLabel(value.managedToken)} / ${PRICING_DENOMINATIONS[enumValue(value.denomination)]}`,
       subtitle: `${count} pricing vector${count === 1 ? "" : "s"}`,
       status: value.disabled ? "Disabled" : vectors.length ? "Active" : "Needs vector",
       statusClass: value.disabled || !vectors.length ? "warning" : "",
       facts: [
-        ["OnRe token", tokenLabel(value.onReToken)],
+        ["Managed token", tokenLabel(value.managedToken)],
         ["Denomination", PRICING_DENOMINATIONS[enumValue(value.denomination)]],
         ["Current price", record.currentPrice ? formatUsdPrice(record.currentPrice) : "No active vector"],
         ...vectorFacts,
@@ -31,5 +31,5 @@ export function renderPricing() {
       idLabel: "Pricer ID",
     });
   });
-  $("#pricing-list").innerHTML = cards.length ? cards.join("") : emptyState("No pricers yet. Register an OnRe token, then create its USD pricer.");
+  $("#pricing-list").innerHTML = cards.length ? cards.join("") : emptyState("No pricers yet. Register a Managed token, then create its USD pricer.");
 }

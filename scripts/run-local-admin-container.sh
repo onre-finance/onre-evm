@@ -20,7 +20,7 @@ anvil \
   --host 0.0.0.0 \
   --port 8545 \
   --chain-id 31337 \
-  --allow-origin 'http://localhost:5173' \
+  --allow-origin '*' \
   --accounts 6 \
   --mnemonic-random 12 \
   --config-out "$anvil_config" \
@@ -68,7 +68,7 @@ cast send --rpc-url "$rpc_url" --unlocked --from "$ONRE_BOSS" \
   "$diamond_address" "setPermissionlessSettlementAccount(address)" "$permissionless_account" >/dev/null
 
 echo "Building the admin UI for Diamond $diamond_address"
-forge build admin-ui/contracts/LocalAssetToken.sol lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol
+forge build admin-ui/contracts/LocalAssetToken.sol
 pnpm exec vite build admin-ui
 
 echo "OnRe Admin: http://localhost:5173"

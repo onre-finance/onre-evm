@@ -56,7 +56,6 @@ transactions, so another developer does not need a `.env` file or private key.
 ## Manual setup
 
 ```bash
-cd evm
 pnpm devnet
 ```
 
@@ -75,10 +74,10 @@ account. The connected user is funded for local gas without becoming the boss.
 These Anvil-only RPC methods must never be used against a shared or production
 RPC.
 
-The checked-in local deployment file points the UI at zero-supply Mock USDC
-(6 decimals) and Mock ONyc (9 decimals). The Overview deployment action creates
-fresh replacements only; it does not register them or create any protocol
-configuration.
+The Overview deployment action deploys a fresh `ManagedToken` implementation,
+asks the Diamond factory to create and register the Mock ONyc UUPS proxy, and
+deploys a fresh Mock USDC. It does not create pricing, Buffer, quoter, vault,
+fee, or offer configuration.
 
 Fixture and manually tracked token addresses are stored per local chain and
 Diamond address. **Forget local token addresses** removes the current fixture
@@ -91,7 +90,7 @@ and call `takeOffer`. Permissionless offers use the contract-required empty
 approval automatically. Permissioned offers expose expiry and signature inputs.
 Worker offers are excluded because they must use fulfillment requests.
 
-OnRe tokens are minted and burned by the Diamond; the UI does not configure an
+Managed tokens are minted and burned by the Diamond; the UI does not configure an
 inventory source. The permissionless settlement account grants the Diamond a
 maximum allowance for each freshly deployed or registered token and re-checks
 both tokens before a permissionless offer is created.

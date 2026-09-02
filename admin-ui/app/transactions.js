@@ -1,5 +1,5 @@
 import { parseUnits, zeroAddress } from "viem";
-import { BASIS_POINTS, erc20MetadataAbi, OFFER_FLOWS, localAssetArtifact, onReTokenArtifact } from "./config.js";
+import { BASIS_POINTS, erc20MetadataAbi, OFFER_FLOWS, localAssetArtifact, managedTokenArtifact } from "./config.js";
 import { readDiamond, requireUserWallet, writeBossToken, writeUserDiamond, writeUserToken } from "./chain.js";
 import { recordById } from "./data.js";
 import { entityLabel, tokenLabel, tokenMeta } from "./model.js";
@@ -93,7 +93,7 @@ export async function mintMockToken(form) {
   const meta = tokenMeta(token);
   if (meta.decimals === undefined) throw new Error("Token decimals could not be read.");
   const amount = parseUnits(requiredValue(form.elements.amount.value, "Amount"), meta.decimals);
-  const abi = token.toLowerCase() === state.fixtures.onReToken?.toLowerCase() ? onReTokenArtifact.abi : localAssetArtifact.abi;
+  const abi = token.toLowerCase() === state.fixtures.managedToken?.toLowerCase() ? managedTokenArtifact.abi : localAssetArtifact.abi;
   await writeBossToken(token, abi, "mint", [recipient, amount]);
   await renderWalletBalances();
   return `Minted ${formatTokenAmount(amount, meta.decimals)} ${meta.symbol} to ${recipient}.`;

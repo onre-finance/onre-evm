@@ -3,19 +3,19 @@ import { tokenLabel, tokenMeta, tokenUsage } from "../model.js";
 import { $, emptyState, entityCard } from "../ui.js";
 
 export function renderTokens() {
-  const registered = new Map(recordsOf("OnRe token").map((record) => [String(record.id).toLowerCase(), record]));
+  const registered = new Map(recordsOf("Managed token").map((record) => [String(record.id).toLowerCase(), record]));
   const cards = knownTokenAddresses().map((address) => {
     const meta = tokenMeta(address);
     const configRecord = registered.get(address.toLowerCase());
     const config = configRecord?.value;
     return entityCard({
-      eyebrow: configRecord ? "Registered OnRe token" : "ERC-20 asset",
+      eyebrow: configRecord ? "Registered Managed token" : "ERC-20 asset",
       title: `${meta.symbol} · ${meta.name}`,
       subtitle: `${meta.decimals ?? "?"} decimals`,
       status: configRecord ? (config.enabled ? "Enabled" : "Disabled") : "Known asset",
       statusClass: configRecord && !config.enabled ? "warning" : "",
       facts: [
-        ["Protocol role", configRecord ? "OnRe token" : "External asset"],
+        ["Protocol role", configRecord ? "Managed token" : "External asset"],
         ["Registered decimals", configRecord ? Number(config.decimals) : "Not applicable"],
         ["Used by", tokenUsage(address) || "No configuration yet"],
       ],

@@ -12,13 +12,13 @@ export function renderSelectOptions() {
   });
   const form = $("#create-offer-form");
   const assets = optionsFor("asset-tokens");
-  const onReTokens = optionsFor("onre-tokens");
-  if (!form.dataset.defaultsApplied && assets.length && onReTokens.length) {
+  const managedTokens = optionsFor("managed-tokens");
+  if (!form.dataset.defaultsApplied && assets.length && managedTokens.length) {
     const latestRfq = recordsOf("Prop RFQ")[0]?.value;
     const preferredAsset = latestRfq && assets.find((option) => String(option.value).toLowerCase() === latestRfq.assetToken.toLowerCase());
-    const preferredOnRe = latestRfq && onReTokens.find((option) => String(option.value).toLowerCase() === latestRfq.onReToken.toLowerCase());
+    const preferredManaged = latestRfq && managedTokens.find((option) => String(option.value).toLowerCase() === latestRfq.managedToken.toLowerCase());
     form.elements.tokenIn.value = String((preferredAsset || assets[0]).value);
-    form.elements.tokenOut.value = String((preferredOnRe || onReTokens[0]).value);
+    form.elements.tokenOut.value = String((preferredManaged || managedTokens[0]).value);
     form.dataset.defaultsApplied = "true";
   }
   setSelectOptions(form.elements.quoterId, compatibleQuoterOptions());
@@ -47,16 +47,16 @@ export function optionsFor(kind) {
     return { value: address, label: totals.get(label) > 1 ? `${label} · deployment ${occurrence}` : label };
   });
   if (kind === "tokens") return tokens;
-  if (kind === "onre-tokens") return recordsOf("OnRe token").map((record) => ({ value: record.id, label: tokenLabel(record.id) }));
+  if (kind === "managed-tokens") return recordsOf("Managed token").map((record) => ({ value: record.id, label: tokenLabel(record.id) }));
   if (kind === "buffer-candidates") {
     const initialized = new Set(recordsOf("Buffer").map((record) => String(record.id).toLowerCase()));
-    return recordsOf("OnRe token")
+    return recordsOf("Managed token")
       .filter((record) => !initialized.has(String(record.id).toLowerCase()))
       .map((record) => ({ value: record.id, label: tokenLabel(record.id) }));
   }
   if (kind === "asset-tokens") {
-    const onRe = new Set(recordsOf("OnRe token").map((record) => String(record.id).toLowerCase()));
-    return tokens.filter((option) => !onRe.has(String(option.value).toLowerCase()));
+    const managed = new Set(recordsOf("Managed token").map((record) => String(record.id).toLowerCase()));
+    return tokens.filter((option) => !managed.has(String(option.value).toLowerCase()));
   }
   if (kind === "pricers") return recordsOf("Pricer").map((record) => ({ value: record.id, label: entityLabel("Pricer", record.id) }));
   if (kind === "rfq-quoters") return recordsOf("Quoter").filter((record) => enumValue(record.value.kind) === 2).map((record) => ({ value: record.id, label: entityLabel("Quoter", record.id) }));
@@ -78,7 +78,7 @@ export function optionsFor(kind) {
 }
 
 export function mintableTokenAddresses() {
-  return [state.fixtures.assetToken, state.fixtures.onReToken]
+  return [state.fixtures.assetToken, state.fixtures.managedToken]
     .filter((address) => address && isAddress(address))
     .map((address) => getAddress(address));
 }
@@ -102,6 +102,6 @@ function compatibleQuoterOptions() {
     const rfqState = rfqStates.get(String(record.id).toLowerCase());
     if (!rfqState || !tokenIn || !tokenOut) return false;
     const pair = new Set([tokenIn.toLowerCase(), tokenOut.toLowerCase()]);
-    return pair.has(rfqState.assetToken.toLowerCase()) && pair.has(rfqState.onReToken.toLowerCase());
+    return pair.has(rfqState.assetToken.toLowerCase()) && pair.has(rfqState.managedToken.toLowerCase());
   }).map((record) => ({ value: record.id, label: entityLabel("Quoter", record.id) }));
 }

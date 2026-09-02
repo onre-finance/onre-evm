@@ -19,7 +19,7 @@ function storageKey(name, diamondAddress) {
 function localFixtureDefaults(diamondAddress) {
   if (!localFixtures.diamond || String(diamondAddress).toLowerCase() !== localFixtures.diamond.toLowerCase()) return {};
   return Object.fromEntries([
-    ["onReToken", localFixtures.onReToken],
+    ["managedToken", localFixtures.managedToken],
     ["assetToken", localFixtures.assetToken],
   ].filter(([, address]) => address && isAddress(address)).map(([key, address]) => [key, getAddress(address)]));
 }
@@ -76,11 +76,11 @@ export function resetFixtures() {
 }
 
 export function replaceFixtures(fixtures) {
-  for (const address of [state.fixtures.onReToken, state.fixtures.assetToken].filter(Boolean)) {
+  for (const address of [state.fixtures.managedToken, state.fixtures.assetToken].filter(Boolean)) {
     state.trackedTokens.delete(getAddress(address));
   }
   state.fixtures = normalizeFixtures(fixtures);
-  for (const address of [state.fixtures.onReToken, state.fixtures.assetToken].filter(Boolean)) {
+  for (const address of [state.fixtures.managedToken, state.fixtures.assetToken].filter(Boolean)) {
     state.trackedTokens.add(getAddress(address));
   }
   storeFixtures();

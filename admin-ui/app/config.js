@@ -1,12 +1,11 @@
 import { defineChain, getAddress } from "viem";
 import diamondAbi from "../../src/generated/abi.json";
 import deployments from "../../gemforge.deployments.json";
-import onReTokenArtifact from "../../out/OnReToken.sol/OnReToken.json";
-import proxyArtifact from "../../out/ERC1967Proxy.sol/ERC1967Proxy.json";
+import managedTokenArtifact from "../../out/ManagedToken.sol/ManagedToken.json";
 import localAssetArtifact from "../../out/LocalAssetToken.sol/LocalAssetToken.json";
 import localFixtures from "../local-deployment.json";
 
-export { diamondAbi, localAssetArtifact, localFixtures, onReTokenArtifact, proxyArtifact };
+export { diamondAbi, localAssetArtifact, localFixtures, managedTokenArtifact };
 
 export const DEFAULT_PERMISSIONLESS_ACCOUNT = getAddress("0x70997970C51812dc3A010C7d01b50e0d17dc79C8");
 export const MAX_UINT256 = (1n << 256n) - 1n;
@@ -18,7 +17,7 @@ export const PRICING_DENOMINATIONS = ["USD"];
 export const QUOTER_KINDS = ["NAV", "NAV permissionless", "Proprietary RFQ"];
 export const VAULT_KINDS = ["Fee", "Proceeds", "Liquidity", "Buffer reserve"];
 export const OFFER_FLOWS = ["Permissioned", "Permissionless", "Worker"];
-export const OFFER_DIRECTIONS = ["Asset → OnRe", "OnRe → asset"];
+export const OFFER_DIRECTIONS = ["Asset → managed", "Managed → asset"];
 
 export const erc20MetadataAbi = [
   { type: "function", name: "name", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
@@ -37,7 +36,7 @@ export const anvil = defineChain({
 });
 
 export const getterByEvent = {
-  OnReTokenRegistered: ["OnRe token", "onReToken", "getOnReTokenConfig"],
+  ManagedTokenRegistered: ["Managed token", "managedToken", "getManagedTokenConfig"],
   PricerCreated: ["Pricer", "pricerId", "getPricer"],
   QuoterCreated: ["Quoter", "quoterId", "getQuoter"],
   PropRfqConfigured: ["Prop RFQ", "quoterId", "getPropRfqState"],
@@ -45,7 +44,7 @@ export const getterByEvent = {
   ConfigurableVaultCreated: ["Vault", "vaultId", "getConfigurableVault"],
   OfferConfigCreated: ["Offer", "offerConfigId", "getOfferConfig"],
   FulfillmentRequested: ["Fulfillment request", "fulfillmentRequestId", "getFulfillmentRequest"],
-  BufferInitialized: ["Buffer", "onReToken", "getBufferState"],
+  BufferInitialized: ["Buffer", "managedToken", "getBufferState"],
 };
 
 export const advancedMethods = new Set(["diamondCut", "onBeforeSupplyChange", "renounceRole"]);

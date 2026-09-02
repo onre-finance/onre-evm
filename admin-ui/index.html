@@ -52,9 +52,9 @@
           </div>
           <div class="panel setup-panel">
             <div class="section-heading"><div><p class="eyebrow">Quick start</p><h3>Build a complete local market</h3></div></div>
-            <p class="muted">Deploy only Mock USDC and Mock ONyc. This does not register tokens or create any protocol configuration; continue manually through the tabs.</p>
+            <p class="muted">Deploy a ManagedToken implementation, create Mock ONyc through the Diamond factory, and deploy Mock USDC. The managed token is registered automatically; continue through the tabs to configure pricing, Buffer, quoters, vaults, fees, and offers.</p>
             <div class="button-row">
-              <button id="deploy-fixtures" class="primary">Deploy fresh mock tokens</button>
+              <button id="deploy-fixtures" class="primary">Deploy fresh managed and asset tokens</button>
               <button id="clear-fixtures" class="ghost">Forget local token addresses</button>
             </div>
             <div id="fixture-grid" class="entity-grid compact-grid"></div>
@@ -66,13 +66,13 @@
         </section>
 
         <section class="tab-page" data-page="tokens">
-          <div class="page-heading"><div><p class="eyebrow">Assets</p><h2>Tokens</h2><p>Registered OnRe tokens and ERC-20 assets known from protocol configuration.</p></div></div>
+          <div class="page-heading"><div><p class="eyebrow">Assets</p><h2>Tokens</h2><p>Registered Managed tokens and ERC-20 assets known from protocol configuration.</p></div></div>
           <div class="two-column">
             <form id="register-token-form" class="panel entity-form">
-              <div class="form-heading"><div><p class="eyebrow">OnRe token</p><h3>Register token</h3></div><span class="step">Create</span></div>
-              <label>Token<select name="onReToken" data-options="tokens"></select></label>
-              <p class="field-help">OnRe tokens are minted and burned by the Diamond. There is no inventory source.</p>
-              <button class="primary" type="submit">Register OnRe token</button>
+              <div class="form-heading"><div><p class="eyebrow">Managed token</p><h3>Register token</h3></div><span class="step">Create</span></div>
+              <label>ManagedToken proxy address<input name="managedToken" placeholder="0x..." required /></label>
+              <p class="field-help">Factory deployments are registered automatically. Use this only for a compatible ManagedToken proxy deployed elsewhere.</p>
+              <button class="primary" type="submit">Register Managed token</button>
               <p class="form-result" aria-live="polite"></p>
             </form>
             <form id="track-token-form" class="panel entity-form">
@@ -87,11 +87,11 @@
         </section>
 
         <section class="tab-page" data-page="pricing">
-          <div class="page-heading"><div><p class="eyebrow">NAV source</p><h2>Pricing</h2><p>One USD-denominated pricer per OnRe token, with time-based pricing vectors.</p></div></div>
+          <div class="page-heading"><div><p class="eyebrow">NAV source</p><h2>Pricing</h2><p>One USD-denominated pricer per Managed token, with time-based pricing vectors.</p></div></div>
           <div class="two-column">
             <form id="create-pricer-form" class="panel entity-form">
               <div class="form-heading"><div><p class="eyebrow">Pricer</p><h3>Create pricing feed</h3></div><span class="step">Create</span></div>
-              <label>OnRe token<select name="onReToken" data-options="onre-tokens"></select></label>
+              <label>Managed token<select name="managedToken" data-options="managed-tokens"></select></label>
               <label>Denomination<select name="denomination"><option value="0">USD</option></select></label>
               <button class="primary" type="submit">Create pricer</button>
               <p class="form-result" aria-live="polite"></p>
@@ -121,14 +121,14 @@
           <div class="two-column">
             <form id="initialize-buffer-form" class="panel entity-form">
               <div class="form-heading"><div><p class="eyebrow">Step 1</p><h3>Initialize Buffer</h3></div><span class="step">Create</span></div>
-              <label>Registered OnRe token<select name="onReToken" data-options="buffer-candidates"></select></label>
+              <label>Registered Managed token<select name="managedToken" data-options="buffer-candidates"></select></label>
               <p class="field-help">Create the token's USD pricer and active pricing vector first. Initialization derives the reserve, management-fee, and performance-fee vaults.</p>
               <button class="primary" type="submit">Initialize Buffer and vaults</button>
               <p class="form-result" aria-live="polite"></p>
             </form>
             <form id="configure-buffer-form" class="panel entity-form">
               <div class="form-heading"><div><p class="eyebrow">Step 2</p><h3>Activate Buffer</h3></div><span class="step">Configure</span></div>
-              <label>Initialized Buffer<select name="onReToken" data-options="buffer-tokens"></select></label>
+              <label>Initialized Buffer<select name="managedToken" data-options="buffer-tokens"></select></label>
               <div class="field-triple">
                 <label>Reserve destination<input name="reserveDestination" data-default="boss" placeholder="0x…" required /></label>
                 <label>Management-fee destination<input name="managementFeeDestination" data-default="boss" placeholder="0x…" required /></label>
@@ -163,7 +163,7 @@
               <label>RFQ quoter<select name="quoterId" data-options="rfq-quoters"></select></label>
               <div class="field-pair">
                 <label>Asset token<select name="assetToken" data-options="asset-tokens"></select></label>
-                <label>OnRe token<select name="onReToken" data-options="onre-tokens"></select></label>
+                <label>Managed token<select name="managedToken" data-options="managed-tokens"></select></label>
               </div>
               <div class="field-triple">
                 <label>Epoch (hours)<input name="epochHours" type="number" min="1" value="24" /></label>
@@ -230,7 +230,7 @@
               <label>Output token<select name="tokenOut" data-options="tokens"></select></label>
               <label>Execution flow<select name="flow"><option value="0">Permissioned</option><option value="1" selected>Permissionless</option><option value="2">Worker</option></select></label>
             </div>
-            <div id="derived-pricer" class="derived-dependency"><span>Pricer</span><strong>Select a pair</strong><small>Automatically derived by the contract from the OnRe token.</small></div>
+            <div id="derived-pricer" class="derived-dependency"><span>Pricer</span><strong>Select a pair</strong><small>Automatically derived by the contract from the Managed token.</small></div>
             <div class="field-pair">
               <label>Quoter<select name="quoterId" data-options="compatible-quoters"></select></label>
               <label>Fee configuration<select name="feeConfigId" data-options="fees"></select></label>

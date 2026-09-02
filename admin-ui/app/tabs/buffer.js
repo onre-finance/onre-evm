@@ -31,7 +31,7 @@ export function renderBuffers() {
         ["Performance fees", entityLabel("Vault", value.performanceFeeVaultId)],
       ],
       id: record.id,
-      idLabel: "OnRe token",
+      idLabel: "Managed token",
     });
   });
   $("#buffer-list").innerHTML = cards.length
@@ -42,7 +42,7 @@ export function renderBuffers() {
 
 export function syncBufferForm() {
   const form = $("#configure-buffer-form");
-  const record = recordById("Buffer", form.elements.onReToken.value);
+  const record = recordById("Buffer", form.elements.managedToken.value);
   if (!record) return;
   const value = record.value;
   form.elements.grossApr.value = String(Number(value.grossApr) * 100 / APR_SCALE);

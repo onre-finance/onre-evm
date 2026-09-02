@@ -16,7 +16,7 @@
     "verify:testnet": "gemforge verify testnet",
     "verify:mainnet": "gemforge verify mainnet",
     "devnet": "anvil",
-    "admin:contracts": "gemforge build && forge build admin-ui/contracts/LocalAssetToken.sol lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol",
+    "admin:contracts": "gemforge build && forge build admin-ui/contracts/LocalAssetToken.sol",
     "admin:dev": "pnpm admin:contracts && vite admin-ui",
     "admin:build": "pnpm admin:contracts && vite build admin-ui",
     "test:integration": "bash scripts/test-gemforge-integration.sh"

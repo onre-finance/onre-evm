@@ -1,5 +1,5 @@
 import { parseUnits } from "viem";
-import { APR_SCALE, erc20MetadataAbi, OFFER_FLOWS, onReTokenArtifact, PRICE_DECIMALS, QUOTER_KINDS, VAULT_KINDS, ZERO_BYTES32 } from "./config.js";
+import { APR_SCALE, erc20MetadataAbi, OFFER_FLOWS, managedTokenArtifact, PRICE_DECIMALS, QUOTER_KINDS, VAULT_KINDS, ZERO_BYTES32 } from "./config.js";
 import { readDiamond, writeBossDiamond, writeBossToken } from "./chain.js";
 import { hydrateTokenMetadata, recordById, recordsOf } from "./data.js";
 import { entityLabel, tokenLabel, tokenMeta } from "./model.js";
@@ -7,14 +7,14 @@ import { ensurePermissionlessTokenApprovals } from "./permissionless.js";
 import { state, storeTrackedTokens } from "./state.js";
 import { formatBps, formatPercentScaled, formatTokenAmount, formatUsdPrice, requiredAddress, requiredValue, short } from "./utils.js";
 
-export async function registerOnReToken(form) {
-  const token = requiredAddress(form.elements.onReToken.value, "Token");
-  await writeBossToken(token, onReTokenArtifact.abi, "grantMintAndBurnRoles", [state.diamondAddress]);
+export async function registerManagedToken(form) {
+  const token = requiredAddress(form.elements.managedToken.value, "Token");
+  await writeBossToken(token, managedTokenArtifact.abi, "grantMintAndBurnRoles", [state.diamondAddress]);
   await ensurePermissionlessTokenApprovals([token]);
-  await writeBossDiamond("registerOnReToken", [token]);
+  await writeBossDiamond("registerManagedToken", [token]);
   state.trackedTokens.add(token);
   storeTrackedTokens();
-  return `${tokenLabel(token)} registered as an OnRe token.`;
+  return `${tokenLabel(token)} registered as a managed token.`;
 }
 
 export async function trackToken(form) {
@@ -27,7 +27,7 @@ export async function trackToken(form) {
 }
 
 export async function createPricer(form) {
-  const token = requiredAddress(form.elements.onReToken.value, "OnRe token");
+  const token = requiredAddress(form.elements.managedToken.value, "Managed token");
   const result = await writeBossDiamond("createPricer", [token, Number(form.elements.denomination.value)]);
   return `Created ${tokenLabel(token)} / USD pricer (${short(result.simulatedResult)}).`;
 }
@@ -62,8 +62,8 @@ export async function createQuoter(form) {
 export async function configurePropRfq(form) {
   const quoterId = requiredValue(form.elements.quoterId.value, "RFQ quoter");
   const assetToken = requiredAddress(form.elements.assetToken.value, "Asset token");
-  const onReToken = requiredAddress(form.elements.onReToken.value, "OnRe token");
-  await writeBossDiamond("configurePropRfq", [quoterId, assetToken, onReToken, {
+  const managedToken = requiredAddress(form.elements.managedToken.value, "Managed token");
+  await writeBossDiamond("configurePropRfq", [quoterId, assetToken, managedToken, {
     epochDurationSeconds: BigInt(Math.round(Number(form.elements.epochHours.value) * 3600)),
     curveExponentScaled: Number(form.elements.curveExponent.value),
     cadenceThreshold: Number(form.elements.cadenceThreshold.value),
@@ -71,7 +71,7 @@ export async function configurePropRfq(form) {
     wallSensitivityScaled: Number(form.elements.wallSensitivity.value),
     curvePegHaircutBps: Number(form.elements.haircutBps.value),
   }]);
-  return `Configured ${entityLabel("Quoter", quoterId)} for ${tokenLabel(assetToken)} ↔ ${tokenLabel(onReToken)}.`;
+  return `Configured ${entityLabel("Quoter", quoterId)} for ${tokenLabel(assetToken)} ↔ ${tokenLabel(managedToken)}.`;
 }
 
 export async function createVault(form) {
@@ -116,25 +116,25 @@ export async function createOffer(form) {
   const feeConfigId = requiredValue(form.elements.feeConfigId.value, "Fee configuration");
   const proceedsVaultId = requiredValue(form.elements.proceedsVaultId.value, "Proceeds vault");
   const liquidityVaultId = form.elements.liquidityVaultId.value || ZERO_BYTES32;
-  const onReToken = [tokenIn, tokenOut].find((token) => recordsOf("OnRe token").some((record) => String(record.id).toLowerCase() === token.toLowerCase()));
-  const pricer = onReToken && recordsOf("Pricer").find((record) => record.value.onReToken.toLowerCase() === onReToken.toLowerCase());
-  if (!pricer) throw new Error("This pair has no USD pricer for its OnRe token.");
+  const managedToken = [tokenIn, tokenOut].find((token) => recordsOf("Managed token").some((record) => String(record.id).toLowerCase() === token.toLowerCase()));
+  const pricer = managedToken && recordsOf("Pricer").find((record) => record.value.managedToken.toLowerCase() === managedToken.toLowerCase());
+  if (!pricer) throw new Error("This pair has no USD pricer for its Managed token.");
   if (flow === 1) await ensurePermissionlessTokenApprovals([tokenIn, tokenOut]);
   const result = await writeBossDiamond("makeOfferConfig", [{ tokenIn, tokenOut, flow, quoterId, feeConfigId, proceedsVaultId, liquidityVaultId }]);
   return `Created ${tokenLabel(tokenIn)} → ${tokenLabel(tokenOut)} ${OFFER_FLOWS[flow]} offer (${short(result.simulatedResult)}).`;
 }
 
 export async function initializeBuffer(form) {
-  const onReToken = requiredAddress(form.elements.onReToken.value, "OnRe token");
-  const pricer = recordsOf("Pricer").find((record) => record.value.onReToken.toLowerCase() === onReToken.toLowerCase());
+  const managedToken = requiredAddress(form.elements.managedToken.value, "Managed token");
+  const pricer = recordsOf("Pricer").find((record) => record.value.managedToken.toLowerCase() === managedToken.toLowerCase());
   if (!pricer) throw new Error("Create this token's USD pricer and active pricing vector before initializing its Buffer.");
   await readDiamond("currentPrice", [pricer.id]);
-  await writeBossDiamond("initializeBuffer", [onReToken]);
-  return `Initialized the ${tokenLabel(onReToken)} Buffer and its three derived vaults.`;
+  await writeBossDiamond("initializeBuffer", [managedToken]);
+  return `Initialized the ${tokenLabel(managedToken)} Buffer and its three derived vaults.`;
 }
 
 export async function configureBuffer(form) {
-  const onReToken = requiredAddress(form.elements.onReToken.value, "OnRe token");
+  const managedToken = requiredAddress(form.elements.managedToken.value, "Managed token");
   const reserveDestination = requiredAddress(form.elements.reserveDestination.value, "Reserve withdrawal destination");
   const managementFeeDestination = requiredAddress(form.elements.managementFeeDestination.value, "Management-fee withdrawal destination");
   const performanceFeeDestination = requiredAddress(form.elements.performanceFeeDestination.value, "Performance-fee withdrawal destination");
@@ -149,9 +149,9 @@ export async function configureBuffer(form) {
     if (!Number.isFinite(value) || value < 0 || value > 100) throw new Error(`${label} must be between 0% and 100%.`);
   }
 
-  const buffer = recordById("Buffer", onReToken)?.value;
+  const buffer = recordById("Buffer", managedToken)?.value;
   if (!buffer) throw new Error("Initialize this Buffer first.");
-  const pricer = recordsOf("Pricer").find((record) => record.value.onReToken.toLowerCase() === onReToken.toLowerCase());
+  const pricer = recordsOf("Pricer").find((record) => record.value.managedToken.toLowerCase() === managedToken.toLowerCase());
   if (!pricer) throw new Error("Create this token's USD pricer and active pricing vector before activating its Buffer.");
   await readDiamond("currentPrice", [pricer.id]);
 
@@ -164,23 +164,23 @@ export async function configureBuffer(form) {
   await updateBufferVaultDestination(buffer.performanceFeeVaultId, performanceFeeDestination);
 
   const currentController = await state.publicClient.readContract({
-    address: onReToken,
-    abi: onReTokenArtifact.abi,
+    address: managedToken,
+    abi: managedTokenArtifact.abi,
     functionName: "bufferController",
   });
   if (currentController.toLowerCase() !== state.diamondAddress.toLowerCase()) {
-    await writeBossToken(onReToken, onReTokenArtifact.abi, "setBufferController", [state.diamondAddress]);
+    await writeBossToken(managedToken, managedTokenArtifact.abi, "setBufferController", [state.diamondAddress]);
   }
 
-  if (Number(buffer.grossApr) !== grossApr) await writeBossDiamond("setBufferGrossApr", [onReToken, grossApr]);
+  if (Number(buffer.grossApr) !== grossApr) await writeBossDiamond("setBufferGrossApr", [managedToken, grossApr]);
   if (
     Number(buffer.managementFeeBasisPoints) !== managementFee
     || Number(buffer.performanceFeeBasisPoints) !== performanceFee
     || buffer.performanceFeeHighWatermarkEnabled !== form.elements.highWatermark.checked
   ) {
-    await writeBossDiamond("setBufferFeeConfig", [onReToken, managementFee, performanceFee, form.elements.highWatermark.checked]);
+    await writeBossDiamond("setBufferFeeConfig", [managedToken, managementFee, performanceFee, form.elements.highWatermark.checked]);
   }
-  return `Activated ${tokenLabel(onReToken)} Buffer with its Diamond controller, vault destinations, and fee configuration.`;
+  return `Activated ${tokenLabel(managedToken)} Buffer with its Diamond controller, vault destinations, and fee configuration.`;
 }
 
 async function updateBufferVaultDestination(vaultId, withdrawalDestination) {

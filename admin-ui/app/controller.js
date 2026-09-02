@@ -10,7 +10,7 @@ import {
   createVault,
   initializeBuffer,
   manageVaultBalance,
-  registerOnReToken,
+  registerManagedToken,
   trackToken,
 } from "./actions.js";
 import { initializeAdvancedConsole } from "./advanced.js";
@@ -94,7 +94,7 @@ function bindActions() {
   });
   $("#deploy-fixtures").addEventListener("click", (event) => withBusy(event.currentTarget, async () => {
     await deployFixtures();
-    await refreshDomainUi();
+    await refreshEverything();
   }));
   $("#clear-fixtures").addEventListener("click", () => {
     resetFixtures();
@@ -104,7 +104,7 @@ function bindActions() {
   $("#clear-log").addEventListener("click", () => { $("#activity-log").textContent = "Ready."; });
 
   const forms = [
-    ["#register-token-form", registerOnReToken],
+    ["#register-token-form", registerManagedToken],
     ["#track-token-form", trackToken],
     ["#create-pricer-form", createPricer],
     ["#add-vector-form", addPricingVector],
@@ -128,7 +128,7 @@ function bindActions() {
       renderDerivedPricer();
     });
   });
-  $("#configure-buffer-form").elements.onReToken.addEventListener("change", syncBufferForm);
+  $("#configure-buffer-form").elements.managedToken.addEventListener("change", syncBufferForm);
   bindTransactionControls();
 }
 

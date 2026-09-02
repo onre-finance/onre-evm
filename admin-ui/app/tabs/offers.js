@@ -1,14 +1,14 @@
 import { OFFER_DIRECTIONS, OFFER_FLOWS, ZERO_BYTES32 } from "../config.js";
 import { recordsOf } from "../data.js";
-import { entityLabel, offerOnReToken, tokenLabel } from "../model.js";
+import { entityLabel, offerManagedToken, tokenLabel } from "../model.js";
 import { $, emptyState, entityCard } from "../ui.js";
 import { enumValue } from "../utils.js";
 
 export function renderOffers() {
   const cards = recordsOf("Offer").map((record) => {
     const value = record.value;
-    const onReToken = offerOnReToken(value);
-    const pricer = recordsOf("Pricer").find((candidate) => candidate.value.onReToken.toLowerCase() === onReToken?.toLowerCase());
+    const managedToken = offerManagedToken(value);
+    const pricer = recordsOf("Pricer").find((candidate) => candidate.value.managedToken.toLowerCase() === managedToken?.toLowerCase());
     return entityCard({
       eyebrow: OFFER_FLOWS[enumValue(value.flow)],
       title: `${tokenLabel(value.tokenIn)} → ${tokenLabel(value.tokenOut)}`,
@@ -36,7 +36,7 @@ export function renderDerivedPricer() {
   const form = $("#create-offer-form");
   const tokenIn = form.elements.tokenIn.value;
   const tokenOut = form.elements.tokenOut.value;
-  const onReToken = [tokenIn, tokenOut].find((address) => recordsOf("OnRe token").some((record) => String(record.id).toLowerCase() === address?.toLowerCase()));
-  const pricer = onReToken && recordsOf("Pricer").find((record) => record.value.onReToken.toLowerCase() === onReToken.toLowerCase());
-  $("#derived-pricer").querySelector("strong").textContent = pricer ? entityLabel("Pricer", pricer.id) : onReToken ? "Missing USD pricer" : "Pair must contain one OnRe token";
+  const managedToken = [tokenIn, tokenOut].find((address) => recordsOf("Managed token").some((record) => String(record.id).toLowerCase() === address?.toLowerCase()));
+  const pricer = managedToken && recordsOf("Pricer").find((record) => record.value.managedToken.toLowerCase() === managedToken.toLowerCase());
+  $("#derived-pricer").querySelector("strong").textContent = pricer ? entityLabel("Pricer", pricer.id) : managedToken ? "Missing USD pricer" : "Pair must contain one Managed token";
 }

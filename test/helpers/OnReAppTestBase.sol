@@ -9,7 +9,7 @@ import {Test} from "forge-std/Test.sol";
 import {IDiamondProxy} from "../../src/generated/IDiamondProxy.sol";
 import {IManagedToken} from "../../src/IManagedToken.sol";
 import {ManagedToken} from "../../src/ManagedToken.sol";
-import {LibOnRePropRfqMath} from "../../src/libraries/LibOnRePropRfqMath.sol";
+import {LibOnRePropAmmMath} from "../../src/libraries/LibOnRePropAmmMath.sol";
 import {
     ApprovalMessage,
     ConfigurableVaultKind,
@@ -18,7 +18,7 @@ import {
     OfferFlow,
     PricingDenomination,
     PricingVector,
-    PropRfqConfig,
+    PropAmmConfig,
     QuoterKind,
     TakeOfferParams
 } from "../../src/types/OnReTypes.sol";
@@ -121,12 +121,12 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         );
     }
 
-    function _createConfiguredPropRfq(uint64 instanceId, PropRfqConfig memory config)
+    function _createConfiguredPropAmm(uint64 instanceId, PropAmmConfig memory config)
         internal
         returns (bytes32 quoterId)
     {
-        quoterId = app.createQuoter(QuoterKind.PropRfq, instanceId);
-        app.configurePropRfq(quoterId, address(usd), address(managedToken), config);
+        quoterId = app.createQuoter(QuoterKind.PropAmm, instanceId);
+        app.configurePropAmm(quoterId, address(usd), address(managedToken), config);
     }
 
     function _fundAndApproveUsd(address account, uint256 amount) internal {
@@ -140,8 +140,8 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
         IERC20(token).approve(address(app), type(uint256).max);
     }
 
-    function _basePropRfqTestConfig() internal pure returns (PropRfqConfig memory) {
-        return PropRfqConfig({
+    function _basePropAmmTestConfig() internal pure returns (PropAmmConfig memory) {
+        return PropAmmConfig({
             curvePegHaircutBps: 700,
             curveExponentScaled: 25_000,
             cadenceThreshold: 20,
@@ -238,7 +238,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
     }
 }
 
-contract PropRfqMathHarness {
+contract PropAmmMathHarness {
     uint256 private constant HARD_WALL_SCALE = 1_000_000_000_000;
 
     function baseCurveOutput(uint256 rawAmount, uint256 effectiveLiquidity, uint16 pegBps, uint32 exponent)
@@ -247,16 +247,16 @@ contract PropRfqMathHarness {
         returns (uint256)
     {
         uint256 utilization = rawAmount * HARD_WALL_SCALE / effectiveLiquidity;
-        uint256 haircut = LibOnRePropRfqMath._redemptionHaircutScaled(utilization, pegBps, exponent);
+        uint256 haircut = LibOnRePropAmmMath._redemptionHaircutScaled(utilization, pegBps, exponent);
         return rawAmount * (HARD_WALL_SCALE - haircut) / HARD_WALL_SCALE;
     }
 
     function cadenceTarget(uint256 utilization, uint256 waveYScaled) external pure returns (uint256) {
-        return LibOnRePropRfqMath._cadenceWaveTargetHaircutScaled(utilization, waveYScaled);
+        return LibOnRePropAmmMath._cadenceWaveTargetHaircutScaled(utilization, waveYScaled);
     }
 
     function utilizationPower(uint256 utilization, uint32 exponentScaled) external pure returns (uint256) {
-        return LibOnRePropRfqMath._utilizationPowerScaled(utilization, exponentScaled);
+        return LibOnRePropAmmMath._utilizationPowerScaled(utilization, exponentScaled);
     }
 }
 

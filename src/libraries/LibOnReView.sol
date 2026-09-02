@@ -11,7 +11,7 @@ import {
     ManagedTokenConfig,
     Pricer,
     PricingVector,
-    PropRfqState,
+    PropAmmState,
     Quoter,
     QuoterKind
 } from "../types/OnReTypes.sol";
@@ -38,13 +38,13 @@ library LibOnReView {
         return LibOnReStorage._appStorage().quoters[quoterId];
     }
 
-    function _getPropRfqState(bytes32 quoterId) internal view returns (PropRfqState memory) {
+    function _getPropAmmState(bytes32 quoterId) internal view returns (PropAmmState memory) {
         Quoter storage quoter = LibOnReStorage._appStorage().quoters[quoterId];
         if (!quoter.exists) revert QuoterNotFoundError(quoterId);
-        if (quoter.kind != QuoterKind.PropRfq) {
-            revert InvalidQuoterKindError(quoterId, uint8(QuoterKind.PropRfq), uint8(quoter.kind));
+        if (quoter.kind != QuoterKind.PropAmm) {
+            revert InvalidQuoterKindError(quoterId, uint8(QuoterKind.PropAmm), uint8(quoter.kind));
         }
-        return LibOnReStorage._appStorage().propRfqStates[quoterId];
+        return LibOnReStorage._appStorage().propAmmStates[quoterId];
     }
 
     function _getFeeConfig(bytes32 feeConfigId) internal view returns (FeeConfig memory) {

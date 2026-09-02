@@ -6,7 +6,7 @@ import "../src/types/OnReTypes.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
-contract OnRePropRfqTest is OnReAppTestBase {
+contract OnRePropAmmTest is OnReAppTestBase {
     function test_QuoterIdentitySupportsIndependentInstancesOfTheSameKind() public {
         bytes32 secondNavQuoterId = app.createQuoter(QuoterKind.Nav, 1);
 
@@ -19,23 +19,23 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertFalse(app.getQuoter(navQuoterId).disabled);
     }
 
-    function test_PropRfqSupportsIndependentConfiguredInstances() public {
-        PropRfqConfig memory firstConfig = _basePropRfqTestConfig();
-        PropRfqConfig memory secondConfig = _basePropRfqTestConfig();
+    function test_PropAmmSupportsIndependentConfiguredInstances() public {
+        PropAmmConfig memory firstConfig = _basePropAmmTestConfig();
+        PropAmmConfig memory secondConfig = _basePropAmmTestConfig();
         secondConfig.curvePegHaircutBps = 1_200;
         secondConfig.cadenceThreshold = 7;
 
-        bytes32 firstId = app.createQuoter(QuoterKind.PropRfq, 0);
-        bytes32 secondId = app.createQuoter(QuoterKind.PropRfq, 1);
-        app.configurePropRfq(firstId, address(usd), address(managedToken), firstConfig);
-        app.configurePropRfq(secondId, address(usd), address(managedToken), secondConfig);
+        bytes32 firstId = app.createQuoter(QuoterKind.PropAmm, 0);
+        bytes32 secondId = app.createQuoter(QuoterKind.PropAmm, 1);
+        app.configurePropAmm(firstId, address(usd), address(managedToken), firstConfig);
+        app.configurePropAmm(secondId, address(usd), address(managedToken), secondConfig);
 
-        assertEq(firstId, OnReIds._quoterId(QuoterKind.PropRfq, 0));
-        assertEq(secondId, OnReIds._quoterId(QuoterKind.PropRfq, 1));
+        assertEq(firstId, OnReIds._quoterId(QuoterKind.PropAmm, 0));
+        assertEq(secondId, OnReIds._quoterId(QuoterKind.PropAmm, 1));
         assertNotEq(firstId, secondId);
 
-        PropRfqState memory first = app.getPropRfqState(firstId);
-        PropRfqState memory second = app.getPropRfqState(secondId);
+        PropAmmState memory first = app.getPropAmmState(firstId);
+        PropAmmState memory second = app.getPropAmmState(secondId);
         assertEq(first.assetToken, address(usd));
         assertEq(first.managedToken, address(managedToken));
         assertEq(first.config.curvePegHaircutBps, 700);
@@ -43,111 +43,111 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertEq(second.config.cadenceThreshold, 7);
 
         firstConfig.curveExponentScaled = 30_000;
-        app.configurePropRfq(firstId, address(usd), address(managedToken), firstConfig);
-        assertEq(app.getPropRfqState(firstId).config.curveExponentScaled, 30_000);
-        assertEq(app.getPropRfqState(secondId).config.curveExponentScaled, 25_000);
+        app.configurePropAmm(firstId, address(usd), address(managedToken), firstConfig);
+        assertEq(app.getPropAmmState(firstId).config.curveExponentScaled, 30_000);
+        assertEq(app.getPropAmmState(secondId).config.curveExponentScaled, 25_000);
 
         vm.expectRevert(NoChangeError.selector);
-        app.configurePropRfq(firstId, address(usd), address(managedToken), firstConfig);
+        app.configurePropAmm(firstId, address(usd), address(managedToken), firstConfig);
         MockUsd alternativeUsd = new MockUsd();
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidPropRfqPairError.selector, firstId, address(alternativeUsd), address(managedToken)
+                InvalidPropAmmPairError.selector, firstId, address(alternativeUsd), address(managedToken)
             )
         );
-        app.configurePropRfq(firstId, address(alternativeUsd), address(managedToken), firstConfig);
+        app.configurePropAmm(firstId, address(alternativeUsd), address(managedToken), firstConfig);
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidQuoterKindError.selector, navQuoterId, uint8(QuoterKind.PropRfq), uint8(QuoterKind.Nav)
+                InvalidQuoterKindError.selector, navQuoterId, uint8(QuoterKind.PropAmm), uint8(QuoterKind.Nav)
             )
         );
-        app.configurePropRfq(navQuoterId, address(usd), address(managedToken), firstConfig);
+        app.configurePropAmm(navQuoterId, address(usd), address(managedToken), firstConfig);
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidQuoterKindError.selector, navQuoterId, uint8(QuoterKind.PropRfq), uint8(QuoterKind.Nav)
+                InvalidQuoterKindError.selector, navQuoterId, uint8(QuoterKind.PropAmm), uint8(QuoterKind.Nav)
             )
         );
-        app.getPropRfqState(navQuoterId);
+        app.getPropAmmState(navQuoterId);
     }
 
-    function test_PropRfqRequiresDedicatedConfigurationAndValidPairTokens() public {
-        bytes32 propRfqId = app.createQuoter(QuoterKind.PropRfq, 0);
-        assertEq(propRfqId, OnReIds._quoterId(QuoterKind.PropRfq, 0));
-        assertTrue(app.getQuoter(propRfqId).exists);
-        assertEq(app.getPropRfqState(propRfqId).assetToken, address(0));
+    function test_PropAmmRequiresDedicatedConfigurationAndValidPairTokens() public {
+        bytes32 propAmmId = app.createQuoter(QuoterKind.PropAmm, 0);
+        assertEq(propAmmId, OnReIds._quoterId(QuoterKind.PropAmm, 0));
+        assertTrue(app.getQuoter(propAmmId).exists);
+        assertEq(app.getPropAmmState(propAmmId).assetToken, address(0));
 
-        vm.expectRevert(PropRfqConfigurationRequiredError.selector);
+        vm.expectRevert(PropAmmConfigurationRequiredError.selector);
         app.updateOfferConfigReferences(
-            permissionlessOfferId, propRfqId, feeConfigId, proceedsVaultId, liquidityVaultId
+            permissionlessOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
 
-        PropRfqConfig memory config = _basePropRfqTestConfig();
+        PropAmmConfig memory config = _basePropAmmTestConfig();
         vm.expectRevert(ZeroAddressError.selector);
-        app.configurePropRfq(propRfqId, address(0), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(0), address(managedToken), config);
         vm.expectRevert(ZeroAddressError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(0), config);
+        app.configurePropAmm(propAmmId, address(usd), address(0), config);
         vm.expectRevert(InvalidTokenError.selector);
-        app.configurePropRfq(propRfqId, address(managedToken), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(managedToken), address(managedToken), config);
 
         MockUsd unregisteredManagedToken = new MockUsd();
         vm.expectRevert(abi.encodeWithSelector(TokenNotRegisteredError.selector, address(unregisteredManagedToken)));
-        app.configurePropRfq(propRfqId, address(usd), address(unregisteredManagedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(unregisteredManagedToken), config);
 
         app.setManagedTokenEnabled(address(managedToken), false);
         vm.expectRevert(InvalidTokenError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
     }
 
-    function test_PropRfqValidatesEveryConfigBound() public {
-        bytes32 propRfqId = app.createQuoter(QuoterKind.PropRfq, 0);
-        PropRfqConfig memory config = _basePropRfqTestConfig();
+    function test_PropAmmValidatesEveryConfigBound() public {
+        bytes32 propAmmId = app.createQuoter(QuoterKind.PropAmm, 0);
+        PropAmmConfig memory config = _basePropAmmTestConfig();
         config.curveExponentScaled = 25_001;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.curveExponentScaled = 0;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.curveExponentScaled = 101_000;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.cadenceThreshold = 0;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.cadenceWaveScaled = 10_001;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.cadenceWaveScaled = 51_000;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.epochDurationSeconds = 0;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.wallSensitivityScaled = 0;
         vm.expectRevert(InvalidAmountError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
 
-        config = _basePropRfqTestConfig();
+        config = _basePropAmmTestConfig();
         config.curvePegHaircutBps = 10_001;
         vm.expectRevert(InvalidBasisPointsError.selector);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), config);
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), config);
     }
 
-    function test_PropRfqMathMatchesSolanaCurveAndCadenceVectors() public {
-        PropRfqMathHarness harness = new PropRfqMathHarness();
+    function test_PropAmmMathMatchesSolanaCurveAndCadenceVectors() public {
+        PropAmmMathHarness harness = new PropAmmMathHarness();
         assertEq(harness.baseCurveOutput(100_000, 10_000_000, 700, 25_000), 99_999);
         assertEq(harness.baseCurveOutput(5_000_000, 10_000_000, 700, 25_000), 4_938_128);
         assertEq(harness.baseCurveOutput(5_000_000, 10_000_000, 700, 10_000), 4_825_000);
@@ -181,11 +181,11 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertEq(harness.cadenceTarget(250_000_000_000, 50_000), 1_000_000_000_000);
     }
 
-    function testFuzz_PropRfqIntegerUtilizationPowerMatchesRepeatedFixedPointMultiplication(
+    function testFuzz_PropAmmIntegerUtilizationPowerMatchesRepeatedFixedPointMultiplication(
         uint96 utilizationSeed,
         uint8 exponentSeed
     ) public {
-        PropRfqMathHarness harness = new PropRfqMathHarness();
+        PropAmmMathHarness harness = new PropAmmMathHarness();
         uint256 scale = 1_000_000_000_000;
         uint256 utilization = bound(uint256(utilizationSeed), 1, 2 * scale);
         uint32 exponentSteps = uint32(bound(uint256(exponentSeed), 1, 10));
@@ -198,18 +198,18 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertEq(harness.utilizationPower(utilization, exponentSteps * 10_000), expected);
     }
 
-    function test_PropRfqIsPermissionlessAndBoundToItsPair() public {
-        bytes32 propRfqId = _createConfiguredPropRfq(0, _basePropRfqTestConfig());
+    function test_PropAmmIsPermissionlessAndBoundToItsPair() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
 
         vm.expectRevert(InvalidFlowQuoterError.selector);
-        app.updateOfferConfigReferences(permissionedOfferId, propRfqId, feeConfigId, proceedsVaultId, liquidityVaultId);
+        app.updateOfferConfigReferences(permissionedOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId);
 
         MockUsd alternativeUsd = new MockUsd();
         bytes32 expectedOfferId =
             OnReIds._offerConfigId(address(alternativeUsd), address(managedToken), OfferFlow.Permissionless);
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidPropRfqPairError.selector, propRfqId, address(alternativeUsd), address(managedToken)
+                InvalidPropAmmPairError.selector, propAmmId, address(alternativeUsd), address(managedToken)
             )
         );
         app.makeOfferConfig(
@@ -217,7 +217,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
                 tokenIn: address(alternativeUsd),
                 tokenOut: address(managedToken),
                 flow: OfferFlow.Permissionless,
-                quoterId: propRfqId,
+                quoterId: propAmmId,
                 feeConfigId: feeConfigId,
                 proceedsVaultId: proceedsVaultId,
                 liquidityVaultId: liquidityVaultId
@@ -226,12 +226,12 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertFalse(app.getOfferConfig(expectedOfferId).exists);
     }
 
-    function test_PropRfqSellUsesFeeConfigMinimumHardWallAndRecordsPressure() public {
-        PropRfqConfig memory config = _basePropRfqTestConfig();
+    function test_PropAmmSellUsesFeeConfigMinimumHardWallAndRecordsPressure() public {
+        PropAmmConfig memory config = _basePropAmmTestConfig();
         config.cadenceThreshold = 1;
-        bytes32 propRfqId = _createConfiguredPropRfq(0, config);
+        bytes32 propAmmId = _createConfiguredPropAmm(0, config);
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 100_000_000, feeVaultId);
 
@@ -248,16 +248,16 @@ contract OnRePropRfqTest is OnReAppTestBase {
         app.takeOffer(_takeOfferParams(sellOfferId, 1_000_000_000));
         vm.stopPrank();
 
-        PropRfqState memory afterFirstSell = app.getPropRfqState(propRfqId);
+        PropAmmState memory afterFirstSell = app.getPropAmmState(propAmmId);
         assertEq(afterFirstSell.currentSellValueStable, 900_000);
         assertEq(afterFirstSell.currentSellTradeCount, 1);
         assertLt(app.previewExecution(sellOfferId, 1_000_000_000).amountOut, firstPreview.amountOut);
     }
 
-    function test_PropRfqSellHardWallUsesLiquidityVaultTvlTarget() public {
-        bytes32 propRfqId = _createConfiguredPropRfq(0, _basePropRfqTestConfig());
+    function test_PropAmmSellHardWallUsesLiquidityVaultTvlTarget() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         _depositLiquidity(20_000_000);
@@ -269,13 +269,13 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertLt(cappedAmountOut, uncappedAmountOut);
     }
 
-    function test_PropRfqBuyUsesNavAndRelievesSharedInstancePressure() public {
-        bytes32 propRfqId = _createConfiguredPropRfq(0, _basePropRfqTestConfig());
+    function test_PropAmmBuyUsesNavAndRelievesSharedInstancePressure() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
         app.updateOfferConfigReferences(
-            permissionlessOfferId, propRfqId, feeConfigId, proceedsVaultId, liquidityVaultId
+            permissionlessOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
 
@@ -292,17 +292,17 @@ contract OnRePropRfqTest is OnReAppTestBase {
         vm.prank(user);
         app.takeOffer(_takeOfferParams(permissionlessOfferId, 1_000_000));
 
-        PropRfqState memory state = app.getPropRfqState(propRfqId);
+        PropAmmState memory state = app.getPropAmmState(propAmmId);
         assertEq(state.currentBuyValueStable, 1_000_000);
         assertEq(state.currentSellValueStable, 1_000_000);
         assertEq(state.currentSellTradeCount, 1);
         assertGt(app.previewExecution(sellOfferId, 1_000_000_000).amountOut, pressuredAmountOut);
     }
 
-    function test_PropRfqSellRejectsEveryLiquidityBoundary() public {
-        bytes32 propRfqId = _createConfiguredPropRfq(0, _basePropRfqTestConfig());
+    function test_PropAmmSellRejectsEveryLiquidityBoundary() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
 
@@ -320,10 +320,10 @@ contract OnRePropRfqTest is OnReAppTestBase {
         app.previewExecution(sellOfferId, 1_000_000_000);
     }
 
-    function test_PropRfqSellRejectsDustThatRoundsToZeroOutput() public {
-        bytes32 propRfqId = _createConfiguredPropRfq(0, _basePropRfqTestConfig());
+    function test_PropAmmSellRejectsDustThatRoundsToZeroOutput() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
 
@@ -335,15 +335,15 @@ contract OnRePropRfqTest is OnReAppTestBase {
         app.previewExecution(sellOfferId, 1);
     }
 
-    function test_PropRfqVolumeTrackerRollsAndExpiresEpochPressure() public {
-        PropRfqConfig memory config = _basePropRfqTestConfig();
+    function test_PropAmmVolumeTrackerRollsAndExpiresEpochPressure() public {
+        PropAmmConfig memory config = _basePropAmmTestConfig();
         config.epochDurationSeconds = 100;
-        bytes32 propRfqId = _createConfiguredPropRfq(0, config);
+        bytes32 propAmmId = _createConfiguredPropAmm(0, config);
         app.updateOfferConfigReferences(
-            permissionlessOfferId, propRfqId, feeConfigId, proceedsVaultId, liquidityVaultId
+            permissionlessOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         _depositLiquidity(10_000_000);
@@ -360,7 +360,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
         vm.prank(user);
         app.takeOffer(_takeOfferParams(permissionlessOfferId, 250_000));
 
-        PropRfqState memory rolled = app.getPropRfqState(propRfqId);
+        PropAmmState memory rolled = app.getPropAmmState(propAmmId);
         assertEq(rolled.epochStart, 101);
         assertEq(rolled.previousNetSellValueStable, 1_000_000);
         assertEq(rolled.currentSellValueStable, 0);
@@ -371,7 +371,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
         vm.prank(user);
         app.takeOffer(_takeOfferParams(permissionlessOfferId, 100_000));
 
-        PropRfqState memory expired = app.getPropRfqState(propRfqId);
+        PropAmmState memory expired = app.getPropAmmState(propAmmId);
         assertEq(expired.epochStart, 301);
         assertEq(expired.previousNetSellValueStable, 0);
         assertEq(expired.currentSellValueStable, 0);
@@ -379,10 +379,10 @@ contract OnRePropRfqTest is OnReAppTestBase {
         assertEq(expired.currentSellTradeCount, 0);
     }
 
-    function test_PropRfqPressureUpdateRollsBackWhenTokenCollectionFails() public {
-        bytes32 propRfqId = _createConfiguredPropRfq(0, _basePropRfqTestConfig());
+    function test_PropAmmPressureUpdateRollsBackWhenTokenCollectionFails() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
         bytes32 sellOfferId = _makeOffer(
-            address(managedToken), address(usd), OfferFlow.Permissionless, propRfqId, feeConfigId, liquidityVaultId
+            address(managedToken), address(usd), OfferFlow.Permissionless, propAmmId, feeConfigId, liquidityVaultId
         );
         app.updateFeeConfig(feeConfigId, 0, 0, feeVaultId);
         _depositLiquidity(10_000_000);
@@ -392,7 +392,7 @@ contract OnRePropRfqTest is OnReAppTestBase {
         vm.expectRevert();
         app.takeOffer(_takeOfferParams(sellOfferId, 1_000_000_000));
 
-        PropRfqState memory state = app.getPropRfqState(propRfqId);
+        PropAmmState memory state = app.getPropAmmState(propAmmId);
         assertEq(state.currentSellValueStable, 0);
         assertEq(state.currentSellTradeCount, 0);
     }

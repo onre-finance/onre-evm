@@ -9,7 +9,7 @@ import {
     ManagedTokenConfig,
     Pricer,
     PricingVector,
-    PropRfqState,
+    PropAmmState,
     Quoter
 } from "../types/OnReTypes.sol";
 import {LibOnReView} from "../libraries/LibOnReView.sol";
@@ -31,8 +31,8 @@ contract OnReViewFacet {
         return LibOnReView._getQuoter(quoterId);
     }
 
-    function getPropRfqState(bytes32 quoterId) external view returns (PropRfqState memory) {
-        return LibOnReView._getPropRfqState(quoterId);
+    function getPropAmmState(bytes32 quoterId) external view returns (PropAmmState memory) {
+        return LibOnReView._getPropAmmState(quoterId);
     }
 
     function getFeeConfig(bytes32 feeConfigId) external view returns (FeeConfig memory) {

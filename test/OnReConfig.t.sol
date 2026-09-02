@@ -390,14 +390,14 @@ contract OnReConfigTest is OnReAppTestBase {
         vm.prank(user);
         app.createQuoter(QuoterKind.Nav, 99);
 
-        bytes32 propRfqId = app.createQuoter(QuoterKind.PropRfq, 99);
+        bytes32 propAmmId = app.createQuoter(QuoterKind.PropAmm, 99);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IAccessControl.AccessControlUnauthorizedAccount.selector, user, app.DEFAULT_ADMIN_ROLE()
             )
         );
         vm.prank(user);
-        app.configurePropRfq(propRfqId, address(usd), address(managedToken), _basePropRfqTestConfig());
+        app.configurePropAmm(propAmmId, address(usd), address(managedToken), _basePropAmmTestConfig());
 
         vm.expectRevert(
             abi.encodeWithSelector(

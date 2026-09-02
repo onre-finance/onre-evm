@@ -48,8 +48,7 @@ are generated and git-ignored. `pnpm test` does both in order.
 3. Deploys the eleven application facets and `OnReDiamondInit`.
 4. Sends one `diamondCut` that adds every application selector and delegatecalls
    `OnReDiamondInit.init` with `initArgs`.
-5. `init` validates and stores the managed-token implementation, seeds
-   boss/admin/worker/upgrader and the approvers, then revokes the deployer's
+5. `init` seeds boss/admin/worker/upgrader and the approvers, then revokes the deployer's
    bootstrap `UPGRADER_ROLE` — unless the deployer *is* `ONRE_UPGRADER`.
 
 Step 5 is the one to keep in mind: **after a fresh deployment, the deployment
@@ -60,26 +59,24 @@ deployment wallet. For mainnet, set it to the upgrade multisig.
 ## Registering a managed token
 
 Managed tokens are issued and redeemed by the Diamond; they are not pre-minted.
-Deploy one `ManagedToken` implementation before the Diamond. Set
-`ONRE_MANAGED_TOKEN_IMPLEMENTATION` to that address when deploying the Diamond.
-The Diamond initializer validates and stores it as the UUPS implementation
-template used by the managed-token factory facet.
+Deploy and verify a `ManagedToken` implementation before deploying its first
+proxy. The Diamond does not store a default implementation address.
 
 After verifying the Diamond, connect the application boss through the block
-explorer's **Write Contract** page and call `deployManagedToken` with the name,
-symbol, decimals, token administrator, CCIP administrator, and any additional
-initial minters and burners. The facet atomically deploys and initializes an
-`ERC1967Proxy`, grants the Diamond mint and burn authority, registers the token,
-records it in the Diamond's deployment registry, and emits
-`ManagedTokenDeployed`. No per-token deployment code, initializer transaction,
+explorer's **Write Contract** page and call `deployManagedToken` with the
+previously deployed implementation address, name, symbol, decimals, token
+administrator, CCIP administrator, and any additional initial minters and
+burners. The facet validates the implementation, atomically deploys and
+initializes an `ERC1967Proxy`, grants the Diamond mint and burn authority,
+registers the token, records it in the Diamond's deployment registry, and emits
+`ManagedTokenDeployed`. No per-token proxy bytecode, initializer transaction,
 role-grant transaction, or registration transaction is required.
 
 Each managed token upgrades independently. Its token administrator calls
 `upgradeToAndCall(newImplementation, data)` on that token proxy. Other managed
-tokens remain on their current implementations. To use a new implementation for
-future factory deployments, the application boss separately calls
-`setManagedTokenImplementation(newImplementation)` on the Diamond. Updating the
-factory template never upgrades an existing token.
+tokens remain on their current implementations. For a later factory deployment,
+the application boss supplies whichever verified implementation that new proxy
+should use directly to `deployManagedToken`.
 
 For an externally deployed compatible token, its token administrator must call
 `grantMintAndBurnRoles(diamond)` and the application boss must call

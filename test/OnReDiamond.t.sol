@@ -10,7 +10,6 @@ import {DiamondCutFacet} from "../src/diamond/contracts/facets/DiamondCutFacet.s
 import {IDiamondCut} from "../src/diamond/contracts/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../src/diamond/contracts/interfaces/IDiamondLoupe.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
-import {ManagedToken} from "../src/ManagedToken.sol";
 import {LibDiamond} from "../src/diamond/contracts/libraries/LibDiamond.sol";
 import {LibOnReStorage} from "../src/diamond/LibOnReStorage.sol";
 import {DiamondProxy} from "../src/generated/DiamondProxy.sol";
@@ -19,7 +18,6 @@ import {
     ApproverAlreadyExistsError,
     BossRoleManagedSeparatelyError,
     BothApproversFilledError,
-    InvalidManagedTokenImplementationError,
     NoChangeError,
     NotPendingBossError,
     UnsupportedRoleError,
@@ -36,17 +34,10 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
     address private upgrader = makeAddr("upgrader");
     address private other = makeAddr("other");
     IDiamondProxy private app;
-    address private managedTokenImplementation;
 
     function setUp() public {
-        managedTokenImplementation = address(new ManagedToken());
         InitializeParams memory params = InitializeParams({
-            boss: boss,
-            admin: admin,
-            worker: worker,
-            upgrader: upgrader,
-            managedTokenImplementation: managedTokenImplementation,
-            approvers: new address[](0)
+            boss: boss, admin: admin, worker: worker, upgrader: upgrader, approvers: new address[](0)
         });
         app = _deployDiamondApp(params);
     }
@@ -391,12 +382,7 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
         // A deployer that is itself the configured upgrader keeps the role.
         InitializeParams memory params = InitializeParams({
-            boss: boss,
-            admin: admin,
-            worker: worker,
-            upgrader: address(this),
-            managedTokenImplementation: managedTokenImplementation,
-            approvers: new address[](0)
+            boss: boss, admin: admin, worker: worker, upgrader: address(this), approvers: new address[](0)
         });
         IDiamondProxy retained = _deployDiamondApp(params);
         assertTrue(retained.hasRole(upgraderRole, address(this)));
@@ -429,26 +415,6 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
         _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
 
         params.upgrader = upgrader;
-        params.managedTokenImplementation = address(0);
-        vm.expectRevert(
-            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
-        );
-        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
-
-        params.managedTokenImplementation = other;
-        vm.expectRevert(
-            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
-        );
-        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
-
-        DiamondIncompatibleManagedToken incompatibleImplementation = new DiamondIncompatibleManagedToken();
-        params.managedTokenImplementation = address(incompatibleImplementation);
-        vm.expectRevert(
-            abi.encodeWithSelector(InvalidManagedTokenImplementationError.selector, params.managedTokenImplementation)
-        );
-        _cutBare(bare, address(init), abi.encodeCall(OnReDiamondInit.init, (params)));
-
-        params.managedTokenImplementation = managedTokenImplementation;
         params.approvers = new address[](3);
         params.approvers[0] = makeAddr("approverA");
         params.approvers[1] = makeAddr("approverB");
@@ -601,13 +567,10 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
             admin: makeAddr("initAdmin"),
             worker: makeAddr("initWorker"),
             upgrader: makeAddr("initUpgrader"),
-            managedTokenImplementation: managedTokenImplementation,
             approvers: new address[](0)
         });
     }
 }
-
-contract DiamondIncompatibleManagedToken {}
 
 contract DiamondTestFacetV1 {
     function version() external pure returns (uint256) {

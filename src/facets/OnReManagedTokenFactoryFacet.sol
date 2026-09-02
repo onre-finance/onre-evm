@@ -7,6 +7,7 @@ contract OnReManagedTokenFactoryFacet {
     /// @notice Deploys, initializes, and registers a managed token.
     /// @dev The Diamond is always added to the supplied initial minter and burner sets.
     function deployManagedToken(
+        address implementation,
         string calldata name,
         string calldata symbol,
         uint8 decimals,
@@ -16,17 +17,8 @@ contract OnReManagedTokenFactoryFacet {
         address[] calldata initialBurners
     ) external returns (address managedToken) {
         return LibOnReManagedTokenFactory._deployManagedToken(
-            name, symbol, decimals, admin, ccipAdmin, initialMinters, initialBurners
+            implementation, name, symbol, decimals, admin, ccipAdmin, initialMinters, initialBurners
         );
-    }
-
-    /// @notice Changes the UUPS implementation used only for future deployments.
-    function setManagedTokenImplementation(address newImplementation) external {
-        LibOnReManagedTokenFactory._setManagedTokenImplementation(newImplementation);
-    }
-
-    function managedTokenImplementation() external view returns (address) {
-        return LibOnReManagedTokenFactory._managedTokenImplementation();
     }
 
     function deployedManagedTokenCount() external view returns (uint256) {

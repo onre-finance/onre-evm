@@ -9,7 +9,7 @@ import {
     OfferConfig,
     ManagedTokenConfig,
     Pricer,
-    PropRfqState,
+    PropAmmState,
     Quoter
 } from "../types/OnReTypes.sol";
 
@@ -30,7 +30,7 @@ library LibOnReStorage {
         bool isKilled;
         address approver1;
         address approver2;
-        mapping(bytes32 quoterId => PropRfqState state) propRfqStates;
+        mapping(bytes32 quoterId => PropAmmState state) propAmmStates;
         address permissionlessSettlementAccount;
         mapping(address managedToken => BufferState state) bufferStates;
         address[] deployedManagedTokens;

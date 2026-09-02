@@ -26,7 +26,7 @@ import {
     QuoterKind
 } from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
-import {LibOnRePropRfq} from "./LibOnRePropRfq.sol";
+import {LibOnRePropAmm} from "./LibOnRePropAmm.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
@@ -156,8 +156,8 @@ library LibOnReOfferConfig {
         view
     {
         if (quoter.kind == QuoterKind.NavPermissionless) return;
-        if (quoter.kind == QuoterKind.PropRfq) {
-            LibOnRePropRfq._validatePair(quoterId, LibOnReStorage._appStorage().propRfqStates[quoterId], offer);
+        if (quoter.kind == QuoterKind.PropAmm) {
+            LibOnRePropAmm._validatePair(quoterId, LibOnReStorage._appStorage().propAmmStates[quoterId], offer);
             return;
         }
         revert InvalidFlowQuoterError();

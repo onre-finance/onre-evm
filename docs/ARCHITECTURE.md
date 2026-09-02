@@ -21,7 +21,7 @@ generates against, so the layout has to match what its templates import. See
 - `OnReConfigFacet` implements token and application administration.
 - `OnRePricerFacet` implements the reusable USD Pricer and pricing vectors.
 - `OnReQuoterFacet` implements reusable `Nav`, `NavPermissionless`, and
-  pair-bound stateful `PropRfq` dispatch. Every quoter kind uses the same
+  pair-bound stateful `PropAmm` dispatch. Every quoter kind uses the same
   creation entrypoint; kind-specific state is applied through typed
   configuration functions.
 - `OnReOfferFacet` implements FeeConfigs, OfferConfigs, and flow-dispatched
@@ -51,9 +51,9 @@ The internal libraries follow the same responsibility boundaries:
   policy and fee calculation.
 - `LibOnReOfferConfig` owns pair-and-flow configuration and reference
   validation.
-- `LibOnRePropRfq` owns proprietary request-for-quote (Prop RFQ) configuration
+- `LibOnRePropAmm` owns proprietary automated market maker (Prop AMM) configuration
   validation, rolling buy/sell pressure, and dynamic-wall orchestration.
-- `LibOnRePropRfqMath` owns the pure fixed-point curve and cadence formulas that
+- `LibOnRePropAmmMath` owns the pure fixed-point curve and cadence formulas that
   must remain numerically aligned with the Solana implementation.
 - `LibOnReApproval` owns EIP-712 approval verification.
 - `LibOnReOffer` owns direct and worker settlement against validated
@@ -133,7 +133,7 @@ initialization derives these vault IDs from the managed token and vault role, th
 creates independent configurable-vault records. Their withdrawal destinations
 are set through the standard configurable-vault update path.
 
-Prop RFQ is implemented as a quoter kind rather than a separate facet. Each
+Prop AMM is implemented as a quoter kind rather than a separate facet. Each
 instance is bound to one asset/managed-token pair, stores its own configuration and
 rolling pressure, and can be shared by both directed permissionless
 OfferConfigs for that pair.

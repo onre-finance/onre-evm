@@ -28,7 +28,7 @@ event PricerEnabledSet(bytes32 indexed pricerId, bool enabled);
 
 event QuoterCreated(bytes32 indexed quoterId, QuoterKind indexed kind, uint64 indexed instanceId);
 event QuoterEnabledSet(bytes32 indexed quoterId, bool enabled);
-event PropRfqConfigured(
+event PropAmmConfigured(
     bytes32 indexed quoterId,
     address indexed assetToken,
     address indexed managedToken,

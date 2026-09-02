@@ -7,16 +7,16 @@ import {
     InsufficientLiquidityError,
     InvalidAmountError,
     InvalidBasisPointsError,
-    InvalidPropRfqPairError,
-    PropRfqConfigurationRequiredError
+    InvalidPropAmmPairError,
+    PropAmmConfigurationRequiredError
 } from "../types/OnReAppErrors.sol";
-import {ConfigurableVault, OfferConfig, PropRfqConfig, PropRfqState} from "../types/OnReTypes.sol";
+import {ConfigurableVault, OfferConfig, PropAmmConfig, PropAmmState} from "../types/OnReTypes.sol";
 import {LibOnReMarketStats} from "./LibOnReMarketStats.sol";
-import {LibOnRePropRfqMath} from "./LibOnRePropRfqMath.sol";
+import {LibOnRePropAmmMath} from "./LibOnRePropAmmMath.sol";
 
-/// @notice Stateful pricing for the Proprietary Request for Quote (Prop RFQ) pricing.
+/// @notice Stateful pricing for the Proprietary Automated Market Maker (Prop AMM).
 /// @dev The fixed-point formulas mirror the corresponding Solana implementation.
-library LibOnRePropRfq {
+library LibOnRePropAmm {
     uint256 internal constant HARD_WALL_SCALE = 1_000_000_000_000;
     uint256 internal constant CURVE_EXPONENT_SCALE = 10_000;
     uint256 internal constant CURVE_EXPONENT_STEP = 1_000;
@@ -27,7 +27,7 @@ library LibOnRePropRfq {
     uint256 internal constant WALL_SENSITIVITY_SCALE = 10_000;
     uint256 internal constant MAX_BASIS_POINTS = 10_000;
 
-    function _validateConfig(PropRfqConfig memory config) internal pure {
+    function _validateConfig(PropAmmConfig memory config) internal pure {
         if (config.curvePegHaircutBps > MAX_BASIS_POINTS) {
             revert InvalidBasisPointsError();
         }
@@ -46,18 +46,18 @@ library LibOnRePropRfq {
         }
     }
 
-    function _validatePair(bytes32 quoterId, PropRfqState storage state, OfferConfig storage offer) internal view {
+    function _validatePair(bytes32 quoterId, PropAmmState storage state, OfferConfig storage offer) internal view {
         if (state.assetToken == address(0) || state.managedToken == address(0)) {
-            revert PropRfqConfigurationRequiredError();
+            revert PropAmmConfigurationRequiredError();
         }
         bool isBuy = offer.tokenIn == state.assetToken && offer.tokenOut == state.managedToken;
         bool isSell = offer.tokenIn == state.managedToken && offer.tokenOut == state.assetToken;
         if (!isBuy && !isSell) {
-            revert InvalidPropRfqPairError(quoterId, offer.tokenIn, offer.tokenOut);
+            revert InvalidPropAmmPairError(quoterId, offer.tokenIn, offer.tokenOut);
         }
     }
 
-    function _quoteSell(PropRfqState storage state, OfferConfig storage offer, uint256 rawAmountOut)
+    function _quoteSell(PropAmmState storage state, OfferConfig storage offer, uint256 rawAmountOut)
         internal
         view
         returns (uint256)
@@ -79,10 +79,10 @@ library LibOnRePropRfq {
         uint256 effectiveLiquidity =
             _dynamicWallLiquidity(state, rawAmountOut, actualLiquidity, hardWallReserve, block.timestamp);
         uint256 utilizationScaled = Math.mulDiv(rawAmountOut, HARD_WALL_SCALE, effectiveLiquidity);
-        uint256 baseHaircut = LibOnRePropRfqMath._redemptionHaircutScaled(
+        uint256 baseHaircut = LibOnRePropAmmMath._redemptionHaircutScaled(
             utilizationScaled, state.config.curvePegHaircutBps, state.config.curveExponentScaled
         );
-        uint256 cadenceTarget = LibOnRePropRfqMath._cadenceWaveTargetHaircutScaled(
+        uint256 cadenceTarget = LibOnRePropAmmMath._cadenceWaveTargetHaircutScaled(
             utilizationScaled, _cadenceWaveYForQuote(state, block.timestamp)
         );
         uint256 haircut = baseHaircut > cadenceTarget ? baseHaircut : cadenceTarget;
@@ -91,18 +91,18 @@ library LibOnRePropRfq {
         return Math.mulDiv(rawAmountOut, liquidityFactor, HARD_WALL_SCALE);
     }
 
-    function _recordBuy(PropRfqState storage state, uint256 buyValueStable) internal {
+    function _recordBuy(PropAmmState storage state, uint256 buyValueStable) internal {
         _rollVolumeTracker(state, block.timestamp);
         state.currentBuyValueStable += buyValueStable;
     }
 
-    function _recordSell(PropRfqState storage state, uint256 sellValueStable) internal {
+    function _recordSell(PropAmmState storage state, uint256 sellValueStable) internal {
         _rollVolumeTracker(state, block.timestamp);
         state.currentSellValueStable += sellValueStable;
         ++state.currentSellTradeCount;
     }
 
-    function _hardWallReserve(PropRfqState storage state, OfferConfig storage offer, uint256 actualLiquidity)
+    function _hardWallReserve(PropAmmState storage state, OfferConfig storage offer, uint256 actualLiquidity)
         private
         view
         returns (uint256)
@@ -119,7 +119,7 @@ library LibOnRePropRfq {
     }
 
     function _dynamicWallLiquidity(
-        PropRfqState storage state,
+        PropAmmState storage state,
         uint256 currentSellValueStable,
         uint256 actualLiquidity,
         uint256 hardWallReserve,
@@ -140,7 +140,7 @@ library LibOnRePropRfq {
     }
 
     function _previewEffectiveSellVolume(
-        PropRfqState storage state,
+        PropAmmState storage state,
         uint256 currentSellValueStable,
         uint256 currentTime
     ) private view returns (uint256) {
@@ -172,7 +172,7 @@ library LibOnRePropRfq {
         return decayedPrevious + effectiveCurrentNet + currentSellValueStable;
     }
 
-    function _rollVolumeTracker(PropRfqState storage state, uint256 currentTime) private {
+    function _rollVolumeTracker(PropAmmState storage state, uint256 currentTime) private {
         uint256 epochDuration = state.config.epochDurationSeconds;
         if (state.epochStart == 0 || currentTime < state.epochStart) {
             _resetCurrentEpoch(state, currentTime);
@@ -192,7 +192,7 @@ library LibOnRePropRfq {
         }
     }
 
-    function _resetCurrentEpoch(PropRfqState storage state, uint256 currentTime) private {
+    function _resetCurrentEpoch(PropAmmState storage state, uint256 currentTime) private {
         state.currentSellValueStable = 0;
         state.currentBuyValueStable = 0;
         state.currentSellTradeCount = 0;
@@ -201,7 +201,7 @@ library LibOnRePropRfq {
         state.epochStart = uint64(currentTime);
     }
 
-    function _cadenceWaveYForQuote(PropRfqState storage state, uint256 currentTime) private view returns (uint256) {
+    function _cadenceWaveYForQuote(PropAmmState storage state, uint256 currentTime) private view returns (uint256) {
         uint256 maxWaveY = state.config.cadenceWaveScaled;
         if (maxWaveY == 0 || state.epochStart == 0 || currentTime < state.epochStart) return 0;
         if (currentTime - state.epochStart >= state.config.epochDurationSeconds) return 0;

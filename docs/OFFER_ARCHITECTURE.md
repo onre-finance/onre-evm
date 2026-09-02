@@ -15,8 +15,9 @@ The implemented scope intentionally contains:
 - one pricing denomination: `Usd`;
 - three offer flows: `Permissioned`, `Permissionless`, and `Worker`;
 - two stateless quoter kinds, `Nav` and `NavPermissionless`, plus the stateful
-  proprietary request-for-quote kind, `PropRfq` (Prop RFQ);
-- no Buffer state or execution;
+  proprietary automated market maker kind, `PropAmm` (Prop AMM);
+- per-token Buffer state, accrual, settlement, and managed-token supply-change
+  callbacks;
 - no separate redemption-offer configuration.
 
 ## Domain graph
@@ -41,7 +42,7 @@ flowchart TB
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
         Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>disabled"]
         NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>disabled"]
-        PropRfq["<b>Prop RFQ</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
+        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
     end
 
     subgraph Configuration["Reusable offer configuration"]
@@ -71,7 +72,7 @@ flowchart TB
     OfferConfig -.->|"managed token from pair derives USD Pricer"| Pricer
     OfferConfig -->|"quoterId"| Nav
     OfferConfig -->|"quoterId"| NavPermissionless
-    OfferConfig -->|"quoterId"| PropRfq
+    OfferConfig -->|"quoterId"| PropAmm
     OfferConfig -->|"feeConfigId"| FeeConfig
     OfferConfig -->|"proceedsVaultId"| ProceedsVault
     OfferConfig -->|"liquidityVaultId"| LiquidityVault
@@ -89,7 +90,7 @@ flowchart TB
     Roles -.->|"DEFAULT_ADMIN_ROLE"| Pricer
     Roles -.->|"DEFAULT_ADMIN_ROLE"| Nav
     Roles -.->|"DEFAULT_ADMIN_ROLE"| NavPermissionless
-    Roles -.->|"DEFAULT_ADMIN_ROLE"| PropRfq
+    Roles -.->|"DEFAULT_ADMIN_ROLE"| PropAmm
     Roles -.->|"DEFAULT_ADMIN_ROLE"| FeeConfig
     Roles -.->|"DEFAULT_ADMIN_ROLE"| OfferConfig
     Roles -.->|"DEFAULT_ADMIN_ROLE"| TokenConfig
@@ -117,17 +118,17 @@ FulfillmentRequest = hash("onre.fulfillment_request", offerConfigId, user, reque
 
 For Quoters, `kind` selects the behavior family and `instanceId` selects one
 independently configurable instance within that family. Multiple `Nav`,
-`NavPermissionless`, or `PropRfq` instances can therefore coexist.
+`NavPermissionless`, or `PropAmm` instances can therefore coexist.
 Kind-specific settings are stored under the resulting `quoterId`; mutable
 settings are not included in the identity hash.
 
 Every kind is first created through `createQuoter(kind, instanceId)`. Quoter
 kinds with additional state then expose a typed configuration function. For
-`PropRfq`, `configurePropRfq` binds the pair on its first call and updates
+`PropAmm`, `configurePropAmm` binds the pair on its first call and updates
 only the mutable curve, cadence, and wall settings on later calls. An
-unconfigured `PropRfq` cannot be assigned to an OfferConfig.
+unconfigured `PropAmm` cannot be assigned to an OfferConfig.
 
-A `PropRfq` proprietary request-for-quote instance is immutably bound to one
+A `PropAmm` proprietary automated market maker instance is immutably bound to one
 asset and one managed token.
 Multiple instances may use the same pair while keeping independent curve
 configuration and rolling pressure. The asset-to-managed and managed-to-asset
@@ -157,12 +158,12 @@ cannot be redirected independently.
 | --- | --- | --- | --- |
 | `Permissioned` | either | `Nav` | `takeOffer`; valid approver signature required |
 | `Permissionless` | either | `NavPermissionless` | `takeOffer`; approval fields must be empty |
-| `Permissionless` | either | pair-matching `PropRfq` | `takeOffer`; approval fields must be empty |
+| `Permissionless` | either | pair-matching `PropAmm` | `takeOffer`; approval fields must be empty |
 | `Worker` | `ManagedToAsset` | `Nav` | create, partially fulfill, or cancel a `FulfillmentRequest` |
 
 The two NAV quoter kinds use the same arithmetic but remain separate
 dispatch families so permissionless quoting can evolve without changing
-permissioned or worker behavior. `PropRfq` uses the same NAV result for buys.
+permissioned or worker behavior. `PropAmm` uses the same NAV result for buys.
 For sells it applies the configured liquidity, pressure, curve, and cadence
 dampening after the NAV result.
 
@@ -216,7 +217,7 @@ Set it to zero when the fee configuration should have no absolute floor. Since
 the floor is token-denominated, an offer must reference a fee configuration
 that is appropriate for its input token.
 
-The Prop RFQ configuration stored per quoter instance is:
+The Prop AMM configuration stored per quoter instance is:
 
 - curve peg haircut in basis points;
 - curve exponent scaled by `10_000`;
@@ -230,7 +231,7 @@ asset input to buy value. Successful sells add the raw pre-curve asset output
 and increment the sell count. State is updated before external token calls and
 the entire update rolls back if settlement fails.
 
-For a Prop RFQ sell, the raw NAV output is first checked against actual
+For a Prop AMM sell, the raw NAV output is first checked against actual
 Liquidity-vault balance. The configured Liquidity vault's TVL refill target, if
 nonzero, caps the hard-wall reserve:
 
@@ -279,7 +280,7 @@ Cancellation returns only the unfilled input.
 - `diamondCut` routing cannot be removed, so an upgrade cannot accidentally
   delete the only upgrade entry point; replacement remains available.
 - `OnRePricerFacet` configures USD Pricers and embedded vectors.
-- `OnReQuoterFacet` configures NAV and pair-bound Prop RFQ instances.
+- `OnReQuoterFacet` configures NAV and pair-bound Prop AMM instances.
 - `OnReOfferFacet` delegates FeeConfig policy to `LibOnReFeeConfig`,
   OfferConfig lifecycle to `LibOnReOfferConfig`, and runtime execution to
   `LibOnReOffer`; it also exposes the canonical gross-input execution preview.

@@ -19,7 +19,7 @@ enum OfferDirection {
 enum QuoterKind {
     Nav,
     NavPermissionless,
-    PropRfq
+    PropAmm
 }
 
 enum ConfigurableVaultKind {
@@ -71,7 +71,7 @@ struct Quoter {
     bool exists;
 }
 
-struct PropRfqConfig {
+struct PropAmmConfig {
     uint64 epochDurationSeconds;
     uint32 curveExponentScaled;
     uint32 cadenceThreshold;
@@ -80,11 +80,11 @@ struct PropRfqConfig {
     uint16 curvePegHaircutBps;
 }
 
-struct PropRfqState {
+struct PropAmmState {
     uint256 currentSellValueStable;
     uint256 currentBuyValueStable;
     uint256 previousNetSellValueStable;
-    PropRfqConfig config;
+    PropAmmConfig config;
     address managedToken;
     uint64 epochStart;
     uint32 currentSellTradeCount;

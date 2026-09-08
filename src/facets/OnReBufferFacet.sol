@@ -29,6 +29,16 @@ contract OnReBufferFacet is IBufferController {
         bufferMintAmount = LibOnReBuffer._settleBuffer(managedToken);
     }
 
+    /// @notice Burns reserve tokens to offset a USD asset reduction at the current quoted NAV.
+    /// @param assetAdjustmentAmount USD amount scaled to the managed token's decimals, like MarketStats.tvl.
+    /// @return burnAmount Amount burned in managed-token base units.
+    function burnForNavIncrease(address managedToken, uint256 assetAdjustmentAmount)
+        external
+        returns (uint256 burnAmount)
+    {
+        burnAmount = LibOnReBuffer._burnForNavIncrease(managedToken, assetAdjustmentAmount);
+    }
+
     function onBeforeSupplyChange(uint256 amount, bool isMint) external {
         LibOnReBuffer._onBeforeSupplyChange(amount, isMint);
     }

@@ -240,7 +240,7 @@ contract ManagedTokenTest is Test {
         assertEq(token.getCCIPAdmin(), nextAdmin);
     }
 
-    function test_BufferControllerObservesEveryRegularMintAndBurnWhileBufferMintBypassesIt() public {
+    function test_BufferControllerObservesRegularSupplyChangesWhileBufferPathsBypassIt() public {
         RecordingBufferController controller = new RecordingBufferController();
 
         vm.expectRevert();
@@ -290,6 +290,38 @@ contract ManagedTokenTest is Test {
         token.mintBuffer(7e9);
         assertEq(controller.callCount(), 4);
         assertEq(token.balanceOf(address(controller)), 7e9);
+
+        uint256 supplyBeforeBurn = token.totalSupply();
+        vm.prank(address(controller));
+        token.burnBuffer(3e9);
+        assertEq(controller.callCount(), 4);
+        assertEq(token.balanceOf(address(controller)), 4e9);
+        assertEq(token.totalSupply(), supplyBeforeBurn - 3e9);
+        assertEq(token.balanceOf(user), 90e9);
+
+        vm.expectRevert();
+        vm.prank(address(controller));
+        token.burnBuffer(4e9 + 1);
+        assertEq(token.balanceOf(address(controller)), 4e9);
+        assertEq(controller.callCount(), 4);
+    }
+
+    function test_BurnBufferRequiresConfiguredControllerEvenForAdminOrBurner() public {
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBufferControllerError.selector, burner));
+        vm.prank(burner);
+        token.burnBuffer(0);
+
+        RecordingBufferController controller = new RecordingBufferController();
+        vm.prank(admin);
+        token.setBufferController(address(controller));
+        address[3] memory unauthorized = [admin, burner, user];
+        for (uint256 i; i < unauthorized.length; ++i) {
+            vm.expectRevert(
+                abi.encodeWithSelector(IManagedToken.SenderNotBufferControllerError.selector, unauthorized[i])
+            );
+            vm.prank(unauthorized[i]);
+            token.burnBuffer(1);
+        }
     }
 
     function test_AdminUpgradesOnlySelectedTokenAndPreservesState() public {

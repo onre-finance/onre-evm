@@ -8,16 +8,21 @@ import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     BufferAlreadyExistsError,
     BufferNotFoundError,
+    BufferReserveExcludedFromSupplyError,
     BufferSupplyMismatchError,
+    InsufficientBalanceError,
     InvalidAmountError,
+    InvalidAssetAdjustmentAmountError,
     InvalidBasisPointsError,
     InvalidBufferAprError,
     InvalidBufferControllerError,
     KilledError,
+    NoBurnNeededError,
     NoChangeError
 } from "../types/OnReAppErrors.sol";
 import {
     BufferAccrued,
+    BufferBurnedForNav,
     BufferFeeConfigUpdated,
     BufferGrossAprUpdated,
     BufferInitialized,
@@ -25,11 +30,13 @@ import {
 } from "../types/OnReAppEvents.sol";
 import {BufferState, ConfigurableVaultKind, Pricer, PricingVector} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
+import {LibOnReMarketStats} from "./LibOnReMarketStats.sol";
 import {LibOnRePricer} from "./LibOnRePricer.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {LibOnReVault} from "./LibOnReVault.sol";
 import {OnReIds} from "./OnReIds.sol";
+import {OnReMath} from "./OnReMath.sol";
 
 /// @notice Per-token reserve growth that settles before every tracked supply change.
 library LibOnReBuffer {
@@ -161,6 +168,41 @@ library LibOnReBuffer {
         }
         state.previousSupply = newPreviousSupply;
         emit BufferSupplyChangeRecorded(managedToken, isMint, amount, oldPreviousSupply, newPreviousSupply);
+    }
+
+    function _burnForNavIncrease(address managedToken, uint256 assetAdjustmentAmount)
+        internal
+        returns (uint256 burnAmount)
+    {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        if (LibOnReStorage._appStorage().isKilled) revert KilledError();
+        if (assetAdjustmentAmount == 0) revert NoBurnNeededError();
+        BufferState storage state = _requireBuffer(managedToken);
+        // Burning from an excluded Diamond would leave circulating supply unchanged.
+        if (LibOnReStorage._appStorage().excludedSupplyIndexPlusOne[managedToken][address(this)] != 0) {
+            revert BufferReserveExcludedFromSupplyError(managedToken);
+        }
+
+        uint256 currentNav = _accrue(managedToken, state).currentNav;
+        uint256 circulatingSupply = LibOnReMarketStats._circulatingSupply(managedToken);
+        uint256 totalAssets = OnReMath._calculateTvl(circulatingSupply, currentNav, LibOnRePricer.PRICE_SCALE);
+        if (assetAdjustmentAmount > totalAssets) revert InvalidAssetAdjustmentAmountError();
+
+        // Match Solana: floor TVL, then ceil the supply required after the asset reduction.
+        uint256 requiredSupplyAfter =
+            Math.mulDiv(totalAssets - assetAdjustmentAmount, LibOnRePricer.PRICE_SCALE, currentNav, Math.Rounding.Ceil);
+        burnAmount = circulatingSupply - requiredSupplyAfter;
+        if (burnAmount == 0) revert NoBurnNeededError();
+
+        uint256 reserveBalance = LibOnReVault._balance(state.reserveVaultId, managedToken);
+        if (burnAmount > reserveBalance) revert InsufficientBalanceError(reserveBalance, burnAmount);
+        LibOnReStorage._appStorage().configurableVaultBalances[state.reserveVaultId][managedToken] =
+            reserveBalance - burnAmount;
+        // Controller-only Buffer burns skip the callback, so record the post-burn baseline here.
+        state.previousSupply -= burnAmount;
+        IManagedToken(managedToken).burnBuffer(burnAmount);
+
+        emit BufferBurnedForNav(managedToken, burnAmount, assetAdjustmentAmount, totalAssets, currentNav);
     }
 
     function _bufferState(address managedToken) internal view returns (BufferState storage state) {

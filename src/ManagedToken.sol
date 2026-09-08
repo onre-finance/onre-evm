@@ -155,6 +155,13 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         _mint(sender, amount);
     }
 
+    /// @notice Burns the configured controller's Buffer tokens without recursively notifying it.
+    function burnBuffer(uint256 amount) external {
+        address sender = msg.sender;
+        if (sender != _bufferController) revert SenderNotBufferControllerError(sender);
+        _burn(sender, amount);
+    }
+
     function burn(uint256 amount) public onlyBurner {
         _notifyBufferController(amount, false);
         _burn(msg.sender, amount);

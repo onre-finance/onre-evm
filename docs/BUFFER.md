@@ -36,9 +36,10 @@ changing supply. The Diamond settles the interval using the old supply and then
 records the expected post-operation supply. The token operation reverts if
 settlement or reconciliation fails.
 
-The controller-only `mintBuffer` path is different by design: it always mints
-to the controller and does not invoke the callback. This is the recursion
-boundary for Diamond-initiated Buffer accrual.
+The controller-only `mintBuffer` and `burnBuffer` paths do not invoke the
+callback. They mint to or burn from the controller's own balance. These are the
+recursion boundaries for Diamond-initiated Buffer accrual and NAV reserve burns;
+the Diamond records the resulting supply baseline itself.
 
 The controller is optional until activated. Once configured, the callback is
 strict; it does not fall back to an untracked mint or burn.
@@ -67,3 +68,73 @@ old configuration first. `settleBuffer` is worker-only and respects the
 application kill switch. Token supply callbacks remain available while killed
 so token-level mint and burn permissions do not become an accidental global
 freeze.
+
+## Burn for NAV preservation
+
+The boss (`DEFAULT_ADMIN_ROLE`) calls
+`burnForNavIncrease(managedToken, assetAdjustmentAmount)` to offset a reduction
+in the effective USD asset base by burning managed tokens from that token's
+BufferReserve vault. The name follows Solana's `burn_for_nav_increase`.
+The function preserves the current quoted NAV; it does not edit pricing vectors
+or transfer USD assets. The USD reduction is an accounting input supplied by the
+boss, not an on-chain asset withdrawal.
+
+`assetAdjustmentAmount` is USD scaled to the managed token's decimals, matching
+`MarketStats.tvl`. For 9-decimal ONyc, `$100` is `100_000_000_000`; at a quoted
+NAV of `$1.10`, this burns `90_909_090_909` base units (about `90.909090909 ONyc`).
+NAV itself always uses the Pricer's `1e9` scale.
+
+The call first settles pending Buffer accrual, including management and
+performance fees, then applies the same rounding as Solana:
+
+```text
+totalAssets = floor(circulatingSupply * currentNav / 1e9)
+requiredSupplyAfter = ceil((totalAssets - assetAdjustmentAmount) * 1e9 / currentNav)
+burnAmount = circulatingSupply - requiredSupplyAfter
+```
+
+Only the reserve's logical balance funds the burn. Fee vault balances, other
+vaults, and unaccounted tokens held by the Diamond cannot cover a reserve
+shortfall. The Diamond records the reduced total supply as the next accrual
+baseline and calls controller-only `burnBuffer`, which skips the supply-change
+callback. Market statistics are derived on read and immediately reflect the
+reduced circulating supply and TVL.
+
+The operation respects the kill switch and requires an initialized Buffer, the
+Diamond as token controller, and executable USD pricing. Ordinary token burner
+permission is not required for the controller-only Buffer path.
+It rejects zero adjustments, adjustments above circulating TVL, amounts that
+produce no burn, and insufficient reserves. The Diamond must remain included
+in circulating supply; otherwise burning its tokens cannot offset the asset
+reduction. A failure reverts both the burn and preceding accrual atomically.
+`BufferBurnedForNav` reports the token, burned amount, USD adjustment,
+pre-burn total assets, and quoted target NAV.
+
+### Business assumptions and Solana differences
+
+NAV preservation assumes actual backing assets matched circulating supply times
+the quoted NAV before the reported reduction. The contract derives `totalAssets`
+from that quote; it does not verify off-chain assets or losses. For example,
+1,000 ONyc backed by $1,100 has a $1.10 NAV. After a $110 loss, burning 100
+reserve ONyc leaves $990 backing 900 ONyc, maintaining $1.10 per token. The
+reserve gives up its claims; other holders keep their tokens. A reserve shortfall
+reverts, so loss absorption is limited by available reserve tokens.
+
+Burning without an actual asset reduction increases backing per remaining token
+while leaving the quoted price unchanged. Changing the pricing vector to reflect
+the same loss before burning targets that new price, not the original NAV.
+The operator must reconcile the asset adjustment and the price configuration.
+
+For positive adjustments, the burn formula matches Solana. EVM reads excluded
+balances live and derives market stats on demand; Solana reads a cached excluded
+balance and refreshes stored market stats. EVM additionally rejects an excluded
+Diamond and always rejects a zero adjustment. Solana's arithmetic can produce a
+dust burn for zero adjustment when NAV is below $1 and flooring TVL discards
+enough value; that behavior is deliberately not reproduced.
+
+Existing managed-token proxies need an implementation upgrade that includes
+`burnBuffer` before using this entrypoint. Adding that method also changes the
+`IManagedToken` ERC-165 interface ID checked when registering tokens or
+validating factory implementations. This change adds no token or Diamond
+storage fields; deploy the updated Buffer facet and use the regenerated
+Diamond ABI for the new entrypoint.

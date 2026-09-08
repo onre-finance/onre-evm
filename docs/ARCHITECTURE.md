@@ -30,7 +30,8 @@ generates against, so the layout has to match what its templates import. See
 - `OnReConfigurableVaultFacet` implements reusable Fee, Proceeds, Liquidity,
   and BufferReserve vault instances.
 - `OnReBufferFacet` implements per-token Buffer configuration, accrual, manual
-  settlement, and the token supply-change callback.
+  settlement, boss-authorized reserve burns for USD asset adjustments, and the
+  token supply-change callback.
 - `OnReViewFacet` exposes application and domain records.
 - `OnReMarketStatsFacet` derives APY and NAV from the canonical USD Pricer,
   derives circulating supply from token balances, and combines them into TVL.
@@ -59,7 +60,7 @@ The internal libraries follow the same responsibility boundaries:
 - `LibOnReOffer` owns direct and worker settlement against validated
   configuration.
 - `LibOnReBuffer` owns per-token Buffer accrual, fee splitting, supply
-  reconciliation, and logical-vault accounting.
+  reconciliation, NAV-preserving reserve burns, and logical-vault accounting.
 - `OnReMath` owns shared pure arithmetic; domain libraries add policy around
   those calculations rather than duplicating the formulas.
 
@@ -175,9 +176,10 @@ Diamond.
 zero decimals are distinguishable from unregistered addresses.
 
 Separately, a token may configure the Diamond as its Buffer controller. That
-controller has one narrow mint path: `mintBuffer` always mints to the Diamond
-and deliberately skips the supply-change callback so Buffer settlement cannot
-recurse.
+controller has two narrow supply paths: `mintBuffer` always mints to the Diamond
+and `burnBuffer` burns only its own balance. Both deliberately skip the
+supply-change callback so Buffer settlement cannot recurse. The Diamond updates
+the supply baseline explicitly for these operations.
 
 Buffer tokens held by the Diamond are not excluded: they are real supply, count
 toward circulating supply and TVL, and participate in future compounding.

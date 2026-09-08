@@ -34,6 +34,8 @@ interface IManagedToken is IGetCCIPAdmin {
 
     function mintBuffer(uint256 amount) external;
 
+    function burnBuffer(uint256 amount) external;
+
     function bufferController() external view returns (address);
 
     function setBufferController(address newController) external;

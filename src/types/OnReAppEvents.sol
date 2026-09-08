@@ -160,6 +160,13 @@ event BufferSupplyChangeRecorded(
     uint256 oldPreviousSupply,
     uint256 newPreviousSupply
 );
+event BufferBurnedForNav(
+    address indexed managedToken,
+    uint256 burnAmount,
+    uint256 assetAdjustmentAmount,
+    uint256 totalAssets,
+    uint256 targetNav
+);
 
 event ApproverAdded(address indexed approver);
 event ApproverRemoved(address indexed approver);

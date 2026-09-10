@@ -16,12 +16,16 @@
     "verify:testnet": "gemforge verify testnet",
     "verify:mainnet": "gemforge verify mainnet",
     "devnet": "anvil",
+    "admin:contracts": "gemforge build && forge build admin-ui/contracts/LocalAssetToken.sol",
+    "admin:dev": "pnpm admin:contracts && vite admin-ui",
+    "admin:build": "pnpm admin:contracts && vite build admin-ui",
     "test:integration": "bash scripts/test-gemforge-integration.sh"
   },
   "devDependencies": {
     "dotenv": "^16.6.1",
     "gemforge": "2.18.0",
-    "solhint": "^6.2.3"
+    "solhint": "^6.2.3",
+    "vite": "^6.4.3"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -31,5 +35,8 @@
     "patchedDependencies": {
       "gemforge@2.18.0": "patches/gemforge@2.18.0.patch"
     }
+  },
+  "dependencies": {
+    "viem": "^2.55.19"
   }
 }

@@ -91,14 +91,22 @@ module.exports = {
     postDeploy: 'bash hooks/verify-gemforge-deployment.sh',
   },
   wallets: {
-    // Anvil's first default account.
-    local: {
-      type: 'mnemonic',
-      config: {
-        words: 'test test test test test test test test test test test junk',
-        index: 0,
-      },
-    },
+    // Docker supplies Anvil's randomly generated first account. Manual local
+    // development retains Gemforge's existing deterministic Anvil wallet.
+    local: process.env.ONRE_LOCAL_PRIVATE_KEY
+      ? {
+          type: 'private-key',
+          config: {
+            key: () => process.env.ONRE_LOCAL_PRIVATE_KEY,
+          },
+        }
+      : {
+          type: 'mnemonic',
+          config: {
+            words: 'test test test test test test test test test test test junk',
+            index: 0,
+          },
+        },
     deployer: {
       type: 'private-key',
       config: {

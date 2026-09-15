@@ -41,6 +41,11 @@ callback. They mint to or burn from the controller's own balance. These are the
 recursion boundaries for Diamond-initiated Buffer accrual and NAV reserve burns;
 the Diamond records the resulting supply baseline itself.
 
+Regular burns require burner permission. `burnFrom(account, amount)` and its
+`burn(account, amount)` alias spend allowance only when `account` differs from
+the caller. Self-burns do not require or consume self-allowance, and still notify
+the Buffer controller before changing supply.
+
 The controller is optional until activated. Once configured, the callback is
 strict; it does not fall back to an untracked mint or burn.
 

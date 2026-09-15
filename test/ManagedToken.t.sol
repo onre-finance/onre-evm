@@ -4,6 +4,7 @@ pragma solidity 0.8.35;
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
@@ -180,6 +181,9 @@ contract ManagedTokenTest is Test {
     }
 
     function test_NonBurnerCannotBurn() public {
+        vm.prank(minter);
+        token.mint(user, 1);
+
         vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
         vm.prank(user);
         token.burn(1);
@@ -187,6 +191,59 @@ contract ManagedTokenTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
         vm.prank(user);
         token.burnFrom(pool, 1);
+
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
+        vm.prank(user);
+        token.burnFrom(user, 1);
+
+        assertEq(token.balanceOf(user), 1);
+        assertEq(token.totalSupply(), 1);
+    }
+
+    function test_BurnFromOwnBalanceRequiresNoAllowanceAndNotifiesBuffer() public {
+        RecordingBufferController controller = new RecordingBufferController();
+        vm.prank(admin);
+        token.setBufferController(address(controller));
+
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+        assertEq(token.allowance(burner, burner), 0);
+
+        vm.prank(burner);
+        token.burnFrom(burner, 40e9);
+
+        assertEq(token.balanceOf(burner), 60e9);
+        assertEq(token.totalSupply(), 60e9);
+        assertEq(token.allowance(burner, burner), 0);
+        assertEq(controller.callCount(), 2);
+        assertEq(controller.lastAmount(), 40e9);
+        assertFalse(controller.lastIsMint());
+    }
+
+    function test_BurnFromOwnBalanceDoesNotSpendSelfAllowance() public {
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+
+        vm.startPrank(burner);
+        token.approve(burner, 10e9);
+        token.burnFrom(burner, 40e9);
+        vm.stopPrank();
+
+        assertEq(token.allowance(burner, burner), 10e9);
+        assertEq(token.balanceOf(burner), 60e9);
+        assertEq(token.totalSupply(), 60e9);
+    }
+
+    function test_BurnAddressAliasBurnsOwnBalanceWithoutAllowance() public {
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+
+        vm.prank(burner);
+        token.burn(burner, 40e9);
+
+        assertEq(token.balanceOf(burner), 60e9);
+        assertEq(token.totalSupply(), 60e9);
+        assertEq(token.allowance(burner, burner), 0);
     }
 
     function test_BurnAddressAliasUsesBurnFrom() public {
@@ -213,18 +270,30 @@ contract ManagedTokenTest is Test {
         vm.prank(admin);
         token.grantBurnRole(pool);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, pool, 0, 50e9));
         vm.prank(pool);
         token.burnFrom(user, 50e9);
 
+        assertEq(token.balanceOf(user), 100e9);
+        assertEq(token.totalSupply(), 100e9);
+
         vm.prank(user);
-        token.approve(pool, 50e9);
+        token.approve(pool, 60e9);
 
         vm.prank(pool);
         token.burnFrom(user, 50e9);
 
         assertEq(token.balanceOf(user), 50e9);
         assertEq(token.totalSupply(), 50e9);
+        assertEq(token.allowance(user, pool), 10e9);
+
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, pool, 10e9, 50e9));
+        vm.prank(pool);
+        token.burnFrom(user, 50e9);
+
+        assertEq(token.balanceOf(user), 50e9);
+        assertEq(token.totalSupply(), 50e9);
+        assertEq(token.allowance(user, pool), 10e9);
     }
 
     function test_AdminCanUpdateCCIPAdmin() public {

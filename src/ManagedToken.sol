@@ -171,8 +171,11 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         burnFrom(account, amount);
     }
 
+    /// @notice Burns tokens as an authorized burner; allowance is required only for another account.
     function burnFrom(address account, uint256 amount) public onlyBurner {
-        _spendAllowance(account, msg.sender, amount);
+        if (account != msg.sender) {
+            _spendAllowance(account, msg.sender, amount);
+        }
         _notifyBufferController(amount, false);
         _burn(account, amount);
     }

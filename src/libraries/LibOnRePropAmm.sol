@@ -16,7 +16,7 @@ import {LibOnRePropAmmMath} from "./LibOnRePropAmmMath.sol";
 import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Stateful pricing for the Proprietary Automated Market Maker (Prop AMM).
-/// @dev The fixed-point formulas mirror the corresponding Solana implementation.
+/// @dev Curve math mirrors Solana; volume epochs advance on fixed boundaries.
 library LibOnRePropAmm {
     uint256 internal constant CURVE_EXPONENT_STEP = 1_000;
     uint256 internal constant MAX_CURVE_EXPONENT_SCALED = 100_000;
@@ -161,7 +161,8 @@ library LibOnRePropAmm {
                 elapsed = 0;
             } else if (elapsed >= epochDuration) {
                 previousNet = currentNet;
-                elapsed = 0;
+                // Decay starts at the scheduled boundary, even if no trade rolled storage yet.
+                elapsed -= epochDuration;
             } else {
                 previousNet = state.previousNetSellValueStable;
                 effectiveCurrentNet = currentNet;
@@ -183,22 +184,22 @@ library LibOnRePropAmm {
         uint256 elapsed = currentTime - state.epochStart;
         if (elapsed >= epochDuration * 2) {
             state.previousNetSellValueStable = 0;
-            _resetCurrentEpoch(state, currentTime);
+            _resetCurrentEpoch(state, currentTime - elapsed % epochDuration);
         } else if (elapsed >= epochDuration) {
             state.previousNetSellValueStable = state.currentSellValueStable > state.currentBuyValueStable
                 ? state.currentSellValueStable - state.currentBuyValueStable
                 : 0;
-            _resetCurrentEpoch(state, currentTime);
+            _resetCurrentEpoch(state, currentTime - elapsed % epochDuration);
         }
     }
 
-    function _resetCurrentEpoch(PropAmmState storage state, uint256 currentTime) private {
+    function _resetCurrentEpoch(PropAmmState storage state, uint256 epochStart) private {
         state.currentSellValueStable = 0;
         state.currentBuyValueStable = 0;
         state.currentSellTradeCount = 0;
         // block.timestamp remains far below uint64 max for the lifetime of the EVM.
         // forge-lint: disable-next-line(unsafe-typecast)
-        state.epochStart = uint64(currentTime);
+        state.epochStart = uint64(epochStart);
     }
 
     function _cadenceWaveYForQuote(PropAmmState storage state, uint256 currentTime) private view returns (uint256) {

@@ -222,7 +222,7 @@ The Prop AMM configuration stored per quoter instance is:
 - curve peg haircut in basis points;
 - curve exponent scaled by `10_000`;
 - sell cadence threshold and maximum cadence wave;
-- rolling epoch duration;
+- fixed volume epoch duration;
 - dynamic-wall sensitivity.
 
 Each instance also stores current sell value, current buy value, previous net
@@ -230,6 +230,25 @@ sell value, current sell count, and epoch start. Successful buys add their net
 asset input to buy value. Successful sells add the raw pre-curve asset output
 and increment the sell count. State is updated before external token calls and
 the entire update rolls back if settlement fails.
+
+Volume windows have duration `D = epochDurationSeconds` and are anchored to the
+instance's initial `epochStart`. Within a window, current net sells contribute at
+full weight. At its scheduled end, that net becomes previous-window pressure and
+decays linearly to zero over the next D, even without trades. Quotes project this
+lazily; successful buys and sells advance stored `epochStart` by whole multiples
+of D, never to the late trade's timestamp. After two or more elapsed windows,
+old history is discarded while the original boundary alignment is preserved.
+Cadence counts and current buying surplus expire at the same window boundary.
+These boundaries are not automatically aligned with midnight or NAV price steps;
+changing the configured D applies the new duration to the stored epoch anchor.
+
+For example, with D=100 and net sells of 100 in the first window, the historical
+contribution at elapsed times 100, 150, 199, and 200 is 100, 50, 1, and 0.
+A sell of 20 at 199 therefore quotes with total pressure 21. Executing it keeps
+the epoch start at 100: the old 100 disappears at 200, and the new 20 then begins
+its own decay. The pending sell still contributes its full raw value under the
+existing buy-netting policy. This fixed-boundary behavior differs from the
+previously inspected Solana volume tracker; the Solana program is not changed here.
 
 For a Prop AMM sell, the raw NAV output is first checked against actual
 Liquidity-vault balance. The configured Liquidity vault's TVL refill target, if

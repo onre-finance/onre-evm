@@ -50,19 +50,13 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         _initializeKillSwitchController(params.killSwitchController);
 
         uint256 initialMintersLength = params.initialMinters.length;
-        for (uint256 i = 0; i < initialMintersLength;) {
+        for (uint256 i = 0; i < initialMintersLength; ++i) {
             _addMinter(params.initialMinters[i]);
-            unchecked {
-                ++i;
-            }
         }
 
         uint256 initialBurnersLength = params.initialBurners.length;
-        for (uint256 i = 0; i < initialBurnersLength;) {
+        for (uint256 i = 0; i < initialBurnersLength; ++i) {
             _addBurner(params.initialBurners[i]);
-            unchecked {
-                ++i;
-            }
         }
     }
 
@@ -84,6 +78,7 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         }
 
         address previousAdmin = _ccipAdmin;
+        if (newAdmin == previousAdmin) revert NoChangeError();
         _ccipAdmin = newAdmin;
         emit CCIPAdminTransferredEvent(previousAdmin, newAdmin);
     }

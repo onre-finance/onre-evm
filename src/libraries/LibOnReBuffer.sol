@@ -37,13 +37,11 @@ import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {LibOnReVault} from "./LibOnReVault.sol";
 import {OnReIds} from "./OnReIds.sol";
 import {OnReMath} from "./OnReMath.sol";
+import {MAX_BASIS_POINTS, APR_SCALE, PRICE_SCALE, SECONDS_PER_YEAR} from "./OnReConstants.sol";
 
 /// @notice Per-token reserve growth that settles before every tracked supply change.
 library LibOnReBuffer {
-    uint256 internal constant APR_SCALE = 1_000_000;
     uint256 internal constant MAX_GROSS_APR = 1_000_000;
-    uint256 internal constant MAX_BASIS_POINTS = 10_000;
-    uint256 internal constant SECONDS_PER_YEAR = 365 days;
 
     struct BufferAccrualResult {
         uint256 secondsElapsed;
@@ -185,12 +183,12 @@ library LibOnReBuffer {
 
         uint256 currentNav = _accrue(managedToken, state).currentNav;
         uint256 circulatingSupply = LibOnReMarketStats._circulatingSupply(managedToken);
-        uint256 totalAssets = OnReMath._calculateTvl(circulatingSupply, currentNav, LibOnRePricer.PRICE_SCALE);
+        uint256 totalAssets = OnReMath._calculateTvl(circulatingSupply, currentNav, PRICE_SCALE);
         if (assetAdjustmentAmount > totalAssets) revert InvalidAssetAdjustmentAmountError();
 
         // Match Solana: floor TVL, then ceil the supply required after the asset reduction.
         uint256 requiredSupplyAfter =
-            Math.mulDiv(totalAssets - assetAdjustmentAmount, LibOnRePricer.PRICE_SCALE, currentNav, Math.Rounding.Ceil);
+            Math.mulDiv(totalAssets - assetAdjustmentAmount, PRICE_SCALE, currentNav, Math.Rounding.Ceil);
         burnAmount = circulatingSupply - requiredSupplyAfter;
         if (burnAmount == 0) revert NoBurnNeededError();
 

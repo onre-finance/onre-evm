@@ -25,7 +25,7 @@ import {ManagedTokenConfig} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
-import {OnReMath} from "./OnReMath.sol";
+import {MAX_TOKEN_DECIMALS} from "./OnReConstants.sol";
 
 /// @notice managed-token registration and supply-exclusion configuration.
 library LibOnReConfig {
@@ -42,7 +42,7 @@ library LibOnReConfig {
         }
 
         uint8 decimals = IERC20Metadata(managedToken).decimals();
-        if (decimals > OnReMath.MAX_TOKEN_DECIMALS) revert InvalidDecimalsError();
+        if (decimals > MAX_TOKEN_DECIMALS) revert InvalidDecimalsError();
 
         config.decimals = decimals;
         config.enabled = true;

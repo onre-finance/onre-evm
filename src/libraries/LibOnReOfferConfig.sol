@@ -30,7 +30,7 @@ import {LibOnRePropAmm} from "./LibOnRePropAmm.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
-import {OnReMath} from "./OnReMath.sol";
+import {MAX_TOKEN_DECIMALS} from "./OnReConstants.sol";
 
 /// @notice Pair-and-flow offer configuration and reference validation.
 library LibOnReOfferConfig {
@@ -44,7 +44,7 @@ library LibOnReOfferConfig {
         OfferDirection direction = _deriveDirection(params.tokenIn, params.tokenOut);
         uint8 tokenInDecimals = IERC20Metadata(params.tokenIn).decimals();
         uint8 tokenOutDecimals = IERC20Metadata(params.tokenOut).decimals();
-        if (tokenInDecimals > OnReMath.MAX_TOKEN_DECIMALS || tokenOutDecimals > OnReMath.MAX_TOKEN_DECIMALS) {
+        if (tokenInDecimals > MAX_TOKEN_DECIMALS || tokenOutDecimals > MAX_TOKEN_DECIMALS) {
             revert InvalidDecimalsError();
         }
 

@@ -2,24 +2,24 @@
 pragma solidity 0.8.35;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Pure fixed-point curve and cadence math for the Proprietary Automated Market Maker pricing.
 /// @dev Mirrors `onre-sol` Prop AMM hard-wall math. Values use a 1e12 fixed-point scale.
 library LibOnRePropAmmMath {
     uint256 internal constant HARD_WALL_SCALE = 1_000_000_000_000;
+    uint256 internal constant CADENCE_WAVE_SCALE = 10_000;
 
     uint32 private constant CURVE_EXPONENT_SCALE = 10_000;
-    uint256 private constant CADENCE_WAVE_SCALE = 10_000;
     uint256 private constant CADENCE_WAVE_EASE = 8;
     uint256 private constant CADENCE_WAVE_CAP_DIVISOR = 3;
-    uint256 private constant MAX_BASIS_POINTS = 10_000;
 
     uint256 private constant POW_APPROX_Q_SHIFT = 40;
     uint256 private constant POW_APPROX_Q = 1_099_511_627_776;
     uint256 private constant POW_APPROX_LN2_Q = 762_123_384_786;
     uint256 private constant POW_APPROX_LOG2_E_Q = 1_586_259_972_792;
     int256 private constant LOG2_HARD_WALL_SCALE_Q = 43_829_982_801_540;
-    int256 private constant CURVE_EXPONENT_SCALE_I256 = 10_000;
+    int256 private constant CURVE_EXPONENT_SCALE_I256 = int256(uint256(CURVE_EXPONENT_SCALE));
     int256 private constant POW_APPROX_Q_I256 = 1_099_511_627_776;
 
     function _redemptionHaircutScaled(uint256 utilization, uint16 pegHaircutBps, uint32 exponentScaled)

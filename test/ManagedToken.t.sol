@@ -354,9 +354,19 @@ contract ManagedTokenTest is Test {
         token.setCCIPAdmin(address(0));
 
         vm.prank(admin);
+        vm.expectEmit(true, true, false, true, address(token));
+        emit IManagedToken.CCIPAdminTransferredEvent(ccipAdmin, nextAdmin);
         token.setCCIPAdmin(nextAdmin);
 
         assertEq(token.getCCIPAdmin(), nextAdmin);
+    }
+
+    function test_SetCCIPAdminRejectsUnchangedAdmin() public {
+        vm.expectRevert(IManagedToken.NoChangeError.selector);
+        vm.prank(admin);
+        token.setCCIPAdmin(ccipAdmin);
+
+        assertEq(token.getCCIPAdmin(), ccipAdmin);
     }
 
     function test_BufferControllerObservesRegularSupplyChangesWhileBufferPathsBypassIt() public {

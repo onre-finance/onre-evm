@@ -30,12 +30,11 @@ import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
+import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Configuration, accounting, and token movement for reusable vault instances.
 library LibOnReVault {
     using SafeERC20 for IERC20;
-
-    uint16 private constant MAX_BASIS_POINTS = 10_000;
 
     function _createConfigurableVault(
         ConfigurableVaultKind kind,

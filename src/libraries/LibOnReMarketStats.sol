@@ -9,6 +9,7 @@ import {LibOnRePricer} from "./LibOnRePricer.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
 import {OnReMath} from "./OnReMath.sol";
+import {PRICE_SCALE} from "./OnReConstants.sol";
 
 /// @notice Canonical token-market metrics derived from supply balances and the USD Pricer.
 library LibOnReMarketStats {
@@ -25,7 +26,7 @@ library LibOnReMarketStats {
         uint256 apy = OnReMath._calculateApyFromApr(activeVector.apr);
         uint256 nav = LibOnRePricer._calculatePricingVectorPriceAt(activeVector, block.timestamp);
         int256 navAdjustment = _calculateNavAdjustment(pricer, activeVector, activeVectorIndex);
-        uint256 tvl = OnReMath._calculateTvl(circulatingSupply_, nav, LibOnRePricer.PRICE_SCALE);
+        uint256 tvl = OnReMath._calculateTvl(circulatingSupply_, nav, PRICE_SCALE);
 
         stats = MarketStats({
             apy: apy,
@@ -43,18 +44,15 @@ library LibOnReMarketStats {
         uint256 excludedSupply;
         address[] storage excludedAccounts = LibOnReStorage._appStorage().excludedSupplyAccounts[managedToken];
         uint256 excludedAccountsLength = excludedAccounts.length;
-        for (uint256 i; i < excludedAccountsLength;) {
+        for (uint256 i; i < excludedAccountsLength; ++i) {
             excludedSupply += IERC20Metadata(managedToken).balanceOf(excludedAccounts[i]);
-            unchecked {
-                ++i;
-            }
         }
         return excludedSupply >= supply ? 0 : supply - excludedSupply;
     }
 
     function _currentTvl(address managedToken) internal view returns (uint256) {
         uint256 nav = LibOnRePricer._currentPrice(OnReIds._usdPricerId(managedToken));
-        return OnReMath._calculateTvl(_circulatingSupply(managedToken), nav, LibOnRePricer.PRICE_SCALE);
+        return OnReMath._calculateTvl(_circulatingSupply(managedToken), nav, PRICE_SCALE);
     }
 
     function _calculateNavAdjustment(Pricer storage pricer, PricingVector storage activeVector, uint8 activeVectorIndex)

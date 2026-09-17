@@ -58,6 +58,7 @@ library LibOnReOfferConfig {
         offer.direction = direction;
         offer.tokenInDecimals = tokenInDecimals;
         offer.tokenOutDecimals = tokenOutDecimals;
+        offer.enabled = true;
         offer.exists = true;
         _setOfferReferences(
             offerConfigId, offer, params.quoterId, params.feeConfigId, params.proceedsVaultId, params.liquidityVaultId
@@ -98,9 +99,8 @@ library LibOnReOfferConfig {
     function _setOfferConfigEnabled(bytes32 offerConfigId, bool enabled) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         OfferConfig storage offer = LibOnReValidation._requireOfferConfig(offerConfigId);
-        bool disabled = !enabled;
-        if (offer.disabled == disabled) revert NoChangeError();
-        offer.disabled = disabled;
+        if (offer.enabled == enabled) revert NoChangeError();
+        offer.enabled = enabled;
         emit OfferConfigEnabledSet(offerConfigId, enabled);
     }
 

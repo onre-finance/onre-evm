@@ -62,7 +62,7 @@ library LibOnReValidation {
 
     function _requireExecutablePricer(bytes32 pricerId) internal view returns (Pricer storage pricer) {
         pricer = _requirePricer(pricerId);
-        if (pricer.disabled) revert PricerDisabledError(pricerId);
+        if (!pricer.enabled) revert PricerDisabledError(pricerId);
         _requireEnabledManagedToken(pricer.managedToken);
     }
 
@@ -73,7 +73,7 @@ library LibOnReValidation {
 
     function _requireExecutableQuoter(bytes32 quoterId) internal view returns (Quoter storage quoter) {
         quoter = _requireQuoter(quoterId);
-        if (quoter.disabled) revert QuoterDisabledError(quoterId);
+        if (!quoter.enabled) revert QuoterDisabledError(quoterId);
     }
 
     function _requireFeeConfig(bytes32 feeConfigId) internal view returns (FeeConfig storage feeConfig) {
@@ -116,7 +116,7 @@ library LibOnReValidation {
             revert KilledError();
         }
         offerConfig = _requireOfferConfig(offerConfigId);
-        if (offerConfig.disabled) revert OfferConfigDisabledError(offerConfigId);
+        if (!offerConfig.enabled) revert OfferConfigDisabledError(offerConfigId);
         _requireExecutablePricer(OnReIds._usdPricerId(_offerManagedToken(offerConfig)));
         _requireExecutableQuoter(offerConfig.quoterId);
         _requireExecutableFeeConfig(offerConfig.feeConfigId);

@@ -45,6 +45,7 @@ library LibOnRePricer {
 
         pricer.managedToken = managedToken;
         pricer.denomination = denomination;
+        pricer.enabled = true;
         pricer.exists = true;
         emit PricerCreated(pricerId, managedToken, denomination);
     }
@@ -123,9 +124,8 @@ library LibOnRePricer {
     function _setPricerEnabled(bytes32 pricerId, bool enabled) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
-        bool disabled = !enabled;
-        if (pricer.disabled == disabled) revert NoChangeError();
-        pricer.disabled = disabled;
+        if (pricer.enabled == enabled) revert NoChangeError();
+        pricer.enabled = enabled;
         emit PricerEnabledSet(pricerId, enabled);
     }
 

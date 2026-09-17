@@ -72,12 +72,12 @@ contract OnReViewValidationTest is OnReAppTestBase {
         app.setKillSwitch(true);
 
         assertFalse(app.getManagedTokenConfig(address(managedToken)).enabled);
-        assertTrue(app.getPricer(pricerId).disabled);
+        assertFalse(app.getPricer(pricerId).enabled);
         assertEq(app.getPricingVector(pricerId, 0).basePrice, 1e9);
-        assertTrue(app.getQuoter(navQuoterId).disabled);
+        assertFalse(app.getQuoter(navQuoterId).enabled);
         assertEq(app.getPropAmmState(propAmmId).assetToken, address(usd));
         assertFalse(app.getFeeConfig(feeConfigId).enabled);
-        assertTrue(app.getOfferConfig(workerOfferId).disabled);
+        assertFalse(app.getOfferConfig(workerOfferId).enabled);
         assertTrue(app.getFulfillmentRequest(requestId).exists);
         assertTrue(app.getConfigurableVault(liquidityVaultId).exists);
         assertEq(app.configurableVaultBalance(liquidityVaultId, address(usd)), 0);

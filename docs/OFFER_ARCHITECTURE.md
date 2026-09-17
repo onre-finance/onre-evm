@@ -20,6 +20,11 @@ The implemented scope intentionally contains:
   callbacks;
 - no separate redemption-offer configuration.
 
+All five configuration types use `enabled`: managed tokens, pricers, quoters, fee
+configs, and offer configs. Creation explicitly sets it to `true`; `false` blocks
+execution while preserving configuration reads. The S4 flag-polarity change
+requires a fresh Diamond deployment; existing stored flags are not migrated.
+
 ## Domain graph
 
 ```mermaid
@@ -38,16 +43,16 @@ flowchart TB
     end
 
     subgraph Pricing["Deterministic USD pricing and quoting"]
-        Pricer["<b>USD Pricer</b><br/>ID = hash(managedToken, Usd)<br/>exactly one per managed token<br/>disabled"]
+        Pricer["<b>USD Pricer</b><br/>ID = hash(managedToken, Usd)<br/>exactly one per managed token<br/>enabled"]
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
-        Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>disabled"]
-        NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>disabled"]
-        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
+        Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>enabled"]
+        NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>enabled"]
+        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>enabled"]
     end
 
     subgraph Configuration["Reusable offer configuration"]
         FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>minimum input-token fee<br/>feeVaultId<br/>enabled"]
-        OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>disabled"]
+        OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>enabled"]
     end
 
     subgraph Custody["Diamond custody and logical vault accounting"]

@@ -53,10 +53,17 @@ contract OnReConfigTest is OnReAppTestBase {
         assertEq(uint8(pricer.denomination), uint8(PricingDenomination.Usd));
         assertEq(pricer.vectorCount, 1);
         assertTrue(pricer.exists);
+        assertTrue(pricer.enabled);
 
         Quoter memory nav = app.getQuoter(navQuoterId);
         assertEq(uint8(nav.kind), uint8(QuoterKind.Nav));
         assertEq(nav.instanceId, 0);
+        assertTrue(nav.enabled);
+        assertTrue(app.getQuoter(navPermissionlessQuoterId).enabled);
+
+        assertTrue(app.getOfferConfig(permissionedOfferId).enabled);
+        assertTrue(app.getOfferConfig(permissionlessOfferId).enabled);
+        assertTrue(app.getOfferConfig(workerOfferId).enabled);
 
         FeeConfig memory fee = app.getFeeConfig(feeConfigId);
         assertEq(fee.basisPoints, 100);
@@ -336,20 +343,38 @@ contract OnReConfigTest is OnReAppTestBase {
     }
 
     function test_DisabledComponentsAndKillSwitchStopExecution() public {
+        uint256 initialAmountOut = app.previewExecution(permissionedOfferId, 1e6).amountOut;
+        assertGt(initialAmountOut, 0);
+
+        app.setPricerEnabled(pricerId, false);
+        assertFalse(app.getPricer(pricerId).enabled);
+        vm.expectRevert(NoChangeError.selector);
         app.setPricerEnabled(pricerId, false);
         vm.expectRevert(abi.encodeWithSelector(PricerDisabledError.selector, pricerId));
         app.previewExecution(permissionedOfferId, 1e6);
         app.setPricerEnabled(pricerId, true);
+        assertTrue(app.getPricer(pricerId).enabled);
+        assertEq(app.previewExecution(permissionedOfferId, 1e6).amountOut, initialAmountOut);
 
+        app.setQuoterEnabled(navQuoterId, false);
+        assertFalse(app.getQuoter(navQuoterId).enabled);
+        vm.expectRevert(NoChangeError.selector);
         app.setQuoterEnabled(navQuoterId, false);
         vm.expectRevert(abi.encodeWithSelector(QuoterDisabledError.selector, navQuoterId));
         app.previewExecution(permissionedOfferId, 1e6);
         app.setQuoterEnabled(navQuoterId, true);
+        assertTrue(app.getQuoter(navQuoterId).enabled);
+        assertEq(app.previewExecution(permissionedOfferId, 1e6).amountOut, initialAmountOut);
 
+        app.setOfferConfigEnabled(permissionedOfferId, false);
+        assertFalse(app.getOfferConfig(permissionedOfferId).enabled);
+        vm.expectRevert(NoChangeError.selector);
         app.setOfferConfigEnabled(permissionedOfferId, false);
         vm.expectRevert(abi.encodeWithSelector(OfferConfigDisabledError.selector, permissionedOfferId));
         app.previewExecution(permissionedOfferId, 1e6);
         app.setOfferConfigEnabled(permissionedOfferId, true);
+        assertTrue(app.getOfferConfig(permissionedOfferId).enabled);
+        assertEq(app.previewExecution(permissionedOfferId, 1e6).amountOut, initialAmountOut);
 
         app.setKillSwitch(true);
         vm.expectRevert(KilledError.selector);

@@ -223,7 +223,8 @@ contract OnRePropAmmTest is OnReAppTestBase {
                 liquidityVaultId: liquidityVaultId
             })
         );
-        assertFalse(app.getOfferConfig(expectedOfferId).exists);
+        vm.expectRevert(abi.encodeWithSelector(OfferConfigNotFoundError.selector, expectedOfferId));
+        app.getOfferConfig(expectedOfferId);
     }
 
     function test_PropAmmSellUsesFeeConfigMinimumHardWallAndRecordsPressure() public {

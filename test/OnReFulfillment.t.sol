@@ -74,7 +74,8 @@ contract OnReFulfillmentTest is OnReAppTestBase {
         assertEq(usd.balanceOf(user), 158_400_000);
         assertEq(managedToken.totalSupply(), 1e9);
         assertEq(app.configurableVaultBalance(feeVaultId, address(managedToken)), 1e9);
-        assertFalse(app.getFulfillmentRequest(requestKey).exists);
+        vm.expectRevert(abi.encodeWithSelector(FulfillmentRequestNotFoundError.selector, requestKey));
+        app.getFulfillmentRequest(requestKey);
     }
 
     function test_WorkerRequestCancellationReturnsOnlyUnfilledInput() public {
@@ -91,7 +92,8 @@ contract OnReFulfillmentTest is OnReAppTestBase {
         app.cancelFulfillmentRequest(requestKey);
 
         assertEq(managedToken.balanceOf(user), 60e9);
-        assertFalse(app.getFulfillmentRequest(requestKey).exists);
+        vm.expectRevert(abi.encodeWithSelector(FulfillmentRequestNotFoundError.selector, requestKey));
+        app.getFulfillmentRequest(requestKey);
     }
 
     function test_WorkerCancellationRejectsExcessDiamondDebit() public {

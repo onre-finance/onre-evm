@@ -115,6 +115,28 @@ cannot modify `DEFAULT_ADMIN_ROLE`. They remain available for `ADMIN_ROLE`,
 `WORKER_ROLE`, and `UPGRADER_ROLE`. Request owners retain the ability to cancel
 their own requests.
 
+## Read API and pricing-vector validation
+
+Object getters reject unknown IDs or unregistered managed-token addresses with
+corresponding domain errors. This includes configuration records, pricing vectors,
+fulfillment requests, excluded-supply lists, and configurable-vault balances.
+Pricing-vector reads check that the pricer exists before checking the vector index.
+Existing disabled configurations remain readable, including while the kill switch
+is active. Calculated quotes and market statistics retain their execution checks.
+
+An existing vault with no balance returns zero; a registered token with no excluded
+accounts returns an empty array. Existing Prop AMM quoters can be inspected before
+configuration. Predicates such as `hasRole` and `isManagedTokenDeployed` retain their
+boolean behavior, and standard ERC20 and Diamond introspection behavior is unchanged.
+
+Clients must handle `NotFound` errors instead of testing an empty record's `exists`
+flag. Fully fulfilled or cancelled requests are deleted, so subsequent
+`getFulfillmentRequest` calls revert with `FulfillmentRequestNotFoundError`.
+
+New pricing vectors require `1 <= priceFixDuration <= 86,400` seconds. Step pricing
+projects to the end of the current interval; the one-day maximum bounds the
+lookahead. This admission check does not rewrite vectors already in storage.
+
 ## Vault boundary
 
 The Diamond has four reusable vault kinds: `Fee`, `Proceeds`, `Liquidity`, and

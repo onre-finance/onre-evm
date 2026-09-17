@@ -32,6 +32,8 @@ import {OnReMath} from "./OnReMath.sol";
 /// @notice Reusable USD price production for managed tokens.
 library LibOnRePricer {
     uint8 internal constant MAX_VECTORS = 10;
+    // Step pricing projects to the interval end; cap that lookahead at one day.
+    uint64 internal constant MAX_PRICE_FIX_DURATION = 1 days;
 
     function _createPricer(address managedToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
@@ -50,7 +52,10 @@ library LibOnRePricer {
     function _addPricingVector(bytes32 pricerId, PricingVector calldata vector) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
-        if (vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0) {
+        if (
+            vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0
+                || vector.priceFixDuration > MAX_PRICE_FIX_DURATION
+        ) {
             revert InvalidAmountError();
         }
         if (vector.baseTime > vector.startTime) {

@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import {ConfigurableVaultKind} from "../types/OnReTypes.sol";
+import {LibOnReValidation} from "../libraries/LibOnReValidation.sol";
 import {LibOnReVault} from "../libraries/LibOnReVault.sol";
 
 contract OnReConfigurableVaultFacet {
@@ -30,6 +31,7 @@ contract OnReConfigurableVaultFacet {
     }
 
     function configurableVaultBalance(bytes32 vaultId, address token) external view returns (uint256) {
+        LibOnReValidation._requireConfigurableVault(vaultId);
         return LibOnReVault._balance(vaultId, token);
     }
 }

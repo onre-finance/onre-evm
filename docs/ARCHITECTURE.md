@@ -144,12 +144,14 @@ The Diamond has four reusable vault kinds: `Fee`, `Proceeds`, `Liquidity`, and
 an independent logical balance per ERC-20 token. Tokens remain physically held
 by the Diamond.
 
-Anyone may deposit or trigger withdrawal. Withdrawal can only send to the
-configured destination, amount zero means the full logical balance, and
-fee-on-transfer assets are rejected by exact balance accounting.
+Anyone may deposit. Fee and Proceeds withdrawals are permissionless; Liquidity
+and BufferReserve withdrawals require `DEFAULT_ADMIN_ROLE`. Withdrawals can only
+send to the configured destination. `withdrawConfigurableVault` requires a
+nonzero amount; `withdrawAllConfigurableVault` withdraws the selected token's
+full logical vault balance and reverts if it is empty. Both paths reject
+fee-on-transfer assets through exact balance accounting.
 
-BufferReserve withdrawals require `DEFAULT_ADMIN_ROLE`, while Fee vaults retain
-their configured permissionless withdrawal path. Buffer accrual mints the full
+Buffer accrual mints the full
 amount to the Diamond and divides that balance between one BufferReserve vault
 and two distinct Fee vaults for management and performance fees. Buffer
 initialization derives these vault IDs from the managed token and vault role, then

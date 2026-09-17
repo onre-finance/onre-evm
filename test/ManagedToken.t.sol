@@ -10,12 +10,15 @@ import {Test} from "forge-std/Test.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
 import {IBufferController} from "../src/IBufferController.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
+import {IAppConfig} from "../src/IAppConfig.sol";
+import {KilledError} from "../src/types/OnReAppErrors.sol";
 
 contract ManagedTokenTest is Test {
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     ManagedToken private token;
     address private implementation;
+    MockKillSwitch private killSwitch;
 
     address private admin = makeAddr("admin");
     address private ccipAdmin = makeAddr("ccipAdmin");
@@ -25,6 +28,7 @@ contract ManagedTokenTest is Test {
     address private user = makeAddr("user");
 
     function setUp() public {
+        killSwitch = new MockKillSwitch();
         implementation = address(new ManagedToken());
         token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
     }
@@ -34,6 +38,7 @@ contract ManagedTokenTest is Test {
         assertEq(token.symbol(), "ONusd");
         assertEq(token.decimals(), 9);
         assertEq(token.getCCIPAdmin(), ccipAdmin);
+        assertEq(token.killSwitchController(), address(killSwitch));
         assertTrue(token.hasRole(token.UPGRADER_ROLE(), admin));
         assertTrue(token.supportsInterface(type(IBurnMintERC20).interfaceId));
         assertTrue(token.supportsInterface(type(IGetCCIPAdmin).interfaceId));
@@ -64,6 +69,21 @@ contract ManagedTokenTest is Test {
         _expectDeployTokenZeroAddressRevert(admin, ccipAdmin, _singleAddress(minter), _singleAddress(address(0)));
     }
 
+    function test_InitializeRequiresAWorkingKillSwitchController() public {
+        address[2] memory noCodeControllers = [address(0), user];
+        for (uint256 i; i < noCodeControllers.length; ++i) {
+            killSwitch = MockKillSwitch(noCodeControllers[i]);
+            vm.expectRevert(
+                abi.encodeWithSelector(IManagedToken.InvalidKillSwitchControllerError.selector, noCodeControllers[i])
+            );
+            _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+        }
+
+        killSwitch = MockKillSwitch(address(new RecordingBufferController()));
+        vm.expectRevert();
+        _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+    }
+
     function test_TracksInitialMintersAndBurners() public view {
         address[] memory minters = token.getMinters();
         address[] memory burners = token.getBurners();
@@ -85,6 +105,36 @@ contract ManagedTokenTest is Test {
 
         assertEq(token.balanceOf(user), 100e9);
         assertEq(token.totalSupply(), 100e9);
+    }
+
+    function test_KillSwitchReadFailureFreezesSupplyButAllowsTransfers() public {
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+        bytes memory failure = abi.encodeWithSignature("KillSwitchUnavailable()");
+        vm.mockCallRevert(address(killSwitch), abi.encodeCall(IAppConfig.appConfig, ()), failure);
+
+        vm.expectRevert(failure);
+        vm.prank(minter);
+        token.mint(user, 1e9);
+        vm.expectRevert(failure);
+        vm.prank(burner);
+        token.burn(1e9);
+        vm.prank(burner);
+        token.transfer(user, 10e9);
+        assertEq(token.totalSupply(), 100e9);
+        assertEq(token.balanceOf(user), 10e9);
+    }
+
+    function test_ChangingBufferControllerCannotBypassKillSwitch() public {
+        killSwitch.setKilled(true);
+        RecordingBufferController replacementBuffer = new RecordingBufferController();
+        vm.prank(admin);
+        token.setBufferController(address(replacementBuffer));
+
+        vm.expectRevert(KilledError.selector);
+        vm.prank(minter);
+        token.mint(user, 1e9);
+        assertEq(token.totalSupply(), 0);
     }
 
     function test_NonMinterCannotMint() public {
@@ -445,6 +495,7 @@ contract ManagedTokenTest is Test {
             decimals: decimals_,
             admin: admin_,
             ccipAdmin: ccipAdmin_,
+            killSwitchController: address(killSwitch),
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
@@ -465,6 +516,7 @@ contract ManagedTokenTest is Test {
             decimals: 9,
             admin: admin_,
             ccipAdmin: ccipAdmin_,
+            killSwitchController: address(killSwitch),
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
@@ -498,5 +550,17 @@ contract RecordingBufferController is IBufferController {
         ++callCount;
         lastAmount = amount;
         lastIsMint = isMint;
+    }
+}
+
+contract MockKillSwitch is IAppConfig {
+    bool public killed;
+
+    function setKilled(bool value) external {
+        killed = value;
+    }
+
+    function appConfig() external view returns (bool, address, address) {
+        return (killed, address(0), address(0));
     }
 }

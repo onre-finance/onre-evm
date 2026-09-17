@@ -38,6 +38,7 @@ library LibOnReManagedTokenFactory {
             decimals: decimals,
             admin: admin,
             ccipAdmin: ccipAdmin,
+            killSwitchController: address(this),
             initialMinters: minters,
             initialBurners: burners
         });

@@ -213,6 +213,7 @@ library LibOnReBuffer {
         private
         returns (BufferAccrualResult memory result)
     {
+        if (LibOnReStorage._appStorage().isKilled) revert KilledError();
         _requireController(managedToken);
         (uint256 currentApr, uint256 currentNav) = _currentPricing(managedToken);
         // forge-lint: disable-next-line(unsafe-typecast)

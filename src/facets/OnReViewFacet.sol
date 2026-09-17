@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
+import {IAppConfig} from "../IAppConfig.sol";
 import {
     ConfigurableVault,
     FeeConfig,
@@ -14,7 +15,7 @@ import {
 } from "../types/OnReTypes.sol";
 import {LibOnReView} from "../libraries/LibOnReView.sol";
 
-contract OnReViewFacet {
+contract OnReViewFacet is IAppConfig {
     function getManagedTokenConfig(address managedToken) external view returns (ManagedTokenConfig memory) {
         return LibOnReView._getManagedTokenConfig(managedToken);
     }
@@ -55,7 +56,7 @@ contract OnReViewFacet {
         return LibOnReView._getExcludedSupplyAccounts(managedToken);
     }
 
-    function appConfig() external view returns (bool isKilled, address approver1, address approver2) {
+    function appConfig() external view override returns (bool isKilled, address approver1, address approver2) {
         (isKilled, approver1, approver2) = LibOnReView._appConfig();
     }
 

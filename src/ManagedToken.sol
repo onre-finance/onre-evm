@@ -3,6 +3,8 @@ pragma solidity 0.8.35;
 
 import {IManagedToken} from "./IManagedToken.sol";
 import {IBufferController} from "./IBufferController.sol";
+import {IAppConfig} from "./IAppConfig.sol";
+import {KilledError} from "./types/OnReAppErrors.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -26,6 +28,7 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
     address private _bufferController;
 
     uint8 private _decimals;
+    address private _killSwitchController;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -44,6 +47,7 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         _ccipAdmin = params.ccipAdmin;
         _grantRole(DEFAULT_ADMIN_ROLE, params.admin);
         _grantRole(UPGRADER_ROLE, params.admin);
+        _initializeKillSwitchController(params.killSwitchController);
 
         uint256 initialMintersLength = params.initialMinters.length;
         for (uint256 i = 0; i < initialMintersLength;) {
@@ -64,6 +68,10 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
 
     function decimals() public view override returns (uint8) {
         return _decimals;
+    }
+
+    function killSwitchController() external view returns (address) {
+        return _killSwitchController;
     }
 
     function getCCIPAdmin() external view override returns (address) {
@@ -204,6 +212,24 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
 
     // solhint-disable-next-line no-empty-blocks
     function _authorizeUpgrade(address) internal override onlyRole(UPGRADER_ROLE) {}
+
+    function _initializeKillSwitchController(address controller) private {
+        if (controller.code.length == 0) revert InvalidKillSwitchControllerError(controller);
+        // Validate the application interface, including when it is already killed.
+        IAppConfig(controller).appConfig();
+        _killSwitchController = controller;
+        emit KillSwitchControllerInitialized(controller);
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        // Covers Buffer mint/burn too, without invoking the recursive supply callback.
+        if (from == address(0) || to == address(0)) {
+            address controller = _killSwitchController;
+            (bool killed,,) = IAppConfig(controller).appConfig();
+            if (killed) revert KilledError();
+        }
+        super._update(from, to, value);
+    }
 
     function _addMinter(address account) internal {
         if (account == address(0)) {

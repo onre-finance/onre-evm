@@ -1,0 +1,89 @@
+name: Java bindings
+
+# Builds the web3j Java wrappers for IDiamondProxy and ManagedToken from the
+# current commit and publishes com.onre.evm:onre-evm-java:<version> to this
+# repository's GitHub Packages Maven registry. Run it manually from the Actions
+# tab once the contracts at that commit are the ones a Java consumer should
+# target. See bindings/java/README.md.
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Maven version to publish, e.g. 1.4.0 or 1.4.0-SNAPSHOT
+        required: true
+        type: string
+      publish:
+        description: Publish to GitHub Packages (uncheck to only build and upload the jar as a workflow artifact)
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  bindings:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Gemforge
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate diamond sources and Forge artifacts
+        # Same as CI: writes src/generated and out/, which the Gradle build reads.
+        run: pnpm build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: true
+
+      - name: Build bindings jar
+        working-directory: bindings/java
+        env:
+          BINDINGS_VERSION: ${{ inputs.version }}
+        # forgeBuild=false: the artifacts were produced by `pnpm build` above.
+        run: ./gradlew build -PforgeBuild=false -Pversion="$BINDINGS_VERSION"
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: onre-evm-java-${{ inputs.version }}
+          path: |
+            bindings/java/build/libs/*.jar
+            bindings/java/build/abi/IDiamondProxy.json
+          if-no-files-found: error
+
+      - name: Publish to GitHub Packages
+        if: ${{ inputs.publish }}
+        working-directory: bindings/java
+        env:
+          BINDINGS_VERSION: ${{ inputs.version }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish -PforgeBuild=false -Pversion="$BINDINGS_VERSION"

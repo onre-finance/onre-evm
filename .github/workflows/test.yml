@@ -57,3 +57,48 @@ jobs:
 
       - name: Run Gemforge deployment and upgrade integration test
         run: pnpm test:integration
+
+  java-bindings:
+    name: Java bindings
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install Gemforge
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate diamond sources and Forge artifacts
+        run: pnpm build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          validate-wrappers: true
+
+      - name: Generate, compile and test the web3j wrappers
+        # Catches ABI shapes web3j cannot generate for before a release is cut.
+        # Publishing is a separate, manual workflow: java-bindings.yml.
+        working-directory: bindings/java
+        run: ./gradlew build -PforgeBuild=false

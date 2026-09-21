@@ -4,6 +4,7 @@
 .vscode/
 *.swp
 *.swo
+.settings/
 
 # Env and logs
 .env
@@ -24,6 +25,12 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+
+# Gradle (bindings/java)
+.gradle/
+bin/
+.classpath
+.project
 
 # Foundry / EVM
 cache/

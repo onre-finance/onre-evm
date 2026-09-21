@@ -185,3 +185,13 @@ The core stays under `src/` rather than `lib/` so that `forge build --sizes`,
 Commit it — Gemforge reads it to find the existing deployment to upgrade. If it
 is missing for a target, `gemforge deploy` treats that target as a fresh
 deployment.
+
+## Java bindings
+
+`bindings/java` holds a Gradle build that generates a
+[web3j](https://github.com/LFDT-web3j/web3j) wrapper for the diamond from the
+merged ABI Gemforge writes to `src/generated/abi.json`, and publishes it as
+`com.onre.evm:onre-evm-java:<version>` to this repository's GitHub Packages
+Maven registry. The `Java bindings` workflow publishes a chosen version on
+demand; CI only checks that the wrapper still generates and compiles. See
+`bindings/java/README.md`.

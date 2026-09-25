@@ -15,3 +15,7 @@ t: test
 deploy-local:	## Deploy to a local Anvil network
 	pnpm run deploy:local
 dl:	deploy-local
+
+java-local:	## Generate java bindings and publish to local maven repository
+	cd bindings/java && ./gradlew publishToMavenLocal
+jl: publish-java-locally

@@ -2,6 +2,7 @@
 pragma solidity 0.8.35;
 
 import {ConfigurableVaultKind} from "../types/OnReTypes.sol";
+import {LibOnReValidation} from "../libraries/LibOnReValidation.sol";
 import {LibOnReVault} from "../libraries/LibOnReVault.sol";
 
 contract OnReConfigurableVaultFacet {
@@ -22,6 +23,7 @@ contract OnReConfigurableVaultFacet {
         LibOnReVault._depositConfigurableVault(vaultId, token, amount);
     }
 
+    /// @notice Withdraw a nonzero amount to the vault's configured destination.
     function withdrawConfigurableVault(bytes32 vaultId, address token, uint256 amount)
         external
         returns (uint256 withdrawnAmount)
@@ -29,7 +31,13 @@ contract OnReConfigurableVaultFacet {
         withdrawnAmount = LibOnReVault._withdrawConfigurableVault(vaultId, token, amount);
     }
 
+    /// @notice Withdraw the token's full logical vault balance to the configured destination.
+    function withdrawAllConfigurableVault(bytes32 vaultId, address token) external returns (uint256 withdrawnAmount) {
+        withdrawnAmount = LibOnReVault._withdrawAllConfigurableVault(vaultId, token);
+    }
+
     function configurableVaultBalance(bytes32 vaultId, address token) external view returns (uint256) {
+        LibOnReValidation._requireConfigurableVault(vaultId);
         return LibOnReVault._balance(vaultId, token);
     }
 }

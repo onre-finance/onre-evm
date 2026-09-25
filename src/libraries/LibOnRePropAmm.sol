@@ -13,19 +13,16 @@ import {
 import {ConfigurableVault, OfferConfig, PropAmmConfig, PropAmmState} from "../types/OnReTypes.sol";
 import {LibOnReMarketStats} from "./LibOnReMarketStats.sol";
 import {LibOnRePropAmmMath} from "./LibOnRePropAmmMath.sol";
+import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Stateful pricing for the Proprietary Automated Market Maker (Prop AMM).
-/// @dev The fixed-point formulas mirror the corresponding Solana implementation.
+/// @dev Curve math mirrors Solana; volume epochs advance on fixed boundaries.
 library LibOnRePropAmm {
-    uint256 internal constant HARD_WALL_SCALE = 1_000_000_000_000;
-    uint256 internal constant CURVE_EXPONENT_SCALE = 10_000;
     uint256 internal constant CURVE_EXPONENT_STEP = 1_000;
     uint256 internal constant MAX_CURVE_EXPONENT_SCALED = 100_000;
-    uint256 internal constant CADENCE_WAVE_SCALE = 10_000;
     uint256 internal constant CADENCE_WAVE_STEP = 1_000;
     uint256 internal constant MAX_CADENCE_WAVE_SCALED = 50_000;
     uint256 internal constant WALL_SENSITIVITY_SCALE = 10_000;
-    uint256 internal constant MAX_BASIS_POINTS = 10_000;
 
     function _validateConfig(PropAmmConfig memory config) internal pure {
         if (config.curvePegHaircutBps > MAX_BASIS_POINTS) {
@@ -78,7 +75,7 @@ library LibOnRePropAmm {
 
         uint256 effectiveLiquidity =
             _dynamicWallLiquidity(state, rawAmountOut, actualLiquidity, hardWallReserve, block.timestamp);
-        uint256 utilizationScaled = Math.mulDiv(rawAmountOut, HARD_WALL_SCALE, effectiveLiquidity);
+        uint256 utilizationScaled = Math.mulDiv(rawAmountOut, LibOnRePropAmmMath.HARD_WALL_SCALE, effectiveLiquidity);
         uint256 baseHaircut = LibOnRePropAmmMath._redemptionHaircutScaled(
             utilizationScaled, state.config.curvePegHaircutBps, state.config.curveExponentScaled
         );
@@ -86,9 +83,10 @@ library LibOnRePropAmm {
             utilizationScaled, _cadenceWaveYForQuote(state, block.timestamp)
         );
         uint256 haircut = baseHaircut > cadenceTarget ? baseHaircut : cadenceTarget;
-        uint256 liquidityFactor = haircut >= HARD_WALL_SCALE ? 0 : HARD_WALL_SCALE - haircut;
+        uint256 liquidityFactor =
+            haircut >= LibOnRePropAmmMath.HARD_WALL_SCALE ? 0 : LibOnRePropAmmMath.HARD_WALL_SCALE - haircut;
 
-        return Math.mulDiv(rawAmountOut, liquidityFactor, HARD_WALL_SCALE);
+        return Math.mulDiv(rawAmountOut, liquidityFactor, LibOnRePropAmmMath.HARD_WALL_SCALE);
     }
 
     function _recordBuy(PropAmmState storage state, uint256 buyValueStable) internal {
@@ -113,7 +111,9 @@ library LibOnRePropAmm {
         uint256 tvl = LibOnReMarketStats._currentTvl(state.managedToken);
         uint8 managedDecimals = LibOnReStorage._appStorage().managedTokenConfigs[state.managedToken].decimals;
         uint256 targetReserve = Math.mulDiv(
-            tvl, uint256(vault.refillTargetBps) * 10 ** offer.tokenOutDecimals, MAX_BASIS_POINTS * 10 ** managedDecimals
+            tvl,
+            uint256(vault.refillTargetBps) * 10 ** offer.tokenOutDecimals,
+            uint256(MAX_BASIS_POINTS) * 10 ** managedDecimals
         );
         return actualLiquidity < targetReserve ? actualLiquidity : targetReserve;
     }
@@ -161,7 +161,8 @@ library LibOnRePropAmm {
                 elapsed = 0;
             } else if (elapsed >= epochDuration) {
                 previousNet = currentNet;
-                elapsed = 0;
+                // Decay starts at the scheduled boundary, even if no trade rolled storage yet.
+                elapsed -= epochDuration;
             } else {
                 previousNet = state.previousNetSellValueStable;
                 effectiveCurrentNet = currentNet;
@@ -183,22 +184,22 @@ library LibOnRePropAmm {
         uint256 elapsed = currentTime - state.epochStart;
         if (elapsed >= epochDuration * 2) {
             state.previousNetSellValueStable = 0;
-            _resetCurrentEpoch(state, currentTime);
+            _resetCurrentEpoch(state, currentTime - elapsed % epochDuration);
         } else if (elapsed >= epochDuration) {
             state.previousNetSellValueStable = state.currentSellValueStable > state.currentBuyValueStable
                 ? state.currentSellValueStable - state.currentBuyValueStable
                 : 0;
-            _resetCurrentEpoch(state, currentTime);
+            _resetCurrentEpoch(state, currentTime - elapsed % epochDuration);
         }
     }
 
-    function _resetCurrentEpoch(PropAmmState storage state, uint256 currentTime) private {
+    function _resetCurrentEpoch(PropAmmState storage state, uint256 epochStart) private {
         state.currentSellValueStable = 0;
         state.currentBuyValueStable = 0;
         state.currentSellTradeCount = 0;
         // block.timestamp remains far below uint64 max for the lifetime of the EVM.
         // forge-lint: disable-next-line(unsafe-typecast)
-        state.epochStart = uint64(currentTime);
+        state.epochStart = uint64(epochStart);
     }
 
     function _cadenceWaveYForQuote(PropAmmState storage state, uint256 currentTime) private view returns (uint256) {
@@ -209,8 +210,8 @@ library LibOnRePropAmm {
         uint256 tradeCount = state.currentSellTradeCount;
         if (tradeCount == 0) return 0;
         uint256 ramp = tradeCount >= state.config.cadenceThreshold
-            ? CADENCE_WAVE_SCALE
-            : Math.mulDiv(tradeCount, CADENCE_WAVE_SCALE, state.config.cadenceThreshold);
-        return Math.mulDiv(maxWaveY, ramp, CADENCE_WAVE_SCALE);
+            ? LibOnRePropAmmMath.CADENCE_WAVE_SCALE
+            : Math.mulDiv(tradeCount, LibOnRePropAmmMath.CADENCE_WAVE_SCALE, state.config.cadenceThreshold);
+        return Math.mulDiv(maxWaveY, ramp, LibOnRePropAmmMath.CADENCE_WAVE_SCALE);
     }
 }

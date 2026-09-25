@@ -60,14 +60,14 @@ struct Pricer {
     address managedToken;
     PricingDenomination denomination;
     uint8 vectorCount;
-    bool disabled;
+    bool enabled;
     bool exists;
 }
 
 struct Quoter {
     QuoterKind kind;
     uint64 instanceId;
-    bool disabled;
+    bool enabled;
     bool exists;
 }
 
@@ -133,7 +133,7 @@ struct OfferConfig {
     address tokenOut;
     uint8 tokenOutDecimals;
     uint8 tokenInDecimals;
-    bool disabled;
+    bool enabled;
     bool exists;
 }
 

@@ -2,13 +2,10 @@
 pragma solidity 0.8.35;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {APR_SCALE, PRICE_DECIMALS, PRICE_SCALE, DAYS_PER_YEAR, SECONDS_IN_DAY} from "./OnReConstants.sol";
 
 library OnReMath {
-    uint256 internal constant PRICE_DECIMALS = 9;
     uint256 internal constant INT_SCALE = 1e18;
-    uint256 internal constant APR_SCALE = 1_000_000;
-    uint256 internal constant SECONDS_IN_DAY = 86_400;
-    uint8 internal constant MAX_TOKEN_DECIMALS = 18;
 
     function _calculateFee(uint256 amount, uint16 feeBasisPoints, uint16 maxBasisPoints)
         internal
@@ -39,7 +36,7 @@ library OnReMath {
         }
 
         uint256 decimalDivisor = 10 ** (uint256(tokenInDecimals) - uint256(tokenOutDecimals));
-        return Math.mulDiv(tokenInAmount, 10 ** PRICE_DECIMALS, price * decimalDivisor);
+        return Math.mulDiv(tokenInAmount, PRICE_SCALE, price * decimalDivisor);
     }
 
     function _calculateRedemptionAssetOutAmount(
@@ -51,7 +48,7 @@ library OnReMath {
         if (assetDecimals >= managedTokenDecimals) {
             uint256 decimalMultiplier =
                 10 ** (uint256(assetDecimals) - uint256(managedTokenDecimals));
-            return Math.mulDiv(managedTokenNetAmount, price * decimalMultiplier, 10 ** PRICE_DECIMALS);
+            return Math.mulDiv(managedTokenNetAmount, price * decimalMultiplier, PRICE_SCALE);
         }
 
         uint256 decimalDivisor = 10 ** (uint256(managedTokenDecimals) - uint256(assetDecimals) + PRICE_DECIMALS);
@@ -67,7 +64,7 @@ library OnReMath {
             return basePrice;
         }
 
-        uint256 dailyRate = _mulDivHalfUp(apr, INT_SCALE, 365 * APR_SCALE);
+        uint256 dailyRate = _mulDivHalfUp(apr, INT_SCALE, DAYS_PER_YEAR * APR_SCALE);
         uint256 dailyFactor = INT_SCALE + dailyRate;
         uint256 elapsedDays = elapsedTime / SECONDS_IN_DAY;
         uint256 remainingSeconds = elapsedTime % SECONDS_IN_DAY;
@@ -105,8 +102,8 @@ library OnReMath {
             return 0;
         }
 
-        uint256 dailyRate = _mulDivHalfUp(apr, INT_SCALE, 365 * APR_SCALE);
-        uint256 compoundFactor = _powFixed(INT_SCALE + dailyRate, 365, INT_SCALE);
+        uint256 dailyRate = _mulDivHalfUp(apr, INT_SCALE, DAYS_PER_YEAR * APR_SCALE);
+        uint256 compoundFactor = _powFixed(INT_SCALE + dailyRate, DAYS_PER_YEAR, INT_SCALE);
         return _mulDivHalfUp(compoundFactor - INT_SCALE, APR_SCALE, INT_SCALE);
     }
 

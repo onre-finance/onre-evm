@@ -212,6 +212,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
             decimals: decimals_,
             admin: address(this),
             ccipAdmin: address(this),
+            killSwitchController: address(app),
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });

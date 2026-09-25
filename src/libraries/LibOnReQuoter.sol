@@ -41,6 +41,7 @@ library LibOnReQuoter {
 
         quoter.kind = kind;
         quoter.instanceId = quoterInstanceId;
+        quoter.enabled = true;
         quoter.exists = true;
         emit QuoterCreated(quoterId, kind, quoterInstanceId);
     }
@@ -81,9 +82,8 @@ library LibOnReQuoter {
     function _setQuoterEnabled(bytes32 quoterId, bool enabled) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
-        bool disabled = !enabled;
-        if (quoter.disabled == disabled) revert NoChangeError();
-        quoter.disabled = disabled;
+        if (quoter.enabled == enabled) revert NoChangeError();
+        quoter.enabled = enabled;
         emit QuoterEnabledSet(quoterId, enabled);
     }
 

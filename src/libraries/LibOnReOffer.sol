@@ -32,11 +32,10 @@ import {LibOnReQuoter} from "./LibOnReQuoter.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {LibOnReVault} from "./LibOnReVault.sol";
 import {OnReMath} from "./OnReMath.sol";
+import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Direct and worker offer execution against prevalidated configuration.
 library LibOnReOffer {
-    uint16 internal constant MAX_BASIS_POINTS = 10_000;
-
     function _takeOffer(TakeOfferParams calldata params) internal returns (uint256 amountOut) {
         OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(params.offerConfigId);
         if (block.timestamp > params.deadline) {

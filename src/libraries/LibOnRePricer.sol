@@ -32,7 +32,8 @@ import {OnReMath} from "./OnReMath.sol";
 /// @notice Reusable USD price production for managed tokens.
 library LibOnRePricer {
     uint8 internal constant MAX_VECTORS = 10;
-    uint256 internal constant PRICE_SCALE = 1e9;
+    // Step pricing projects to the interval end; cap that lookahead at one day.
+    uint64 internal constant MAX_PRICE_FIX_DURATION = 1 days;
 
     function _createPricer(address managedToken, PricingDenomination denomination) internal returns (bytes32 pricerId) {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
@@ -44,6 +45,7 @@ library LibOnRePricer {
 
         pricer.managedToken = managedToken;
         pricer.denomination = denomination;
+        pricer.enabled = true;
         pricer.exists = true;
         emit PricerCreated(pricerId, managedToken, denomination);
     }
@@ -51,7 +53,10 @@ library LibOnRePricer {
     function _addPricingVector(bytes32 pricerId, PricingVector calldata vector) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
-        if (vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0) {
+        if (
+            vector.startTime == 0 || vector.baseTime == 0 || vector.basePrice == 0 || vector.priceFixDuration == 0
+                || vector.priceFixDuration > MAX_PRICE_FIX_DURATION
+        ) {
             revert InvalidAmountError();
         }
         if (vector.baseTime > vector.startTime) {
@@ -93,13 +98,10 @@ library LibOnRePricer {
         Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         uint8 vectorCount = pricer.vectorCount;
         uint8 vectorIndex = type(uint8).max;
-        for (uint8 i; i < vectorCount;) {
+        for (uint8 i; i < vectorCount; ++i) {
             if (pricer.vectors[i].startTime == startTime) {
                 vectorIndex = i;
                 break;
-            }
-            unchecked {
-                ++i;
             }
         }
         if (vectorIndex == type(uint8).max) revert VectorNotFoundError(startTime);
@@ -112,11 +114,8 @@ library LibOnRePricer {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         uint8 deletedCount = pricer.vectorCount;
-        for (uint8 i; i < deletedCount;) {
+        for (uint8 i; i < deletedCount; ++i) {
             delete pricer.vectors[i];
-            unchecked {
-                ++i;
-            }
         }
         pricer.vectorCount = 0;
         emit AllPricingVectorsDeleted(pricerId, deletedCount);
@@ -125,9 +124,8 @@ library LibOnRePricer {
     function _setPricerEnabled(bytes32 pricerId, bool enabled) internal {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
-        bool disabled = !enabled;
-        if (pricer.disabled == disabled) revert NoChangeError();
-        pricer.disabled = disabled;
+        if (pricer.enabled == enabled) revert NoChangeError();
+        pricer.enabled = enabled;
         emit PricerEnabledSet(pricerId, enabled);
     }
 
@@ -187,19 +185,16 @@ library LibOnRePricer {
         if (activeStartTime == 0) return;
 
         uint64 previousStartTime = 0;
-        for (uint8 i; i < vectorCount;) {
+        for (uint8 i; i < vectorCount; ++i) {
             uint64 candidateStartTime = pricer.vectors[i].startTime;
             if (candidateStartTime < activeStartTime && candidateStartTime > previousStartTime) {
                 previousStartTime = candidateStartTime;
-            }
-            unchecked {
-                ++i;
             }
         }
         if (previousStartTime == 0) return;
 
         uint8 writeIndex = 0;
-        for (uint8 readIndex; readIndex < vectorCount;) {
+        for (uint8 readIndex; readIndex < vectorCount; ++readIndex) {
             uint64 startTime = pricer.vectors[readIndex].startTime;
             bool evict = startTime < activeStartTime && startTime != previousStartTime;
             if (evict) {
@@ -210,27 +205,18 @@ library LibOnRePricer {
                     ++writeIndex;
                 }
             }
-            unchecked {
-                ++readIndex;
-            }
         }
 
-        for (uint8 i = writeIndex; i < vectorCount;) {
+        for (uint8 i = writeIndex; i < vectorCount; ++i) {
             delete pricer.vectors[i];
-            unchecked {
-                ++i;
-            }
         }
         pricer.vectorCount = writeIndex;
     }
 
     function _removePricingVectorAt(Pricer storage pricer, uint8 vectorIndex) private {
         uint8 lastIndex = pricer.vectorCount - 1;
-        for (uint8 i = vectorIndex; i < lastIndex;) {
+        for (uint8 i = vectorIndex; i < lastIndex; ++i) {
             pricer.vectors[i] = pricer.vectors[i + 1];
-            unchecked {
-                ++i;
-            }
         }
         delete pricer.vectors[lastIndex];
         pricer.vectorCount = lastIndex;

@@ -37,6 +37,7 @@ library LibOnReStorage {
         mapping(address managedToken => bool deployedByDiamond) managedTokenDeployedByDiamond;
     }
 
+    // keccak256(abi.encode(uint256(keccak256("onre.storage.App")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 internal constant APP_STORAGE_LOCATION = 0x31164558df59313d3ca3903acf513b2eda293f9424839a72cebf9d8c78813700;
 
     function _appStorage() internal pure returns (AppStorage storage s) {

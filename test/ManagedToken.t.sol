@@ -4,17 +4,21 @@ pragma solidity 0.8.35;
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
 import {IBufferController} from "../src/IBufferController.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
+import {IAppConfig} from "../src/IAppConfig.sol";
+import {KilledError} from "../src/types/OnReAppErrors.sol";
 
 contract ManagedTokenTest is Test {
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     ManagedToken private token;
     address private implementation;
+    MockKillSwitch private killSwitch;
 
     address private admin = makeAddr("admin");
     address private ccipAdmin = makeAddr("ccipAdmin");
@@ -24,6 +28,7 @@ contract ManagedTokenTest is Test {
     address private user = makeAddr("user");
 
     function setUp() public {
+        killSwitch = new MockKillSwitch();
         implementation = address(new ManagedToken());
         token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
     }
@@ -33,6 +38,7 @@ contract ManagedTokenTest is Test {
         assertEq(token.symbol(), "ONusd");
         assertEq(token.decimals(), 9);
         assertEq(token.getCCIPAdmin(), ccipAdmin);
+        assertEq(token.killSwitchController(), address(killSwitch));
         assertTrue(token.hasRole(token.UPGRADER_ROLE(), admin));
         assertTrue(token.supportsInterface(type(IBurnMintERC20).interfaceId));
         assertTrue(token.supportsInterface(type(IGetCCIPAdmin).interfaceId));
@@ -63,6 +69,21 @@ contract ManagedTokenTest is Test {
         _expectDeployTokenZeroAddressRevert(admin, ccipAdmin, _singleAddress(minter), _singleAddress(address(0)));
     }
 
+    function test_InitializeRequiresAWorkingKillSwitchController() public {
+        address[2] memory noCodeControllers = [address(0), user];
+        for (uint256 i; i < noCodeControllers.length; ++i) {
+            killSwitch = MockKillSwitch(noCodeControllers[i]);
+            vm.expectRevert(
+                abi.encodeWithSelector(IManagedToken.InvalidKillSwitchControllerError.selector, noCodeControllers[i])
+            );
+            _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+        }
+
+        killSwitch = MockKillSwitch(address(new RecordingBufferController()));
+        vm.expectRevert();
+        _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
+    }
+
     function test_TracksInitialMintersAndBurners() public view {
         address[] memory minters = token.getMinters();
         address[] memory burners = token.getBurners();
@@ -84,6 +105,36 @@ contract ManagedTokenTest is Test {
 
         assertEq(token.balanceOf(user), 100e9);
         assertEq(token.totalSupply(), 100e9);
+    }
+
+    function test_KillSwitchReadFailureFreezesSupplyButAllowsTransfers() public {
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+        bytes memory failure = abi.encodeWithSignature("KillSwitchUnavailable()");
+        vm.mockCallRevert(address(killSwitch), abi.encodeCall(IAppConfig.appConfig, ()), failure);
+
+        vm.expectRevert(failure);
+        vm.prank(minter);
+        token.mint(user, 1e9);
+        vm.expectRevert(failure);
+        vm.prank(burner);
+        token.burn(1e9);
+        vm.prank(burner);
+        token.transfer(user, 10e9);
+        assertEq(token.totalSupply(), 100e9);
+        assertEq(token.balanceOf(user), 10e9);
+    }
+
+    function test_ChangingBufferControllerCannotBypassKillSwitch() public {
+        killSwitch.setKilled(true);
+        RecordingBufferController replacementBuffer = new RecordingBufferController();
+        vm.prank(admin);
+        token.setBufferController(address(replacementBuffer));
+
+        vm.expectRevert(KilledError.selector);
+        vm.prank(minter);
+        token.mint(user, 1e9);
+        assertEq(token.totalSupply(), 0);
     }
 
     function test_NonMinterCannotMint() public {
@@ -180,6 +231,9 @@ contract ManagedTokenTest is Test {
     }
 
     function test_NonBurnerCannotBurn() public {
+        vm.prank(minter);
+        token.mint(user, 1);
+
         vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
         vm.prank(user);
         token.burn(1);
@@ -187,6 +241,59 @@ contract ManagedTokenTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
         vm.prank(user);
         token.burnFrom(pool, 1);
+
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.SenderNotBurnerError.selector, user));
+        vm.prank(user);
+        token.burnFrom(user, 1);
+
+        assertEq(token.balanceOf(user), 1);
+        assertEq(token.totalSupply(), 1);
+    }
+
+    function test_BurnFromOwnBalanceRequiresNoAllowanceAndNotifiesBuffer() public {
+        RecordingBufferController controller = new RecordingBufferController();
+        vm.prank(admin);
+        token.setBufferController(address(controller));
+
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+        assertEq(token.allowance(burner, burner), 0);
+
+        vm.prank(burner);
+        token.burnFrom(burner, 40e9);
+
+        assertEq(token.balanceOf(burner), 60e9);
+        assertEq(token.totalSupply(), 60e9);
+        assertEq(token.allowance(burner, burner), 0);
+        assertEq(controller.callCount(), 2);
+        assertEq(controller.lastAmount(), 40e9);
+        assertFalse(controller.lastIsMint());
+    }
+
+    function test_BurnFromOwnBalanceDoesNotSpendSelfAllowance() public {
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+
+        vm.startPrank(burner);
+        token.approve(burner, 10e9);
+        token.burnFrom(burner, 40e9);
+        vm.stopPrank();
+
+        assertEq(token.allowance(burner, burner), 10e9);
+        assertEq(token.balanceOf(burner), 60e9);
+        assertEq(token.totalSupply(), 60e9);
+    }
+
+    function test_BurnAddressAliasBurnsOwnBalanceWithoutAllowance() public {
+        vm.prank(minter);
+        token.mint(burner, 100e9);
+
+        vm.prank(burner);
+        token.burn(burner, 40e9);
+
+        assertEq(token.balanceOf(burner), 60e9);
+        assertEq(token.totalSupply(), 60e9);
+        assertEq(token.allowance(burner, burner), 0);
     }
 
     function test_BurnAddressAliasUsesBurnFrom() public {
@@ -213,18 +320,30 @@ contract ManagedTokenTest is Test {
         vm.prank(admin);
         token.grantBurnRole(pool);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, pool, 0, 50e9));
         vm.prank(pool);
         token.burnFrom(user, 50e9);
 
+        assertEq(token.balanceOf(user), 100e9);
+        assertEq(token.totalSupply(), 100e9);
+
         vm.prank(user);
-        token.approve(pool, 50e9);
+        token.approve(pool, 60e9);
 
         vm.prank(pool);
         token.burnFrom(user, 50e9);
 
         assertEq(token.balanceOf(user), 50e9);
         assertEq(token.totalSupply(), 50e9);
+        assertEq(token.allowance(user, pool), 10e9);
+
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, pool, 10e9, 50e9));
+        vm.prank(pool);
+        token.burnFrom(user, 50e9);
+
+        assertEq(token.balanceOf(user), 50e9);
+        assertEq(token.totalSupply(), 50e9);
+        assertEq(token.allowance(user, pool), 10e9);
     }
 
     function test_AdminCanUpdateCCIPAdmin() public {
@@ -235,9 +354,19 @@ contract ManagedTokenTest is Test {
         token.setCCIPAdmin(address(0));
 
         vm.prank(admin);
+        vm.expectEmit(true, true, false, true, address(token));
+        emit IManagedToken.CCIPAdminTransferredEvent(ccipAdmin, nextAdmin);
         token.setCCIPAdmin(nextAdmin);
 
         assertEq(token.getCCIPAdmin(), nextAdmin);
+    }
+
+    function test_SetCCIPAdminRejectsUnchangedAdmin() public {
+        vm.expectRevert(IManagedToken.NoChangeError.selector);
+        vm.prank(admin);
+        token.setCCIPAdmin(ccipAdmin);
+
+        assertEq(token.getCCIPAdmin(), ccipAdmin);
     }
 
     function test_BufferControllerObservesRegularSupplyChangesWhileBufferPathsBypassIt() public {
@@ -376,6 +505,7 @@ contract ManagedTokenTest is Test {
             decimals: decimals_,
             admin: admin_,
             ccipAdmin: ccipAdmin_,
+            killSwitchController: address(killSwitch),
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
@@ -396,6 +526,7 @@ contract ManagedTokenTest is Test {
             decimals: 9,
             admin: admin_,
             ccipAdmin: ccipAdmin_,
+            killSwitchController: address(killSwitch),
             initialMinters: initialMinters,
             initialBurners: initialBurners
         });
@@ -429,5 +560,17 @@ contract RecordingBufferController is IBufferController {
         ++callCount;
         lastAmount = amount;
         lastIsMint = isMint;
+    }
+}
+
+contract MockKillSwitch is IAppConfig {
+    bool public killed;
+
+    function setKilled(bool value) external {
+        killed = value;
+    }
+
+    function appConfig() external view returns (bool, address, address) {
+        return (killed, address(0), address(0));
     }
 }

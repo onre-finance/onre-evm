@@ -38,11 +38,8 @@ contract OnReDiamondInit {
         LibOnReAccessControl._initialize(params.boss, params.admin, params.worker, params.upgrader);
 
         uint256 approverLength = params.approvers.length;
-        for (uint256 i = 0; i < approverLength;) {
+        for (uint256 i = 0; i < approverLength; ++i) {
             _addApprover(s, params.approvers[i]);
-            unchecked {
-                ++i;
-            }
         }
 
         LibDiamond.DiamondStorage storage ds = LibDiamond._diamondStorage();

@@ -49,7 +49,7 @@ library LibDiamond {
 
     function _diamondCut(IDiamondCut.FacetCut[] memory cut, address init, bytes memory initCalldata) internal {
         uint256 cutLength = cut.length;
-        for (uint256 i = 0; i < cutLength;) {
+        for (uint256 i = 0; i < cutLength; ++i) {
             IDiamondCut.FacetCut memory facetCut = cut[i];
             if (facetCut.action == IDiamondCut.FacetCutAction.Add) {
                 _addFunctions(facetCut.facetAddress, facetCut.functionSelectors);
@@ -59,9 +59,6 @@ library LibDiamond {
                 _removeFunctions(facetCut.facetAddress, facetCut.functionSelectors);
             } else {
                 revert InvalidFacetCutAction(uint8(facetCut.action));
-            }
-            unchecked {
-                ++i;
             }
         }
 
@@ -86,7 +83,7 @@ library LibDiamond {
         }
 
         uint256 selectorLength = selectors.length;
-        for (uint256 i = 0; i < selectorLength;) {
+        for (uint256 i = 0; i < selectorLength; ++i) {
             bytes4 selector = selectors[i];
             if (ds.selectorToFacetAndPosition[selector].facetAddress != address(0)) {
                 revert FunctionAlreadyExists(selector);
@@ -96,7 +93,6 @@ library LibDiamond {
                 FacetAddressAndPosition({facetAddress: facet, functionSelectorPosition: _toUint32(selectorPosition)});
             unchecked {
                 ++selectorPosition;
-                ++i;
             }
         }
     }
@@ -118,7 +114,7 @@ library LibDiamond {
         }
 
         uint256 selectorLength = selectors.length;
-        for (uint256 i = 0; i < selectorLength;) {
+        for (uint256 i = 0; i < selectorLength; ++i) {
             bytes4 selector = selectors[i];
             address oldFacet = ds.selectorToFacetAndPosition[selector].facetAddress;
             if (oldFacet == address(0)) {
@@ -133,7 +129,6 @@ library LibDiamond {
                 FacetAddressAndPosition({facetAddress: facet, functionSelectorPosition: _toUint32(selectorPosition)});
             unchecked {
                 ++selectorPosition;
-                ++i;
             }
         }
     }
@@ -148,7 +143,7 @@ library LibDiamond {
 
         DiamondStorage storage ds = _diamondStorage();
         uint256 selectorLength = selectors.length;
-        for (uint256 i = 0; i < selectorLength;) {
+        for (uint256 i = 0; i < selectorLength; ++i) {
             bytes4 selector = selectors[i];
             if (selector == IDiamondCut.diamondCut.selector) {
                 revert FunctionIsImmutable(selector);
@@ -158,9 +153,6 @@ library LibDiamond {
                 revert FunctionDoesNotExist(selector);
             }
             _removeFunction(oldFacet, selector);
-            unchecked {
-                ++i;
-            }
         }
     }
 

@@ -15,8 +15,8 @@ contract OnRePropAmmTest is OnReAppTestBase {
         assertEq(app.getQuoter(secondNavQuoterId).instanceId, 1);
 
         app.setQuoterEnabled(secondNavQuoterId, false);
-        assertTrue(app.getQuoter(secondNavQuoterId).disabled);
-        assertFalse(app.getQuoter(navQuoterId).disabled);
+        assertFalse(app.getQuoter(secondNavQuoterId).enabled);
+        assertTrue(app.getQuoter(navQuoterId).enabled);
     }
 
     function test_PropAmmSupportsIndependentConfiguredInstances() public {
@@ -223,7 +223,8 @@ contract OnRePropAmmTest is OnReAppTestBase {
                 liquidityVaultId: liquidityVaultId
             })
         );
-        assertFalse(app.getOfferConfig(expectedOfferId).exists);
+        vm.expectRevert(abi.encodeWithSelector(OfferConfigNotFoundError.selector, expectedOfferId));
+        app.getOfferConfig(expectedOfferId);
     }
 
     function test_PropAmmSellUsesFeeConfigMinimumHardWallAndRecordsPressure() public {

@@ -10,6 +10,8 @@ interface IManagedToken is IGetCCIPAdmin {
         uint8 decimals;
         address admin;
         address ccipAdmin;
+        // Required application Diamond; independent of the optional Buffer controller.
+        address killSwitchController;
         address[] initialMinters;
         address[] initialBurners;
     }
@@ -20,11 +22,13 @@ interface IManagedToken is IGetCCIPAdmin {
     event BurnAccessRevokedEvent(address indexed burner);
     event CCIPAdminTransferredEvent(address indexed previousAdmin, address indexed newAdmin);
     event BufferControllerSet(address indexed oldController, address indexed newController);
+    event KillSwitchControllerInitialized(address indexed controller);
 
     error SenderNotMinterError(address sender);
     error SenderNotBurnerError(address sender);
     error SenderNotBufferControllerError(address sender);
     error BufferControllerHasNoCodeError(address controller);
+    error InvalidKillSwitchControllerError(address controller);
     error NoChangeError();
     error ZeroAddressError();
 
@@ -39,4 +43,6 @@ interface IManagedToken is IGetCCIPAdmin {
     function bufferController() external view returns (address);
 
     function setBufferController(address newController) external;
+
+    function killSwitchController() external view returns (address);
 }

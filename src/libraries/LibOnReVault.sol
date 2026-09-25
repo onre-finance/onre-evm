@@ -30,12 +30,11 @@ import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
+import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Configuration, accounting, and token movement for reusable vault instances.
 library LibOnReVault {
     using SafeERC20 for IERC20;
-
-    uint16 private constant MAX_BASIS_POINTS = 10_000;
 
     function _createConfigurableVault(
         ConfigurableVaultKind kind,
@@ -100,6 +99,20 @@ library LibOnReVault {
         internal
         returns (uint256 withdrawnAmount)
     {
+        if (amount == 0) revert InvalidAmountError();
+        address destination = _requireWithdrawalDestination(vaultId, token);
+        _withdrawToDestination(vaultId, token, destination, amount);
+        return amount;
+    }
+
+    function _withdrawAllConfigurableVault(bytes32 vaultId, address token) internal returns (uint256 withdrawnAmount) {
+        address destination = _requireWithdrawalDestination(vaultId, token);
+        withdrawnAmount = _balance(vaultId, token);
+        if (withdrawnAmount == 0) revert ZeroBalanceError();
+        _withdrawToDestination(vaultId, token, destination, withdrawnAmount);
+    }
+
+    function _requireWithdrawalDestination(bytes32 vaultId, address token) private view returns (address destination) {
         if (LibOnReStorage._appStorage().isKilled) revert KilledError();
         if (token == address(0)) revert ZeroAddressError();
         ConfigurableVault storage vault = LibOnReValidation._requireConfigurableVault(vaultId);
@@ -108,21 +121,21 @@ library LibOnReVault {
         } else if (vault.kind != ConfigurableVaultKind.Fee && vault.kind != ConfigurableVaultKind.Proceeds) {
             revert UnsupportedConfigurableVaultKindError(uint8(vault.kind));
         }
-        address destination = vault.withdrawalDestination;
+        destination = vault.withdrawalDestination;
         if (destination == address(0)) {
             revert MissingConfigurableVaultDestinationError(vaultId);
         }
+    }
 
+    function _withdrawToDestination(bytes32 vaultId, address token, address destination, uint256 amount) private {
         uint256 availableAmount = _balance(vaultId, token);
-        withdrawnAmount = amount == 0 ? availableAmount : amount;
-        if (withdrawnAmount == 0) revert ZeroBalanceError();
-        if (withdrawnAmount > availableAmount) {
-            revert InsufficientBalanceError(availableAmount, withdrawnAmount);
+        if (amount > availableAmount) {
+            revert InsufficientBalanceError(availableAmount, amount);
         }
 
-        LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = availableAmount - withdrawnAmount;
-        _transferExactTokenAmount(token, destination, withdrawnAmount);
-        emit ConfigurableVaultWithdrawn(vaultId, token, destination, withdrawnAmount);
+        LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = availableAmount - amount;
+        _transferExactTokenAmount(token, destination, amount);
+        emit ConfigurableVaultWithdrawn(vaultId, token, destination, amount);
     }
 
     function _transferExactTokenAmountFrom(address token, address from, address recipient, uint256 amount) internal {

@@ -15,10 +15,10 @@ import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
 import {OnReMath} from "./OnReMath.sol";
+import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 
 /// @notice Reusable fee-policy configuration and fee calculation.
 library LibOnReFeeConfig {
-    uint16 internal constant MAX_BASIS_POINTS = 10_000;
     uint16 internal constant MAX_ALLOWED_FEE_BPS = 1_000;
 
     function _createFeeConfig(

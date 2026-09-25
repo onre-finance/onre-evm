@@ -86,6 +86,57 @@ contract OnReBufferTest is OnReAppTestBase {
         assertEq(stats.circulatingSupply, startingSupply + expectedBufferMint + mintAmount);
     }
 
+    function test_KillSwitchFreezesAccrualAndAllBufferSupplyPaths() public {
+        managedToken.grantBurnRole(address(this));
+        vm.warp(1 + 30 days);
+        vm.prank(worker);
+        app.settleBuffer(address(managedToken));
+        vm.warp(1 + 60 days);
+        app.setKillSwitch(true);
+
+        BufferState memory beforeState = app.getBufferState(address(managedToken));
+        uint256 supply = managedToken.totalSupply();
+        uint256 controllerBalance = managedToken.balanceOf(address(app));
+        uint256 reserveBalance = app.configurableVaultBalance(bufferReserveVaultId, address(managedToken));
+
+        vm.expectRevert(KilledError.selector);
+        managedToken.mint(user, 1e9);
+        vm.expectRevert(KilledError.selector);
+        managedToken.burn(1e9);
+        vm.expectRevert(KilledError.selector);
+        app.setBufferGrossApr(address(managedToken), GROSS_APR + 1);
+        vm.expectRevert(KilledError.selector);
+        app.setBufferFeeConfig(address(managedToken), MANAGEMENT_FEE_BPS + 1, PERFORMANCE_FEE_BPS, true);
+        vm.expectRevert(KilledError.selector);
+        vm.prank(worker);
+        app.settleBuffer(address(managedToken));
+        vm.expectRevert(KilledError.selector);
+        app.burnForNavIncrease(address(managedToken), 1e9);
+        vm.expectRevert(KilledError.selector);
+        vm.prank(address(managedToken));
+        app.onBeforeSupplyChange(1e9, true);
+        vm.expectRevert(KilledError.selector);
+        vm.prank(address(app));
+        managedToken.mintBuffer(1e9);
+        vm.expectRevert(KilledError.selector);
+        vm.prank(address(app));
+        managedToken.burnBuffer(1e9);
+
+        assertEq(managedToken.totalSupply(), supply);
+        assertEq(managedToken.balanceOf(address(app)), controllerBalance);
+        assertEq(app.configurableVaultBalance(bufferReserveVaultId, address(managedToken)), reserveBalance);
+        assertEq(abi.encode(app.getBufferState(address(managedToken))), abi.encode(beforeState));
+        managedToken.transfer(user, 1e9);
+        assertEq(managedToken.totalSupply(), supply);
+
+        app.setKillSwitch(false);
+        managedToken.mint(user, 1e9);
+        assertGt(managedToken.totalSupply(), supply + 1e9);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, managedToken.totalSupply());
+        managedToken.burn(1e9);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, managedToken.totalSupply());
+    }
+
     function test_BurnAndBurnFromSettleBeforeSupplyChange() public {
         managedToken.grantBurnRole(address(this));
         managedToken.mint(address(this), 200e9);

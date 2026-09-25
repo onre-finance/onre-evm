@@ -15,6 +15,7 @@ import {LibOnReRoles} from "./LibOnReRoles.sol";
 
 /// @notice Diamond-owned deployment and enumeration of canonical managed tokens.
 library LibOnReManagedTokenFactory {
+    // bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     function _deployManagedToken(
@@ -38,6 +39,7 @@ library LibOnReManagedTokenFactory {
             decimals: decimals,
             admin: admin,
             ccipAdmin: ccipAdmin,
+            killSwitchController: address(this),
             initialMinters: minters,
             initialBurners: burners
         });
@@ -87,11 +89,8 @@ library LibOnReManagedTokenFactory {
         uint256 length = accounts.length;
         result = new address[](length + 1);
         result[0] = address(this);
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i = 0; i < length; ++i) {
             result[i + 1] = accounts[i];
-            unchecked {
-                ++i;
-            }
         }
     }
 }

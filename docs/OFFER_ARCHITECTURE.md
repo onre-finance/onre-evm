@@ -20,6 +20,11 @@ The implemented scope intentionally contains:
   callbacks;
 - no separate redemption-offer configuration.
 
+All five configuration types use `enabled`: managed tokens, pricers, quoters, fee
+configs, and offer configs. Creation explicitly sets it to `true`; `false` blocks
+execution while preserving configuration reads. The S4 flag-polarity change
+requires a fresh Diamond deployment; existing stored flags are not migrated.
+
 ## Domain graph
 
 ```mermaid
@@ -38,16 +43,16 @@ flowchart TB
     end
 
     subgraph Pricing["Deterministic USD pricing and quoting"]
-        Pricer["<b>USD Pricer</b><br/>ID = hash(managedToken, Usd)<br/>exactly one per managed token<br/>disabled"]
+        Pricer["<b>USD Pricer</b><br/>ID = hash(managedToken, Usd)<br/>exactly one per managed token<br/>enabled"]
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
-        Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>disabled"]
-        NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>disabled"]
-        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>disabled"]
+        Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>enabled"]
+        NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>enabled"]
+        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>enabled"]
     end
 
     subgraph Configuration["Reusable offer configuration"]
         FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>minimum input-token fee<br/>feeVaultId<br/>enabled"]
-        OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>disabled"]
+        OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>enabled"]
     end
 
     subgraph Custody["Diamond custody and logical vault accounting"]
@@ -222,7 +227,7 @@ The Prop AMM configuration stored per quoter instance is:
 - curve peg haircut in basis points;
 - curve exponent scaled by `10_000`;
 - sell cadence threshold and maximum cadence wave;
-- rolling epoch duration;
+- fixed volume epoch duration;
 - dynamic-wall sensitivity.
 
 Each instance also stores current sell value, current buy value, previous net
@@ -230,6 +235,25 @@ sell value, current sell count, and epoch start. Successful buys add their net
 asset input to buy value. Successful sells add the raw pre-curve asset output
 and increment the sell count. State is updated before external token calls and
 the entire update rolls back if settlement fails.
+
+Volume windows have duration `D = epochDurationSeconds` and are anchored to the
+instance's initial `epochStart`. Within a window, current net sells contribute at
+full weight. At its scheduled end, that net becomes previous-window pressure and
+decays linearly to zero over the next D, even without trades. Quotes project this
+lazily; successful buys and sells advance stored `epochStart` by whole multiples
+of D, never to the late trade's timestamp. After two or more elapsed windows,
+old history is discarded while the original boundary alignment is preserved.
+Cadence counts and current buying surplus expire at the same window boundary.
+These boundaries are not automatically aligned with midnight or NAV price steps;
+changing the configured D applies the new duration to the stored epoch anchor.
+
+For example, with D=100 and net sells of 100 in the first window, the historical
+contribution at elapsed times 100, 150, 199, and 200 is 100, 50, 1, and 0.
+A sell of 20 at 199 therefore quotes with total pressure 21. Executing it keeps
+the epoch start at 100: the old 100 disappears at 200, and the new 20 then begins
+its own decay. The pending sell still contributes its full raw value under the
+existing buy-netting policy. This fixed-boundary behavior differs from the
+previously inspected Solana volume tracker; the Solana program is not changed here.
 
 For a Prop AMM sell, the raw NAV output is first checked against actual
 Liquidity-vault balance. The configured Liquidity vault's TVL refill target, if

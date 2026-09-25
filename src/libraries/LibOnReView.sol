@@ -2,7 +2,8 @@
 pragma solidity 0.8.35;
 
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
-import {InvalidQuoterKindError, QuoterNotFoundError, VectorIndexOutOfBoundsError} from "../types/OnReAppErrors.sol";
+import {LibOnReValidation} from "./LibOnReValidation.sol";
+import {InvalidQuoterKindError, VectorIndexOutOfBoundsError} from "../types/OnReAppErrors.sol";
 import {
     ConfigurableVault,
     FeeConfig,
@@ -17,17 +18,19 @@ import {
 } from "../types/OnReTypes.sol";
 
 /// @notice Read helpers shared by the view facet.
+/// @dev Object getters require existence, but permit disabled records and reads while killed.
 library LibOnReView {
     function _getManagedTokenConfig(address managedToken) internal view returns (ManagedTokenConfig memory) {
+        LibOnReValidation._requireRegisteredManagedToken(managedToken);
         return LibOnReStorage._appStorage().managedTokenConfigs[managedToken];
     }
 
     function _getPricer(bytes32 pricerId) internal view returns (Pricer memory) {
-        return LibOnReStorage._appStorage().pricers[pricerId];
+        return LibOnReValidation._requirePricer(pricerId);
     }
 
     function _getPricingVector(bytes32 pricerId, uint8 vectorIndex) internal view returns (PricingVector memory) {
-        Pricer storage pricer = LibOnReStorage._appStorage().pricers[pricerId];
+        Pricer storage pricer = LibOnReValidation._requirePricer(pricerId);
         if (vectorIndex >= pricer.vectorCount) {
             revert VectorIndexOutOfBoundsError(vectorIndex, pricer.vectorCount);
         }
@@ -35,12 +38,11 @@ library LibOnReView {
     }
 
     function _getQuoter(bytes32 quoterId) internal view returns (Quoter memory) {
-        return LibOnReStorage._appStorage().quoters[quoterId];
+        return LibOnReValidation._requireQuoter(quoterId);
     }
 
     function _getPropAmmState(bytes32 quoterId) internal view returns (PropAmmState memory) {
-        Quoter storage quoter = LibOnReStorage._appStorage().quoters[quoterId];
-        if (!quoter.exists) revert QuoterNotFoundError(quoterId);
+        Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
         if (quoter.kind != QuoterKind.PropAmm) {
             revert InvalidQuoterKindError(quoterId, uint8(QuoterKind.PropAmm), uint8(quoter.kind));
         }
@@ -48,22 +50,23 @@ library LibOnReView {
     }
 
     function _getFeeConfig(bytes32 feeConfigId) internal view returns (FeeConfig memory) {
-        return LibOnReStorage._appStorage().feeConfigs[feeConfigId];
+        return LibOnReValidation._requireFeeConfig(feeConfigId);
     }
 
     function _getOfferConfig(bytes32 offerConfigId) internal view returns (OfferConfig memory) {
-        return LibOnReStorage._appStorage().offerConfigs[offerConfigId];
+        return LibOnReValidation._requireOfferConfig(offerConfigId);
     }
 
     function _getFulfillmentRequest(bytes32 fulfillmentRequestId) internal view returns (FulfillmentRequest memory) {
-        return LibOnReStorage._appStorage().fulfillmentRequests[fulfillmentRequestId];
+        return LibOnReValidation._requireFulfillmentRequest(fulfillmentRequestId);
     }
 
     function _getConfigurableVault(bytes32 vaultId) internal view returns (ConfigurableVault memory) {
-        return LibOnReStorage._appStorage().configurableVaults[vaultId];
+        return LibOnReValidation._requireConfigurableVault(vaultId);
     }
 
     function _getExcludedSupplyAccounts(address managedToken) internal view returns (address[] memory) {
+        LibOnReValidation._requireRegisteredManagedToken(managedToken);
         return LibOnReStorage._appStorage().excludedSupplyAccounts[managedToken];
     }
 

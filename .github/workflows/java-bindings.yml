@@ -1,25 +1,36 @@
 name: Java bindings
 
-# Builds the web3j Java wrappers for IDiamondProxy and ManagedToken from the
-# current commit and publishes com.onre.evm:onre-evm-java:<version> to this
-# repository's GitHub Packages Maven registry. Run it manually from the Actions
-# tab once the contracts at that commit are the ones a Java consumer should
-# target. See bindings/java/README.md.
+# Builds the web3j Java wrapper for IDiamondProxy from the current commit and
+# publishes com.onre.evm:onre-evm-java:<version> to this repository's GitHub
+# Packages Maven registry. The version is the `version=` line of
+# bindings/java/gradle.properties. Run it manually from the Actions tab once the
+# contracts at that commit are the ones a Java consumer should target. See
+# bindings/java/README.md.
+#
+# GitHub Packages refuses a second upload of a release version (HTTP 409) but
+# accepts repeated uploads of a -SNAPSHOT version. `overwrite` deletes the
+# already-published version first so the same version number can be re-used.
 
 permissions: {}
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: Maven version to publish, e.g. 1.4.0 or 1.4.0-SNAPSHOT
-        required: true
-        type: string
       publish:
         description: Publish to GitHub Packages (uncheck to only build and upload the jar as a workflow artifact)
         required: true
         type: boolean
         default: true
+      overwrite:
+        description: If this version is already published, delete it and publish again in its place
+        required: true
+        type: boolean
+        default: false
+
+# One publish at a time, so two runs cannot race on the same version.
+concurrency:
+  group: java-bindings-publish
+  cancel-in-progress: false
 
 jobs:
   bindings:
@@ -33,6 +44,24 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+
+      - name: Read coordinates from the Gradle project
+        id: coords
+        run: |
+          set -euo pipefail
+          group="$(sed -n 's/^group=//p' bindings/java/gradle.properties | tr -d '[:space:]')"
+          version="$(sed -n 's/^version=//p' bindings/java/gradle.properties | tr -d '[:space:]')"
+          artifact="$(sed -n 's/^rootProject.name *= *"\(.*\)"/\1/p' bindings/java/settings.gradle.kts)"
+          for v in group version artifact; do
+            [ -n "${!v}" ] || { echo "::error::could not read $v from bindings/java" >&2; exit 1; }
+          done
+          {
+            echo "group=$group"
+            echo "artifact=$artifact"
+            echo "version=$version"
+            echo "package=$group.$artifact"
+          } >> "$GITHUB_OUTPUT"
+          echo "Coordinates: $group:$artifact:$version"
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -51,7 +80,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate diamond sources and Forge artifacts
-        # Same as CI: writes src/generated and out/, which the Gradle build reads.
+        # Same as CI: writes src/generated/abi.json, which the Gradle build reads.
         run: pnpm build
 
       - uses: actions/setup-java@v4
@@ -65,25 +94,64 @@ jobs:
 
       - name: Build bindings jar
         working-directory: bindings/java
-        env:
-          BINDINGS_VERSION: ${{ inputs.version }}
-        # forgeBuild=false: the artifacts were produced by `pnpm build` above.
-        run: ./gradlew build -PforgeBuild=false -Pversion="$BINDINGS_VERSION"
+        # forgeBuild=false: the ABI was produced by `pnpm build` above.
+        run: ./gradlew build -PforgeBuild=false
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
-          name: onre-evm-java-${{ inputs.version }}
+          name: ${{ steps.coords.outputs.artifact }}-${{ steps.coords.outputs.version }}
           path: |
             bindings/java/build/libs/*.jar
             bindings/java/build/abi/IDiamondProxy.json
           if-no-files-found: error
 
+      - name: Check GitHub Packages for an existing version
+        if: ${{ inputs.publish }}
+        env:
+          # A classic PAT with read:packages + delete:packages can be stored as
+          # PACKAGES_TOKEN if the workflow token is ever refused for the delete.
+          GH_TOKEN: ${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          OWNER_KIND: ${{ github.event.repository.owner.type == 'Organization' && 'orgs' || 'users' }}
+          PACKAGE: ${{ steps.coords.outputs.package }}
+          VERSION: ${{ steps.coords.outputs.version }}
+          OVERWRITE: ${{ inputs.overwrite }}
+        run: |
+          set -euo pipefail
+          base="/$OWNER_KIND/$OWNER/packages/maven/$PACKAGE/versions"
+
+          if ! json="$(gh api --paginate "$base" 2>gh-error.txt)"; then
+            if grep -q "HTTP 404" gh-error.txt; then
+              echo "$PACKAGE has never been published; nothing to check."
+              exit 0
+            fi
+            cat gh-error.txt >&2
+            exit 1
+          fi
+
+          ids="$(printf '%s' "$json" | jq -r --arg v "$VERSION" '.[] | select(.name == $v) | .id')"
+          if [ -z "$ids" ]; then
+            echo "$PACKAGE:$VERSION is not published yet."
+            exit 0
+          fi
+
+          if [ "$OVERWRITE" = "true" ]; then
+            for id in $ids; do
+              echo "Deleting published $PACKAGE:$VERSION (version id $id) so it can be replaced."
+              gh api -X DELETE "$base/$id"
+            done
+          elif [[ "$VERSION" == *-SNAPSHOT ]]; then
+            echo "$PACKAGE:$VERSION is a snapshot; the registry accepts a new upload alongside the old ones."
+          else
+            echo "::error::$PACKAGE:$VERSION is already published. Bump version= in bindings/java/gradle.properties, or re-run with 'overwrite' to replace it."
+            exit 1
+          fi
+
       - name: Publish to GitHub Packages
         if: ${{ inputs.publish }}
         working-directory: bindings/java
         env:
-          BINDINGS_VERSION: ${{ inputs.version }}
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew publish -PforgeBuild=false -Pversion="$BINDINGS_VERSION"
+        run: ./gradlew publish -PforgeBuild=false

@@ -66,7 +66,7 @@ Requires JDK 21+, Node 20+ with pnpm, and Foundry, as for the rest of the reposi
 cd bindings/java
 ./gradlew build                     # runs `pnpm build` at the repo root, then generates, compiles and tests
 ./gradlew build -PforgeBuild=false  # reuse the src/generated/abi.json already present
-./gradlew publishToMavenLocal -Pversion=1.0.0-SNAPSHOT
+./gradlew publishToMavenLocal      # installs the version from gradle.properties into ~/.m2
 ```
 
 Outputs:
@@ -81,15 +81,26 @@ a dropped event fails the build rather than surfacing in a consumer.
 ## Publishing
 
 The `Java bindings` workflow (`.github/workflows/java-bindings.yml`) is run manually from the
-Actions tab. It takes the Maven version to publish, builds from the selected ref, uploads the jar as
-a workflow artifact, and publishes `com.onre.evm:onre-evm-java:<version>` with the workflow's
-`GITHUB_TOKEN`. Untick `publish` to only build.
+Actions tab. It publishes the version in `gradle.properties` (`version=`) from the selected ref,
+uploads the jar as a workflow artifact, and pushes `com.onre.evm:onre-evm-java:<version>` to GitHub
+Packages with the workflow's `GITHUB_TOKEN`. Untick `publish` to only build.
 
+To release, bump `version=` in `gradle.properties`, commit, and run the workflow on that commit.
 Versions are not derived from git. Pick a version that tells consumers which contract deployment it
 matches, and use a `-SNAPSHOT` suffix for anything not yet deployed.
 
+GitHub Packages refuses a second upload of a release version, so re-running the workflow on an
+already-published version fails before publishing. Tick `overwrite` to delete the published version
+and publish again in its place; consumers that already resolved the old jar must refresh
+(`./gradlew --refresh-dependencies`). `-SNAPSHOT` versions can be re-published without `overwrite`.
+
+The delete uses the workflow token. If GitHub ever refuses it, add a repository secret
+`PACKAGES_TOKEN` holding a classic personal access token with `read:packages` and
+`delete:packages`, and the workflow will use it for the check and delete steps.
+
 To publish from a workstation instead, set `gpr.user` and `gpr.key` (a token with `write:packages`)
-in `~/.gradle/gradle.properties` and run `./gradlew publish -Pversion=<version>`.
+in `~/.gradle/gradle.properties` and run `./gradlew publish`, or `./gradlew publish -Pversion=<version>`
+to override the version.
 
 ## Configuration
 

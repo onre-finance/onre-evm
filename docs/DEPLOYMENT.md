@@ -192,6 +192,6 @@ deployment.
 [web3j](https://github.com/LFDT-web3j/web3j) wrapper for the diamond from the
 merged ABI Gemforge writes to `src/generated/abi.json`, and publishes it as
 `com.onre.evm:onre-evm-java:<version>` to this repository's GitHub Packages
-Maven registry. The `Java bindings` workflow publishes a chosen version on
-demand; CI only checks that the wrapper still generates and compiles. See
-`bindings/java/README.md`.
+Maven registry. The `Java bindings` workflow publishes the version set in
+`bindings/java/gradle.properties` on demand; CI only checks that the wrapper
+still generates and compiles. See `bindings/java/README.md`.

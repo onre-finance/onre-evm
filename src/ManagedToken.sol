@@ -19,12 +19,6 @@ import {
 contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    event MintLimitsSet(uint256 oldMaxSupply, uint256 newMaxSupply, uint256 oldMaxMintAmount, uint256 newMaxMintAmount);
-
-    error MaxSupplyBelowCurrentSupply(uint256 maxSupply, uint256 currentSupply);
-    error MaxSupplyExceeded(uint256 currentSupply, uint256 amount, uint256 maxSupply);
-    error MaxMintAmountExceeded(uint256 amount, uint256 maxMintAmount);
-
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     EnumerableSet.AddressSet private _minters;
@@ -83,7 +77,7 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
     /// Does not accrue Buffer and remains callable while killed.
     function setMintLimits(uint256 maxSupply_, uint256 maxMintAmount_) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 supply = totalSupply();
-        if (maxSupply_ != 0 && maxSupply_ < supply) revert MaxSupplyBelowCurrentSupply(maxSupply_, supply);
+        if (maxSupply_ != 0 && maxSupply_ < supply) revert MaxSupplyBelowCurrentSupplyError(maxSupply_, supply);
         uint256 oldMaxSupply = maxSupply;
         uint256 oldMaxMintAmount = maxMintAmount;
         if (maxSupply_ == oldMaxSupply && maxMintAmount_ == oldMaxMintAmount) revert NoChangeError();
@@ -249,13 +243,13 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
         }
         if (from == address(0)) {
             uint256 mintCap = maxMintAmount;
-            if (mintCap != 0 && value > mintCap) revert MaxMintAmountExceeded(value, mintCap);
+            if (mintCap != 0 && value > mintCap) revert MaxMintAmountExceededError(value, mintCap);
             uint256 supplyCap = maxSupply;
             if (supplyCap != 0) {
                 uint256 supply = totalSupply();
                 // Use subtraction to avoid overflowing when the requested mint is extremely large.
                 if (supply > supplyCap || value > supplyCap - supply) {
-                    revert MaxSupplyExceeded(supply, value, supplyCap);
+                    revert MaxSupplyExceededError(supply, value, supplyCap);
                 }
             }
         }

@@ -8,7 +8,6 @@ import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.so
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 import {IManagedToken} from "../src/IManagedToken.sol";
-import {ManagedTokenBeforeMintLimits} from "./fixtures/ManagedTokenBeforeMintLimits.sol";
 import {IBufferController} from "../src/IBufferController.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
 import {IAppConfig} from "../src/IAppConfig.sol";
@@ -127,7 +126,7 @@ contract ManagedTokenTest is Test {
             token.setMintLimits(100e9, 10e9);
         }
         vm.expectEmit(address(token));
-        emit ManagedToken.MintLimitsSet(0, 100e9, 0, 10e9);
+        emit IManagedToken.MintLimitsSet(0, 100e9, 0, 10e9);
         vm.prank(admin);
         token.setMintLimits(100e9, 10e9);
         vm.expectRevert(IManagedToken.NoChangeError.selector);
@@ -136,7 +135,7 @@ contract ManagedTokenTest is Test {
 
         killSwitch.setKilled(true);
         vm.expectEmit(address(token));
-        emit ManagedToken.MintLimitsSet(100e9, 200e9, 10e9, 20e9);
+        emit IManagedToken.MintLimitsSet(100e9, 200e9, 10e9, 20e9);
         vm.prank(admin);
         token.setMintLimits(200e9, 20e9);
         assertEq(token.maxSupply(), 200e9);
@@ -150,7 +149,7 @@ contract ManagedTokenTest is Test {
         token.setMintLimits(100e9, 0);
         vm.prank(minter);
         token.mint(user, 100e9);
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxSupplyExceeded.selector, 100e9, 1, 100e9));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxSupplyExceededError.selector, 100e9, 1, 100e9));
         vm.prank(minter);
         token.mint(user, 1);
 
@@ -158,7 +157,7 @@ contract ManagedTokenTest is Test {
         token.setMintLimits(0, 10e9);
         vm.prank(minter);
         token.mint(user, 10e9);
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxMintAmountExceeded.selector, 10e9 + 1, 10e9));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxMintAmountExceededError.selector, 10e9 + 1, 10e9));
         vm.prank(minter);
         token.mint(user, 10e9 + 1);
         vm.prank(admin);
@@ -171,7 +170,9 @@ contract ManagedTokenTest is Test {
     function test_SupplyCapRejectsBelowSupplyAndAllowsBurnsAndTransfersAtCap() public {
         vm.prank(minter);
         token.mint(burner, 100e9);
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxSupplyBelowCurrentSupply.selector, 100e9 - 1, 100e9));
+        vm.expectRevert(
+            abi.encodeWithSelector(IManagedToken.MaxSupplyBelowCurrentSupplyError.selector, 100e9 - 1, 100e9)
+        );
         vm.prank(admin);
         token.setMintLimits(100e9 - 1, 1);
         assertEq(token.maxMintAmount(), 0);
@@ -194,15 +195,100 @@ contract ManagedTokenTest is Test {
         vm.stopPrank();
         vm.prank(minter);
         token.mint(user, cap);
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxMintAmountExceeded.selector, cap + 1, cap));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxMintAmountExceededError.selector, cap + 1, cap));
         vm.prank(pool);
         token.mint(user, cap + 1);
         vm.prank(pool);
         token.mint(user, cap);
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxSupplyExceeded.selector, cap * 2, 1, cap * 2));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxSupplyExceededError.selector, cap * 2, 1, cap * 2));
         vm.prank(pool);
         token.mint(user, 1);
         assertEq(token.totalSupply(), cap * 2);
+    }
+
+    function testFuzz_ConfiguredSupplyLimitEnforcesRemainingHeadroom(uint256 cap_, uint256 startingSupply_) public {
+        uint256 cap = bound(cap_, 1, type(uint256).max);
+        uint256 startingSupply = bound(startingSupply_, 0, cap);
+        vm.prank(minter);
+        token.mint(burner, startingSupply);
+        vm.prank(admin);
+        token.setMintLimits(cap, 0);
+        assertEq(token.maxSupply(), cap);
+
+        vm.prank(minter);
+        token.mint(burner, cap - startingSupply);
+        assertEq(token.totalSupply(), cap);
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxSupplyExceededError.selector, cap, 1, cap));
+        vm.prank(minter);
+        token.mint(burner, 1);
+        assertEq(token.totalSupply(), cap);
+        assertEq(token.balanceOf(burner), cap);
+
+        // Burning reopens exactly the same amount of supply headroom.
+        vm.prank(burner);
+        token.burn(1);
+        vm.prank(minter);
+        token.mint(burner, 1);
+        assertEq(token.totalSupply(), cap);
+    }
+
+    function testFuzz_ConfiguredPerMintLimitAllowsBoundaryAndRejectsOneAbove(uint256 cap_) public {
+        uint256 cap = bound(cap_, 1, type(uint256).max / 2);
+        vm.prank(admin);
+        token.setMintLimits(0, cap);
+        assertEq(token.maxMintAmount(), cap);
+
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxMintAmountExceededError.selector, cap + 1, cap));
+        vm.prank(minter);
+        token.mint(user, cap + 1);
+        assertEq(token.totalSupply(), 0);
+        assertEq(token.balanceOf(user), 0);
+
+        // The configured limit applies to each call, not their combined amount.
+        vm.startPrank(minter);
+        token.mint(user, cap);
+        token.mint(user, cap);
+        vm.stopPrank();
+        assertEq(token.totalSupply(), cap * 2);
+        assertEq(token.balanceOf(user), cap * 2);
+    }
+
+    function testFuzz_IndependentMintLimitsEnforceTighterBoundary(
+        uint128 startingSupply,
+        uint128 headroom_,
+        uint128 mintCap_
+    ) public {
+        uint256 headroom = bound(uint256(headroom_), 1, type(uint128).max);
+        uint256 mintCap = bound(uint256(mintCap_), 1, type(uint128).max);
+        uint256 supplyCap = uint256(startingSupply) + headroom;
+        uint256 allowedMint = headroom < mintCap ? headroom : mintCap;
+        vm.prank(minter);
+        token.mint(user, startingSupply);
+        vm.prank(admin);
+        token.setMintLimits(supplyCap, mintCap);
+        assertEq(token.maxSupply(), supplyCap);
+        assertEq(token.maxMintAmount(), mintCap);
+
+        if (mintCap <= headroom) {
+            vm.expectRevert(
+                abi.encodeWithSelector(IManagedToken.MaxMintAmountExceededError.selector, allowedMint + 1, mintCap)
+            );
+        } else {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    IManagedToken.MaxSupplyExceededError.selector, startingSupply, allowedMint + 1, supplyCap
+                )
+            );
+        }
+        vm.prank(minter);
+        token.mint(user, allowedMint + 1);
+        assertEq(token.totalSupply(), startingSupply);
+        assertEq(token.balanceOf(user), startingSupply);
+
+        vm.prank(minter);
+        token.mint(user, allowedMint);
+        assertEq(token.totalSupply(), uint256(startingSupply) + allowedMint);
+        assertEq(token.balanceOf(user), uint256(startingSupply) + allowedMint);
     }
 
     function test_SupplyCapRejectsHugeMintWithoutArithmeticOverflow() public {
@@ -211,72 +297,12 @@ contract ManagedTokenTest is Test {
         vm.prank(admin);
         token.setMintLimits(type(uint256).max, 0);
         vm.expectRevert(
-            abi.encodeWithSelector(ManagedToken.MaxSupplyExceeded.selector, 1, type(uint256).max, type(uint256).max)
+            abi.encodeWithSelector(
+                IManagedToken.MaxSupplyExceededError.selector, 1, type(uint256).max, type(uint256).max
+            )
         );
         vm.prank(minter);
         token.mint(user, type(uint256).max);
-    }
-
-    function test_PreLimitUpgradeRejectsInvalidConfigurationAtomicallyAndDefaultsToUnlimited() public {
-        implementation = address(new ManagedTokenBeforeMintLimits());
-        token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
-        vm.prank(minter);
-        token.mint(user, 100e9);
-        ManagedToken nextImplementation = new ManagedToken();
-
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxSupplyBelowCurrentSupply.selector, 100e9 - 1, 100e9));
-        vm.prank(admin);
-        token.upgradeToAndCall(
-            address(nextImplementation), abi.encodeCall(ManagedToken.setMintLimits, (100e9 - 1, 10e9))
-        );
-        assertEq(_implementationOf(address(token)), implementation);
-        assertEq(token.totalSupply(), 100e9);
-
-        vm.prank(admin);
-        token.upgradeToAndCall(address(nextImplementation), "");
-        assertEq(token.maxSupply(), 0);
-        assertEq(token.maxMintAmount(), 0);
-        vm.prank(minter);
-        token.mint(user, 1_000e9);
-        assertEq(token.totalSupply(), 1_100e9);
-    }
-
-    function test_UpgradeFromPreLimitTokenPreservesStateAndConfiguresLimitsAtomically() public {
-        implementation = address(new ManagedTokenBeforeMintLimits());
-        token = _deployToken(9, admin, ccipAdmin, _singleAddress(minter), _singleAddress(burner));
-        vm.prank(minter);
-        token.mint(user, 100e9);
-        vm.prank(user);
-        token.approve(burner, 20e9);
-        RecordingBufferController controller = new RecordingBufferController();
-        vm.prank(admin);
-        token.setBufferController(address(controller));
-        ManagedToken nextImplementation = new ManagedToken();
-        vm.prank(admin);
-        token.upgradeToAndCall(address(nextImplementation), abi.encodeCall(ManagedToken.setMintLimits, (200e9, 10e9)));
-
-        assertEq(token.name(), "OnRe USD");
-        assertEq(token.symbol(), "ONusd");
-        assertEq(token.decimals(), 9);
-        assertEq(token.getCCIPAdmin(), ccipAdmin);
-        assertEq(token.killSwitchController(), address(killSwitch));
-        assertEq(token.bufferController(), address(controller));
-        assertEq(token.totalSupply(), 100e9);
-        assertEq(token.balanceOf(user), 100e9);
-        assertEq(token.allowance(user, burner), 20e9);
-        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), admin));
-        assertTrue(token.hasRole(token.UPGRADER_ROLE(), admin));
-        assertTrue(token.isMinter(minter));
-        assertTrue(token.isBurner(burner));
-        assertEq(token.maxSupply(), 200e9);
-        assertEq(token.maxMintAmount(), 10e9);
-        assertEq(controller.callCount(), 0);
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxMintAmountExceeded.selector, 10e9 + 1, 10e9));
-        vm.prank(minter);
-        token.mint(user, 10e9 + 1);
-        vm.prank(minter);
-        token.mint(user, 10e9);
-        assertEq(token.totalSupply(), 110e9);
     }
 
     function test_KillSwitchReadFailureFreezesSupplyButAllowsTransfers() public {

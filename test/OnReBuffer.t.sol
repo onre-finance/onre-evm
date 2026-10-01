@@ -95,7 +95,9 @@ contract OnReBufferTest is OnReAppTestBase {
         BufferState memory beforeState = app.getBufferState(address(managedToken));
 
         vm.expectRevert(
-            abi.encodeWithSelector(ManagedToken.MaxSupplyExceeded.selector, INITIAL_SUPPLY + accrual, mintAmount, cap)
+            abi.encodeWithSelector(
+                IManagedToken.MaxSupplyExceededError.selector, INITIAL_SUPPLY + accrual, mintAmount, cap
+            )
         );
         managedToken.mint(user, mintAmount);
         _assertMintLimitRollback(beforeState);
@@ -113,7 +115,7 @@ contract OnReBufferTest is OnReAppTestBase {
         managedToken.setMintLimits(0, accrual - 1);
         vm.warp(block.timestamp + 365 days);
         BufferState memory beforeState = app.getBufferState(address(managedToken));
-        vm.expectRevert(abi.encodeWithSelector(ManagedToken.MaxMintAmountExceeded.selector, accrual, accrual - 1));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxMintAmountExceededError.selector, accrual, accrual - 1));
         vm.prank(worker);
         app.settleBuffer(address(managedToken));
         _assertMintLimitRollback(beforeState);
@@ -135,7 +137,9 @@ contract OnReBufferTest is OnReAppTestBase {
         BufferState memory beforeState = app.getBufferState(address(managedToken));
 
         vm.expectRevert(
-            abi.encodeWithSelector(ManagedToken.MaxSupplyExceeded.selector, INITIAL_SUPPLY, accrual, INITIAL_SUPPLY)
+            abi.encodeWithSelector(
+                IManagedToken.MaxSupplyExceededError.selector, INITIAL_SUPPLY, accrual, INITIAL_SUPPLY
+            )
         );
         managedToken.burn(100e9);
         _assertMintLimitRollback(beforeState);

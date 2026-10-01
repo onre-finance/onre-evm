@@ -69,10 +69,26 @@ The first settlement seeds the supply baseline and NAV high watermark without
 minting historical accrual.
 
 Changing gross APR or fee configuration settles the elapsed interval under the
-old configuration first. `settleBuffer` is worker-only and respects the
-application kill switch. Token supply callbacks remain available while killed
-so token-level mint and burn permissions do not become an accidental global
-freeze.
+old configuration first. `settleBuffer` is worker-only. Accrual and every token
+mint/burn respect the application kill switch and revert while killed.
+
+### Token mint limits
+
+`ManagedToken` optionally caps local total supply and each mint amount through
+`setMintLimits`. Both apply to the single gross `mintBuffer` amount, including reserve,
+management fees, and performance fees. Fee splitting does not bypass the limit.
+An ordinary mint settles Buffer first, then checks its own amount and the resulting
+supply; the two mint amounts are checked separately against the per-mint cap.
+Any failure rolls back the entire transaction, including Buffer timestamps,
+supply baseline, high watermark, and logical vault balances.
+
+A supply cap without enough accrual headroom, or a per-mint cap smaller than the
+accrual accumulated since the last settlement, blocks settlement. Because ordinary
+burns and NAV-preservation burns settle first, these operations can also be blocked
+even though their final step reduces supply. The token administrator can raise or
+disable the relevant limit using `setMintLimits` without settling Buffer, including
+while killed, then retry the operation once the application is active. Do not assume
+that burning will always free headroom without first settling accrued Buffer.
 
 ## Burn for NAV preservation
 

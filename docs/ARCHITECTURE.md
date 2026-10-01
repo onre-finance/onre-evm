@@ -182,6 +182,38 @@ without changing any other token. Each proxy also keeps independent metadata,
 decimals, balances, operational roles, CCIP administration, and Buffer
 configuration.
 
+Each token also owns optional `maxSupply` and `maxMintAmount` limits, in token
+base units. Zero disables the respective limit; both default to zero. The token
+administrator sets both with `setMintLimits(maxSupply, maxMintAmount)`, which emits
+`MintLimitsSet` with the old and new values. A nonzero supply cap below current
+`totalSupply()` is rejected, as is setting both values unchanged. Configuration
+does not settle Buffer and remains available while the application is killed.
+
+The token enforces the limits in its shared mint update, covering every authorized
+minter (including CCIP pools) and `mintBuffer`. Supply is checked after any preceding
+Buffer accrual. The per-mint cap applies separately to each mint operation, not
+to cumulative issuance within a transaction or time window. Buffer uses one mint
+for the combined gross accrual allocated across its logical vaults. Transfers and burns
+are not directly capped, but a burn's preceding Buffer accrual can exceed a cap
+and revert the whole operation. See [`docs/BUFFER.md`](BUFFER.md) for recovery.
+
+These are local-chain supply limits, not a cross-chain issuance cap. Bridging in
+consumes local supply headroom and is subject to the per-mint limit; a blocked
+destination mint requires resolving the limit condition before execution can
+succeed. Burning frees local supply headroom.
+
+The configuration and getters are exposed directly through the `ManagedToken` ABI,
+without changing `IManagedToken` or the factory's existing compatibility check.
+Previously registered compatible implementations therefore do not automatically
+gain these controls. Existing canonical proxies each need a token implementation
+upgrade; the new fields are appended after existing token storage. An upgrade
+alone leaves both limits disabled. A caller holding both token `UPGRADER_ROLE`
+and `DEFAULT_ADMIN_ROLE` can use
+`upgradeToAndCall(implementation, abi.encodeCall(ManagedToken.setMintLimits, (supplyCap, mintCap)))`
+to enable them atomically. With separate role holders, configure after upgrading.
+Fresh factory deployments retain the existing initializer and start uncapped;
+the token administrator must configure limits before enabling production minting.
+
 The Diamond's `OnReManagedTokenFactoryFacet` deploys and atomically initializes
 canonical proxies through the Diamond's block-explorer or Safe interface. Every
 factory deployment automatically grants the Diamond mint and burn authority,

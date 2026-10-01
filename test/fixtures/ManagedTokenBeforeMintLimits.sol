@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {IManagedToken} from "./IManagedToken.sol";
-import {IBufferController} from "./IBufferController.sol";
-import {IAppConfig} from "./IAppConfig.sol";
-import {KilledError} from "./types/OnReAppErrors.sol";
+import {IManagedToken} from "../../src/IManagedToken.sol";
+import {IBufferController} from "../../src/IBufferController.sol";
+import {IAppConfig} from "../../src/IAppConfig.sol";
+import {KilledError} from "../../src/types/OnReAppErrors.sol";
 import {IGetCCIPAdmin} from "@chainlink/contracts/src/v0.8/shared/interfaces/IGetCCIPAdmin.sol";
 import {IBurnMintERC20} from "@chainlink/contracts/src/v0.8/shared/token/ERC20/IBurnMintERC20.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -16,14 +16,15 @@ import {
     IERC20 as ChainlinkIERC20
 } from "@chainlink/contracts/src/v0.8/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
 
-contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessControlUpgradeable, UUPSUpgradeable {
+// Frozen pre-limit implementation for proxy upgrade regression tests.
+contract ManagedTokenBeforeMintLimits is
+    Initializable,
+    IManagedToken,
+    ERC20Upgradeable,
+    AccessControlUpgradeable,
+    UUPSUpgradeable
+{
     using EnumerableSet for EnumerableSet.AddressSet;
-
-    event MintLimitsSet(uint256 oldMaxSupply, uint256 newMaxSupply, uint256 oldMaxMintAmount, uint256 newMaxMintAmount);
-
-    error MaxSupplyBelowCurrentSupply(uint256 maxSupply, uint256 currentSupply);
-    error MaxSupplyExceeded(uint256 currentSupply, uint256 amount, uint256 maxSupply);
-    error MaxMintAmountExceeded(uint256 amount, uint256 maxMintAmount);
 
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
@@ -35,10 +36,6 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
 
     uint8 private _decimals;
     address private _killSwitchController;
-
-    // Append-only proxy storage. Zero preserves unlimited minting on existing proxies after upgrade.
-    uint256 public maxSupply;
-    uint256 public maxMintAmount;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -76,20 +73,6 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
 
     function killSwitchController() external view returns (address) {
         return _killSwitchController;
-    }
-
-    /// @notice Sets local-chain mint limits in token base units; zero disables the respective limit.
-    /// @dev Token-admin only. A nonzero supply cap must be at least the current total supply.
-    /// Does not accrue Buffer and remains callable while killed.
-    function setMintLimits(uint256 maxSupply_, uint256 maxMintAmount_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 supply = totalSupply();
-        if (maxSupply_ != 0 && maxSupply_ < supply) revert MaxSupplyBelowCurrentSupply(maxSupply_, supply);
-        uint256 oldMaxSupply = maxSupply;
-        uint256 oldMaxMintAmount = maxMintAmount;
-        if (maxSupply_ == oldMaxSupply && maxMintAmount_ == oldMaxMintAmount) revert NoChangeError();
-        maxSupply = maxSupply_;
-        maxMintAmount = maxMintAmount_;
-        emit MintLimitsSet(oldMaxSupply, maxSupply_, oldMaxMintAmount, maxMintAmount_);
     }
 
     function getCCIPAdmin() external view override returns (address) {
@@ -246,18 +229,6 @@ contract ManagedToken is Initializable, IManagedToken, ERC20Upgradeable, AccessC
             address controller = _killSwitchController;
             (bool killed,,) = IAppConfig(controller).appConfig();
             if (killed) revert KilledError();
-        }
-        if (from == address(0)) {
-            uint256 mintCap = maxMintAmount;
-            if (mintCap != 0 && value > mintCap) revert MaxMintAmountExceeded(value, mintCap);
-            uint256 supplyCap = maxSupply;
-            if (supplyCap != 0) {
-                uint256 supply = totalSupply();
-                // Use subtraction to avoid overflowing when the requested mint is extremely large.
-                if (supply > supplyCap || value > supplyCap - supply) {
-                    revert MaxSupplyExceeded(supply, value, supplyCap);
-                }
-            }
         }
         super._update(from, to, value);
     }

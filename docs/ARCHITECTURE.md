@@ -182,6 +182,12 @@ without changing any other token. Each proxy also keeps independent metadata,
 decimals, balances, operational roles, CCIP administration, and Buffer
 configuration.
 
+Each token has admin-configurable `maxSupply` and `maxMintAmount` limits through
+`setMintLimits`, in token base units; both default to zero (disabled). The token
+checks every mint, including CCIP and Buffer, against its local-chain supply cap
+and per-mint cap. Combined user and Buffer mints succeed or revert atomically.
+See [`docs/BUFFER.md`](BUFFER.md) for accrual and recovery behavior.
+
 The Diamond's `OnReManagedTokenFactoryFacet` deploys and atomically initializes
 canonical proxies through the Diamond's block-explorer or Safe interface. Every
 factory deployment automatically grants the Diamond mint and burn authority,

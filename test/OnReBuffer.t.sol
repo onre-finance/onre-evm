@@ -86,6 +86,82 @@ contract OnReBufferTest is OnReAppTestBase {
         assertEq(stats.circulatingSupply, startingSupply + expectedBufferMint + mintAmount);
     }
 
+    function test_SupplyCapChecksPostAccrualSupplyAndRollsBackWholeMint() public {
+        uint256 accrual = INITIAL_SUPPLY / 10;
+        uint256 mintAmount = 100e9;
+        uint256 cap = INITIAL_SUPPLY + accrual + mintAmount - 1;
+        managedToken.setMintLimits(cap, 0);
+        vm.warp(block.timestamp + 365 days);
+        BufferState memory beforeState = app.getBufferState(address(managedToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IManagedToken.MaxSupplyExceededError.selector, INITIAL_SUPPLY + accrual, mintAmount, cap
+            )
+        );
+        managedToken.mint(user, mintAmount);
+        _assertMintLimitRollback(beforeState);
+        assertEq(managedToken.balanceOf(user), 0);
+
+        managedToken.setMintLimits(cap + 1, 0);
+        managedToken.mint(user, mintAmount);
+        assertEq(managedToken.totalSupply(), cap + 1);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, cap + 1);
+    }
+
+    function test_BufferGrossAccrualRespectsPerMintCapAndCanRecover() public {
+        uint256 accrual = INITIAL_SUPPLY / 10;
+        // Each fee/reserve component fits, but their combined gross amount exceeds the cap.
+        managedToken.setMintLimits(0, accrual - 1);
+        vm.warp(block.timestamp + 365 days);
+        BufferState memory beforeState = app.getBufferState(address(managedToken));
+        vm.expectRevert(abi.encodeWithSelector(IManagedToken.MaxMintAmountExceededError.selector, accrual, accrual - 1));
+        vm.prank(worker);
+        app.settleBuffer(address(managedToken));
+        _assertMintLimitRollback(beforeState);
+
+        managedToken.setMintLimits(0, accrual);
+        assertEq(abi.encode(app.getBufferState(address(managedToken))), abi.encode(beforeState));
+        // Accrual and user mint are separate operations, even within one transaction.
+        managedToken.mint(user, accrual);
+        assertEq(managedToken.totalSupply(), INITIAL_SUPPLY + 2 * accrual);
+        assertEq(managedToken.balanceOf(address(app)), accrual);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, managedToken.totalSupply());
+    }
+
+    function test_BufferSupplyCapCanBlockBurnAndLimitChangeRecoversWithoutAccrual() public {
+        uint256 accrual = INITIAL_SUPPLY / 10;
+        managedToken.grantBurnRole(address(this));
+        managedToken.setMintLimits(INITIAL_SUPPLY, 0);
+        vm.warp(block.timestamp + 365 days);
+        BufferState memory beforeState = app.getBufferState(address(managedToken));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IManagedToken.MaxSupplyExceededError.selector, INITIAL_SUPPLY, accrual, INITIAL_SUPPLY
+            )
+        );
+        managedToken.burn(100e9);
+        _assertMintLimitRollback(beforeState);
+
+        app.setKillSwitch(true);
+        managedToken.setMintLimits(INITIAL_SUPPLY + accrual, 0);
+        assertEq(abi.encode(app.getBufferState(address(managedToken))), abi.encode(beforeState));
+        app.setKillSwitch(false);
+        managedToken.burn(100e9);
+        assertEq(managedToken.totalSupply(), INITIAL_SUPPLY + accrual - 100e9);
+        assertEq(app.getBufferState(address(managedToken)).previousSupply, managedToken.totalSupply());
+    }
+
+    function _assertMintLimitRollback(BufferState memory beforeState) private view {
+        assertEq(managedToken.totalSupply(), INITIAL_SUPPLY);
+        assertEq(managedToken.balanceOf(address(app)), 0);
+        assertEq(app.configurableVaultBalance(bufferReserveVaultId, address(managedToken)), 0);
+        assertEq(app.configurableVaultBalance(managementFeeVaultId, address(managedToken)), 0);
+        assertEq(app.configurableVaultBalance(performanceFeeVaultId, address(managedToken)), 0);
+        assertEq(abi.encode(app.getBufferState(address(managedToken))), abi.encode(beforeState));
+    }
+
     function test_KillSwitchFreezesAccrualAndAllBufferSupplyPaths() public {
         managedToken.grantBurnRole(address(this));
         vm.warp(1 + 30 days);

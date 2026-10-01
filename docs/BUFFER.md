@@ -69,10 +69,13 @@ The first settlement seeds the supply baseline and NAV high watermark without
 minting historical accrual.
 
 Changing gross APR or fee configuration settles the elapsed interval under the
-old configuration first. `settleBuffer` is worker-only and respects the
-application kill switch. Token supply callbacks remain available while killed
-so token-level mint and burn permissions do not become an accidental global
-freeze.
+old configuration first. `settleBuffer` is worker-only. Accrual and every token
+mint/burn respect the application kill switch and revert while killed.
+
+Token mint limits apply to the gross Buffer accrual, including fees. Exceeding a
+limit reverts the whole transaction, including any user mint or burn that triggered
+settlement. The token admin can raise or disable limits with `setMintLimits`
+without accruing Buffer, even while killed, then retry once the app is active.
 
 ## Burn for NAV preservation
 

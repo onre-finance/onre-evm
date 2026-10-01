@@ -23,6 +23,7 @@ interface IManagedToken is IGetCCIPAdmin {
     event CCIPAdminTransferredEvent(address indexed previousAdmin, address indexed newAdmin);
     event BufferControllerSet(address indexed oldController, address indexed newController);
     event KillSwitchControllerInitialized(address indexed controller);
+    event MintLimitsSet(uint256 oldMaxSupply, uint256 newMaxSupply, uint256 oldMaxMintAmount, uint256 newMaxMintAmount);
 
     error SenderNotMinterError(address sender);
     error SenderNotBurnerError(address sender);
@@ -31,6 +32,9 @@ interface IManagedToken is IGetCCIPAdmin {
     error InvalidKillSwitchControllerError(address controller);
     error NoChangeError();
     error ZeroAddressError();
+    error MaxSupplyBelowCurrentSupplyError(uint256 maxSupply, uint256 currentSupply);
+    error MaxSupplyExceededError(uint256 currentSupply, uint256 amount, uint256 maxSupply);
+    error MaxMintAmountExceededError(uint256 amount, uint256 maxMintAmount);
 
     function mint(address to, uint256 amount) external;
 

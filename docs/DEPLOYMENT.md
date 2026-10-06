@@ -30,7 +30,7 @@ pnpm deploy:local
 | `gemforge query <target>` | Lists on-chain facets and selectors, flagging unrecognized ones |
 | `gemforge verify <target>` | Verifies the diamond and its facets on the block explorer |
 
-Targets are `local`, `testnet` (Sepolia) and `mainnet`, defined in
+Targets are `local`, `testnet` (Base Sepolia) and `mainnet`, defined in
 `gemforge.config.cjs`.
 
 `gemforge build` must run before `forge test`: the test helper deploys through

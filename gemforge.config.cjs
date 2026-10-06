@@ -101,17 +101,13 @@ module.exports = {
     },
     deployer: {
       type: 'private-key',
-      config: {
-        key: () => process.env.PRIVATE_KEY,
-      },
+      config: { key: () => process.env.PRIVATE_KEY, },
     },
   },
   networks: {
-    local: {
-      rpcUrl: 'http://localhost:8545',
-    },
-    sepolia: {
-      rpcUrl: () => process.env.SEPOLIA_RPC_URL,
+    local: { rpcUrl: 'http://localhost:8545', },
+    baseSepolia: {
+      rpcUrl: () => process.env.BASE_SEPOLIA_RPC_URL,
       contractVerification: {
         foundry: {
           // Gemforge passes this to `forge verify-contract --verifier-api-key`.
@@ -123,7 +119,7 @@ module.exports = {
       },
     },
     mainnet: {
-      rpcUrl: () => process.env.MAINNET_RPC_URL,
+      rpcUrl: () => process.env.ETH_MAINNET_RPC_URL,
       contractVerification: {
         foundry: {
           // Gemforge passes this to `forge verify-contract --verifier-api-key`.
@@ -142,7 +138,7 @@ module.exports = {
       initArgs: [initArgs()],
     },
     testnet: {
-      network: 'sepolia',
+      network: 'baseSepolia',
       wallet: 'deployer',
       initArgs: [initArgs()],
       // CREATE3 keeps the diamond at the same address on every chain. Set

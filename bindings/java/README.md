@@ -1,13 +1,13 @@
 # OnRe EVM Java bindings
 
-[web3j](https://github.com/LFDT-web3j/web3j) wrapper for the OnRe diamond, generated from the
-merged ABI that `gemforge build` writes to `src/generated/abi.json`, and published as a Maven
-package.
+[web3j](https://github.com/LFDT-web3j/web3j) wrappers for the OnRe diamond and managed tokens,
+generated from the contract ABIs and published together as a Maven package.
 
-The wrapper is `com.onre.evm.IDiamondProxy`. It carries every function callable on the proxy
-and every event and custom error in the merged ABI, including the `ManagedToken` events
-(`Transfer`, mint/burn access changes) and a handful of forge-std and OpenZeppelin proxy events that
-Gemforge merges in. The ABI ships inside the jar as `abi/IDiamondProxy.json`.
+- `com.onre.evm.IDiamondProxy`: generated from the merged Diamond ABI at `src/generated/abi.json`.
+- `com.onre.evm.ManagedToken`: generated from the full contract artifact at
+  `out/ManagedToken.sol/ManagedToken.json`, including inherited ERC-20 metadata and token methods.
+
+Both ABIs ship inside the jar as `abi/IDiamondProxy.json` and `abi/ManagedToken.json`.
 
 ## Consuming the package
 
@@ -28,7 +28,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.onre.evm:onre-evm-java:<version>")
+    implementation("com.onre:onre-evm-java:<version>")
 }
 ```
 
@@ -53,10 +53,22 @@ EthFilter filter = new EthFilter(from, to, diamondAddress)
 proxy.offerExecutedEventFlowable(filter).subscribe(e -> ...);
 ```
 
-Every event `X` is exposed as `IDiamondProxy.X_EVENT`, `IDiamondProxy.XEventResponse`,
-`IDiamondProxy.getXEvents(TransactionReceipt)` and `proxy.xEventFlowable(...)`. Events are decoded
-by signature, so the `Transfer` and access events of a managed token can be decoded with the same
-class by filtering on the token's address instead of the proxy's.
+Each wrapper exposes its events as static event definitions, typed response classes, receipt
+extractors, and event flowables. Use `IDiamondProxy` for Diamond logs and `ManagedToken` for token logs.
+
+### Reading token metadata
+
+Load the token wrapper at the token's proxy address:
+
+```java
+ManagedToken token = ManagedToken.load(tokenAddress, web3j, transactionManager, gasProvider);
+String name = token.name().send();
+String symbol = token.symbol().send();
+BigInteger decimals = token.decimals().send();
+```
+
+The wrapper also exposes the contract's other methods, such as `balanceOf`, `totalSupply`,
+`getCCIPAdmin`, `maxSupply`, and `maxMintAmount`.
 
 ## Building locally
 
@@ -65,24 +77,24 @@ Requires JDK 21+, Node 20+ with pnpm, and Foundry, as for the rest of the reposi
 ```sh
 cd bindings/java
 ./gradlew build                     # runs `pnpm build` at the repo root, then generates, compiles and tests
-./gradlew build -PforgeBuild=false  # reuse the src/generated/abi.json already present
+./gradlew build -PforgeBuild=false  # reuse existing Diamond ABI and ManagedToken Forge artifact
 ./gradlew publishToMavenLocal      # installs the version from gradle.properties into ~/.m2
 ```
 
 Outputs:
 
 - `build/libs/onre-evm-java-<version>.jar` and `-sources.jar`
-- `build/abi/IDiamondProxy.json`, the ABI the wrapper was generated from
+- `build/abi/IDiamondProxy.json` and `build/abi/ManagedToken.json`, the source ABIs
 - `build/generated/sources/web3j/java`, the generated source
 
-`./gradlew test` checks that every event in the ABI has a matching static `Event` on the wrapper, so
-a dropped event fails the build rather than surfacing in a consumer.
+`./gradlew test` checks that every event in each ABI has a matching static `Event` on its wrapper
+and that the token metadata calls expose typed return values.
 
 ## Publishing
 
 The `Java bindings` workflow (`.github/workflows/java-bindings.yml`) is run manually from the
 Actions tab. It publishes the version in `gradle.properties` (`version=`) from the selected ref,
-uploads the jar as a workflow artifact, and pushes `com.onre.evm:onre-evm-java:<version>` to GitHub
+uploads the jar as a workflow artifact, and pushes `com.onre:onre-evm-java:<version>` to GitHub
 Packages with the workflow's `GITHUB_TOKEN`. Untick `publish` to only build.
 
 To release, bump `version=` in `gradle.properties`, commit, and run the workflow on that commit.
@@ -108,8 +120,8 @@ to override the version.
 
 | Property       | Default            | Meaning                                                              |
 | -------------- | ------------------ | -------------------------------------------------------------------- |
-| `version`      | `1.0.0-SNAPSHOT`   | Maven version; override with `-Pversion`                             |
+| `version`      | `1.0.1`            | Maven version; override with `-Pversion`                             |
 | `web3jVersion` | `6.0.0`            | web3j release used for codegen and declared as the `api` dependency  |
 | `javaRelease`  | `21`               | `--release` passed to `javac`                                        |
-| `javaPackage`  | `com.onre.evm`     | Package of the generated wrapper                                     |
-| `forgeBuild`   | `true`             | Run `pnpm build` before staging the ABI                              |
+| `javaPackage`  | `com.onre.evm`     | Package of the generated wrappers                                    |
+| `forgeBuild`   | `true`             | Run `pnpm build` before staging the ABIs                             |

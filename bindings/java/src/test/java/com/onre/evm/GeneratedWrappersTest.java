@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,8 +17,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DynamicTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.web3j.abi.datatypes.Event;
+import org.web3j.protocol.core.RemoteFunctionCall;
 import org.web3j.tx.Contract;
 
 /**
@@ -28,9 +32,21 @@ import org.web3j.tx.Contract;
  */
 class GeneratedWrappersTest {
 
-    private static final List<String> CONTRACTS = List.of("IDiamondProxy");
+    private static final List<String> CONTRACTS = List.of("IDiamondProxy", "ManagedToken");
 
     private static final Pattern NAME = Pattern.compile("\"name\"\\s*:\\s*\"([A-Za-z0-9_]+)\"");
+
+    @Test
+    void managedTokenExposesTypedMetadataCalls() throws Exception {
+        String pkg = System.getProperty("bindings.package", "com.onre.evm");
+        Class<?> wrapper = Class.forName(pkg + ".ManagedToken");
+        for (String method : List.of("name", "symbol", "decimals")) {
+            ParameterizedType result = (ParameterizedType) wrapper.getMethod(method).getGenericReturnType();
+            assertEquals(RemoteFunctionCall.class, result.getRawType());
+            assertEquals(method.equals("decimals") ? BigInteger.class : String.class,
+                    result.getActualTypeArguments()[0]);
+        }
+    }
 
     @TestFactory
     Stream<DynamicTest> eventsHaveWrappers() throws Exception {

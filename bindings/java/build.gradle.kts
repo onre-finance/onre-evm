@@ -1,16 +1,18 @@
 /*
- * Java (web3j) bindings for the OnRe diamond.
+ * Java (web3j) bindings for the OnRe diamond and ManagedToken.
  *
  * Pipeline:
  *   1. `forgeBuild`       runs `pnpm build` at the repo root, which regenerates the merged diamond ABI
- *                         at ../../src/generated/abi.json (skip with -PforgeBuild=false when it is fresh).
- *   2. `stageAbi`         copies that ABI to build/abi/IDiamondProxy.json.
- *   3. `generateWrappers` runs web3j's SolidityFunctionWrapperGenerator on it.
- *   4. The generated source is compiled into the jar, together with the ABI file as a resource.
+ *                         and Forge artifacts (skip with -PforgeBuild=false when they are fresh).
+ *   2. `stageAbi`         stages the diamond ABI and extracts the ManagedToken ABI from its artifact.
+ *   3. `generateWrappers` runs web3j's SolidityFunctionWrapperGenerator on both ABIs.
+ *   4. The generated sources are compiled into the jar, together with the ABIs as resources.
  *
- * Coordinates: com.onre.evm:onre-evm-java:<version> (see gradle.properties; -Pversion overrides).
+ * Coordinates: com.onre:onre-evm-java:<version> (see gradle.properties; -Pversion overrides).
  */
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import javax.inject.Inject
 import org.gradle.process.ExecOperations
 
@@ -28,6 +30,7 @@ val forgeBuild = prop("forgeBuild")
 // bindings/java -> repo root
 val repoRoot: File = rootDir.parentFile.parentFile
 val gemforgeAbi: File = repoRoot.resolve("src/generated/abi.json")
+val managedTokenArtifact: File = repoRoot.resolve("out/ManagedToken.sol/ManagedToken.json")
 
 val abiDir = layout.buildDirectory.dir("abi")
 val generatedJavaDir = layout.buildDirectory.dir("generated/sources/web3j/java")
@@ -84,18 +87,19 @@ val forgeBuildTask = tasks.register<Exec>("forgeBuild") {
 // `gemforge build` writes the merged ABI of the whole diamond (facet functions, events and errors)
 // to src/generated/abi.json. It is copied under the wrapper's class name because web3j names the
 // generated class after the ABI file.
-val stageAbi = tasks.register<Copy>("stageAbi") {
+val stageAbi = tasks.register("stageAbi") {
     group = "bindings"
-    description = "Copies src/generated/abi.json to build/abi/IDiamondProxy.json."
+    description = "Stages the IDiamondProxy and ManagedToken ABIs."
     dependsOn(forgeBuildTask)
-    from(gemforgeAbi) {
-        rename { "IDiamondProxy.json" }
-    }
-    into(abiDir)
-    doFirst {
-        check(gemforgeAbi.isFile) {
-            "src/generated/abi.json not found. Run `pnpm build` at the repo root (or let the forgeBuild task run)."
-        }
+    inputs.files(gemforgeAbi, managedTokenArtifact)
+    outputs.dir(abiDir)
+    doLast {
+        val out = abiDir.get().asFile
+        out.mkdirs()
+        gemforgeAbi.copyTo(out.resolve("IDiamondProxy.json"), overwrite = true)
+        val artifact = JsonSlurper().parse(managedTokenArtifact) as Map<*, *>
+        val abi = artifact["abi"] as List<*>
+        out.resolve("ManagedToken.json").writeText(JsonOutput.toJson(abi))
     }
 }
 
@@ -144,7 +148,7 @@ abstract class Web3jCodegenTask : DefaultTask() {
 val generateWrappers = tasks.register<Web3jCodegenTask>("generateWrappers") {
     group = "bindings"
     description = "Generates web3j Java wrappers from the extracted ABIs."
-    // A Copy task's output is its destination directory; feed the generator the files inside it.
+    // Feed the generator the ABI files inside the staging directory.
     abiFiles.from(stageAbi.map { it.outputs.files.asFileTree })
     codegenClasspath.from(codegen)
     packageName.set(javaPackage)
@@ -162,7 +166,7 @@ sourceSets {
 }
 
 tasks.processResources {
-    // Ship the ABI alongside the wrapper, e.g. for ABI-driven decoding: abi/IDiamondProxy.json
+    // Ship both ABIs alongside the wrappers for ABI-driven decoding.
     from(stageAbi) {
         into("abi")
     }
@@ -189,7 +193,7 @@ publishing {
             from(components["java"])
             pom {
                 name.set("OnRe EVM bindings")
-                description.set("web3j Java wrapper for the OnRe diamond (IDiamondProxy), including all facet events.")
+                description.set("web3j Java wrappers for the OnRe diamond (IDiamondProxy) and ManagedToken.")
                 url.set("https://github.com/onre-finance/onre-evm")
                 licenses {
                     license {

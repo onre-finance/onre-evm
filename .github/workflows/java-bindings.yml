@@ -1,7 +1,7 @@
 name: Java bindings
 
-# Builds the web3j Java wrapper for IDiamondProxy from the current commit and
-# publishes com.onre.evm:onre-evm-java:<version> to this repository's GitHub
+# Builds the web3j Java wrappers for IDiamondProxy and ManagedToken from the current commit and
+# publishes com.onre:onre-evm-java:<version> to this repository's GitHub
 # Packages Maven registry. The version is the `version=` line of
 # bindings/java/gradle.properties. Run it manually from the Actions tab once the
 # contracts at that commit are the ones a Java consumer should target. See
@@ -80,7 +80,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Generate diamond sources and Forge artifacts
-        # Same as CI: writes src/generated/abi.json, which the Gradle build reads.
+        # Writes the merged Diamond ABI and the ManagedToken Forge artifact.
         run: pnpm build
 
       - uses: actions/setup-java@v4
@@ -94,7 +94,7 @@ jobs:
 
       - name: Build bindings jar
         working-directory: bindings/java
-        # forgeBuild=false: the ABI was produced by `pnpm build` above.
+        # forgeBuild=false: both ABI sources were produced by `pnpm build` above.
         run: ./gradlew build -PforgeBuild=false
 
       - name: Upload jar
@@ -103,7 +103,7 @@ jobs:
           name: ${{ steps.coords.outputs.artifact }}-${{ steps.coords.outputs.version }}
           path: |
             bindings/java/build/libs/*.jar
-            bindings/java/build/abi/IDiamondProxy.json
+            bindings/java/build/abi/*.json
           if-no-files-found: error
 
       - name: Check GitHub Packages for an existing version

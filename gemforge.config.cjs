@@ -1,5 +1,8 @@
 require('dotenv').config()
 
+const { execFileSync } = require('child_process')
+const { randomBytes } = require('crypto')
+
 /**
  * Gemforge configuration for the OnRe Diamond.
  *
@@ -99,9 +102,11 @@ module.exports = {
         index: 0,
       },
     },
+    // Signs with a Foundry keystore (`cast wallet import <name> --interactive`).
+    // Gemforge only accepts raw keys, so the keystore is decrypted on demand.
     deployer: {
       type: 'private-key',
-      config: { key: () => process.env.PRIVATE_KEY, },
+      config: { key: () => deployerKey() },
     },
   },
   networks: {
@@ -181,4 +186,48 @@ function initArgs() {
     process.env.ONRE_UPGRADER,
     approvers,
   ]
+}
+
+let cachedDeployerKey
+
+/**
+ * Returns the deployment wallet's private key, decrypted from the Foundry
+ * keystore named by ONRE_DEPLOYER_ACCOUNT (default `deployer`).
+ *
+ * Only called by commands that need a signer (deploy, query, verify), so
+ * `gemforge build` never prompts. cast asks for the keystore password on the
+ * terminal, or reads it from CAST_UNSAFE_PASSWORD for non-interactive runs.
+ * PRIVATE_KEY, if set, bypasses the keystore.
+ *
+ * Never run a real deploy with `-v`: gemforge's trace output logs the key in
+ * plaintext. Dry runs are safe, since they use a throwaway key.
+ */
+function deployerKey() {
+  // `gemforge deploy --dry` sends nothing, so it only needs some signer to read
+  // the live diamond. A throwaway key skips the password prompt and keeps the
+  // real key out of `-v` trace output.
+  if (isDryRun()) {
+    if (!cachedDeployerKey) {
+      console.warn('Dry run: signing with a throwaway key, not the deployment keystore.')
+      cachedDeployerKey = `0x${randomBytes(32).toString('hex')}`
+    }
+    return cachedDeployerKey
+  }
+
+  if (process.env.PRIVATE_KEY) return process.env.PRIVATE_KEY
+
+  if (!cachedDeployerKey) {
+    const account = process.env.ONRE_DEPLOYER_ACCOUNT || 'deployer'
+    const out = execFileSync('cast', ['wallet', 'decrypt-keystore', account], {
+      stdio: ['inherit', 'pipe', 'inherit'],
+    }).toString()
+    const match = out.match(/0x[0-9a-fA-F]{64}/)
+    if (!match) throw new Error(`Could not read a private key from Foundry keystore "${account}"`)
+    cachedDeployerKey = match[0]
+  }
+  return cachedDeployerKey
+}
+
+function isDryRun() {
+  return process.argv.includes('deploy') && process.argv.some(a => a === '--dry' || a === '-d')
 }

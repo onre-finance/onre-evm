@@ -11,6 +11,8 @@
     "deploy:local": "gemforge deploy local",
     "deploy:testnet": "gemforge deploy testnet",
     "deploy:mainnet": "gemforge deploy mainnet",
+    "deploy:testnet:dry": "gemforge deploy testnet --dry -v",
+    "deploy:mainnet:dry": "gemforge deploy mainnet --dry -v",
     "query:testnet": "gemforge query testnet",
     "query:mainnet": "gemforge query mainnet",
     "verify:testnet": "gemforge verify testnet",

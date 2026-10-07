@@ -19,13 +19,29 @@ anvil &                      # in another shell
 pnpm deploy:local
 ```
 
+## Deployment wallet
+
+The `testnet` and `mainnet` targets sign with an encrypted Foundry keystore
+rather than a plaintext key in `.env`:
+
+```bash
+cast wallet import deployer --interactive   # once: paste the key, choose a password
+pnpm gemforge deploy testnet                # prompts for the keystore password
+```
+
+Set `ONRE_DEPLOYER_ACCOUNT` to use a keystore with another name. For CI, set
+`CAST_UNSAFE_PASSWORD` to skip the prompt. `PRIVATE_KEY`, if set, bypasses the
+keystore. Do not run a real deploy with `-v`: its trace output prints the
+decrypted key. Dry runs (`--dry`) sign with a throwaway key instead, so they
+need no password and are safe to run verbosely.
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
 | `gemforge build` | Writes `src/generated/`, then runs `commands.build` (`forge build --sizes src`) |
 | `gemforge deploy <target>` | Deploys a new diamond, or upgrades an existing one |
-| `gemforge deploy <target> --dry` | Prints the cuts without sending anything |
+| `gemforge deploy <target> --dry` | Prints the cuts without sending anything (`pnpm deploy:testnet:dry` adds `-v` for per-selector detail) |
 | `gemforge deploy <target> --new` | Forces a fresh diamond at a new address |
 | `gemforge query <target>` | Lists on-chain facets and selectors, flagging unrecognized ones |
 | `gemforge verify <target>` | Verifies the diamond and its facets on the block explorer |

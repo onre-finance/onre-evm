@@ -4,11 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  gemforge@2.18.0:
-    hash: c6fixjboklt4uitff7hqaqvl3i
-    path: patches/gemforge@2.18.0.patch
-
 importers:
 
   .:
@@ -17,8 +12,8 @@ importers:
         specifier: ^16.6.1
         version: 16.6.1
       gemforge:
-        specifier: 2.18.0
-        version: 2.18.0(patch_hash=c6fixjboklt4uitff7hqaqvl3i)
+        specifier: 2.18.2
+        version: 2.18.2
       solhint:
         specifier: ^6.2.3
         version: 6.2.3
@@ -252,8 +247,8 @@ packages:
     resolution: {integrity: sha512-yDYSgNMraqvnxiEXO4hi88+YZxaHC6QKzb5N84iRCTDeRO7ZALpir/lVmf/uXUhnwUr2O4HU8s/n6x+yNjQkHw==}
     engines: {node: '>= 14.17'}
 
-  gemforge@2.18.0:
-    resolution: {integrity: sha512-zWebJeBt5OX6Mci7VR5c1Pkx7DDLq6YULCkbNuQZYcLLgWkW8JvfB3GPkt3pG3nHoNtaYiEtNlFNUe3Lz6MvsQ==}
+  gemforge@2.18.2:
+    resolution: {integrity: sha512-8Kk42n5RiydXqXThftjBYcJnd2Pc4fcyoIu8JheQ3p8HUmFy2DaAqnX8baXUS5LDzle85176Rmz/RyHK90B/Vw==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -827,7 +822,7 @@ snapshots:
 
   form-data-encoder@2.1.4: {}
 
-  gemforge@2.18.0(patch_hash=c6fixjboklt4uitff7hqaqvl3i):
+  gemforge@2.18.2:
     dependencies:
       '@solidity-parser/parser': 0.16.2
       bigval: 1.7.0

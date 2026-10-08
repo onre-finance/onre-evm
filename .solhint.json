@@ -11,6 +11,7 @@
     "no-unused-vars": "error",
     "one-contract-per-file": "error",
     "gas-custom-errors": "error",
+    "gas-indexed-events": "off",
     "avoid-low-level-calls": "error",
     "avoid-tx-origin": "error",
     "check-send-result": "error",

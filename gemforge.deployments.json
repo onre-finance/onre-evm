@@ -155,5 +155,162 @@
         }
       }
     ]
+  },
+  "mainnet_test": {
+    "chainId": 1,
+    "contracts": [
+      {
+        "name": "DiamondProxy",
+        "fullyQualifiedName": "DiamondProxy.sol:DiamondProxy",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0xf3d4b2a816951c74cca24c93aadf3887f44f1a7ff389d8a77d118540970260d2",
+        "onChain": {
+          "address": "0xF43b84eC9829a2d8D273fB4EC082FC357ed59DEa",
+          "constructorArgs": [
+            "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d"
+          ]
+        }
+      },
+      {
+        "name": "DiamondCutFacet",
+        "fullyQualifiedName": "DiamondCutFacet.sol:DiamondCutFacet",
+        "sender": "0xF43b84eC9829a2d8D273fB4EC082FC357ed59DEa",
+        "txHash": "0xf3d4b2a816951c74cca24c93aadf3887f44f1a7ff389d8a77d118540970260d2",
+        "onChain": {
+          "address": "0x764464DA1d2d18037cCf84F13057a2E916aA2e17",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "DiamondLoupeFacet",
+        "fullyQualifiedName": "DiamondLoupeFacet.sol:DiamondLoupeFacet",
+        "sender": "0xF43b84eC9829a2d8D273fB4EC082FC357ed59DEa",
+        "txHash": "0xf3d4b2a816951c74cca24c93aadf3887f44f1a7ff389d8a77d118540970260d2",
+        "onChain": {
+          "address": "0x55E6a2074b27e587140b6C866F5D4e93409Fb1bF",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReAccessControlFacet",
+        "fullyQualifiedName": "OnReAccessControlFacet.sol:OnReAccessControlFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x3bca323fb8bfde7498eca7481a02c6f4a987017234b8a345792410798ad3a235",
+        "onChain": {
+          "address": "0xE5E7Ff460bf287e35c246dcB969F15cbCD62a773",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReBufferFacet",
+        "fullyQualifiedName": "OnReBufferFacet.sol:OnReBufferFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x6f03c7ea157a6a3d90006aadcc22d1585db1c94ffeccd02af71a005910f40727",
+        "onChain": {
+          "address": "0x7610557020055Af870C0cF1525b6AF66967ff5a5",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReConfigFacet",
+        "fullyQualifiedName": "OnReConfigFacet.sol:OnReConfigFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x31efa3094e22b2a8cf0dce68c88dd83dee8c6c4b49d656ab35f82b552ad84948",
+        "onChain": {
+          "address": "0xA0159f43fafB688084b64704e583DD2C9aF630fE",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReConfigurableVaultFacet",
+        "fullyQualifiedName": "OnReConfigurableVaultFacet.sol:OnReConfigurableVaultFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x59722a7c56298f7e89e7babe607880d585f85d8b9af12562404bf0279754486f",
+        "onChain": {
+          "address": "0x16e38B26C96aE3C9761EFB1f338d330E4108C3D2",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReFulfillmentFacet",
+        "fullyQualifiedName": "OnReFulfillmentFacet.sol:OnReFulfillmentFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0xc2a2bb07130ad6d99bf0296537bfa3627b2c84a89590a6f7d3a7a0e784a52862",
+        "onChain": {
+          "address": "0xFDc8731139Da7dEf9d1a9E891EB50f93291C4840",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReManagedTokenFactoryFacet",
+        "fullyQualifiedName": "OnReManagedTokenFactoryFacet.sol:OnReManagedTokenFactoryFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x2f8ad16c4d27a5eaceb0175ee7f771a353d1ed2c1ecced191a390c0e6f8db400",
+        "onChain": {
+          "address": "0x13CB9052D62BB828678b96576b57eE8D189b1092",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReMarketStatsFacet",
+        "fullyQualifiedName": "OnReMarketStatsFacet.sol:OnReMarketStatsFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0xe5581762c047fab0230906b4992416f2337ce935e979db8984d04e93729e2032",
+        "onChain": {
+          "address": "0x5B3D8Db0eC2155C0df314101c8d1d179cfde4d51",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReOfferFacet",
+        "fullyQualifiedName": "OnReOfferFacet.sol:OnReOfferFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x2faf946a984ba2ff39da7f3ac79e27dcc5fc36ac7e557cc382c8b408f7ba594b",
+        "onChain": {
+          "address": "0x6C4d1e7A4c11D710D695238438B3858e8512650e",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnRePricerFacet",
+        "fullyQualifiedName": "OnRePricerFacet.sol:OnRePricerFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x92d4a4d0a044dea05fe8df89b5b21348b7c818ddf0bc5d38950799e870341f5e",
+        "onChain": {
+          "address": "0x388b65F9957Fae4551E021ee10F8b28c62Fb0bD8",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReQuoterFacet",
+        "fullyQualifiedName": "OnReQuoterFacet.sol:OnReQuoterFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x1e62686ec402a1ea7be3c467d09a284eabd05e07482c4800fe69ffd9a1881bb8",
+        "onChain": {
+          "address": "0x72A2B46f337DE541CA26Eb8238884CD641b4574d",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReViewFacet",
+        "fullyQualifiedName": "OnReViewFacet.sol:OnReViewFacet",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x428989909cb03f5c1317f812294f7b930d5dfab548e91d484d6f61dacf44a60c",
+        "onChain": {
+          "address": "0x37Bf273963dA7A916Ba630029124d0B1A9AD2165",
+          "constructorArgs": []
+        }
+      },
+      {
+        "name": "OnReDiamondInit",
+        "fullyQualifiedName": "OnReDiamondInit.sol:OnReDiamondInit",
+        "sender": "0x325a2677B86eDD54Cfe7F412f2024a87b988bc4d",
+        "txHash": "0x5b63f46547b62140800c8dcb51ed01221faffcf6dd51150ae56c517f47727dc7",
+        "onChain": {
+          "address": "0x76699B69725aaAAB2F9eD3CCabD62fC697962Bfd",
+          "constructorArgs": []
+        }
+      }
+    ]
   }
 }

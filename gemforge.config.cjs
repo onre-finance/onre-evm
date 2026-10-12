@@ -25,13 +25,8 @@ const { randomBytes } = require('crypto')
  */
 module.exports = {
   version: 2,
-  solc: {
-    license: 'MIT',
-    version: '0.8.35',
-  },
-  commands: {
-    build: 'forge build --sizes src',
-  },
+  solc: { version: '0.8.35', license: 'MIT', },
+  commands: { build: 'forge build --sizes src', },
   paths: {
     artifacts: 'out',
     src: {
@@ -44,13 +39,9 @@ module.exports = {
       support: '.gemforge',
       deployments: 'gemforge.deployments.json',
     },
-    lib: {
-      diamond: 'src/diamond',
-    },
+    lib: { diamond: 'src/diamond', },
   },
-  artifacts: {
-    format: 'foundry',
-  },
+  artifacts: { format: 'foundry', },
   generator: {
     proxy: {
       template: 'templates/DiamondProxy.sol',
@@ -62,7 +53,6 @@ module.exports = {
   },
   diamond: {
     publicMethods: false,
-    // Runs once, inside the first diamondCut of a new deployment.
     init: {
       contract: 'OnReDiamondInit',
       function: 'init',
@@ -89,18 +79,12 @@ module.exports = {
     preBuild: '',
     postBuild: '',
     preDeploy: '',
-    // Deployment records are saved before this hook runs, so verification
-    // includes the proxy, core facets, application facets, and initializer.
     postDeploy: 'bash hooks/verify-gemforge-deployment.sh',
   },
   wallets: {
-    // Anvil's first default account.
     local: {
       type: 'mnemonic',
-      config: {
-        words: 'test test test test test test test test test test test junk',
-        index: 0,
-      },
+      config: { words: 'test test test test test test test test test test test junk', index: 0, },
     },
     // Signs with a Foundry keystore (`cast wallet import <name> --interactive`).
     // Gemforge only accepts raw keys, so the keystore is decrypted on demand.
@@ -115,7 +99,6 @@ module.exports = {
       rpcUrl: () => process.env.BASE_SEPOLIA_RPC_URL,
       contractVerification: {
         foundry: {
-          // Gemforge passes this to `forge verify-contract --verifier-api-key`.
           apiKey: () => process.env.ETHERSCAN_API_KEY,
           apiUrl: 'https://api.etherscan.io/v2/api?chainid=84532',
           verifier: 'etherscan',
@@ -127,7 +110,6 @@ module.exports = {
       rpcUrl: () => process.env.ETH_MAINNET_RPC_URL,
       contractVerification: {
         foundry: {
-          // Gemforge passes this to `forge verify-contract --verifier-api-key`.
           apiKey: () => process.env.ETHERSCAN_API_KEY,
           apiUrl: 'https://api.etherscan.io/v2/api?chainid=1',
           verifier: 'etherscan',
@@ -156,7 +138,7 @@ module.exports = {
         manualCut: true,
       },
     },
-    mainnet: {
+    mainnet_test: {
       network: 'mainnet',
       wallet: 'deployer',
       initArgs: [initArgs()],
@@ -167,6 +149,18 @@ module.exports = {
         manualCut: true,
       },
     },
+    mainnet_live: {
+      network: 'mainnet',
+      wallet: 'deployer',
+      initArgs: [initArgs()],
+      ...(process.env.ONRE_CREATE3_SALT ? { create3Salt: process.env.ONRE_CREATE3_SALT } : {}),
+      upgrades: {
+        // Upgrade authority is held by a multisig, not by a hot deployer key.
+        // Gemforge prints the diamondCut() calldata instead of sending it.
+        manualCut: true,
+      },
+    },
+
   },
 }
 

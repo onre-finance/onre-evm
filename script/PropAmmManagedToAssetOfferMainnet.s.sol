@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.35;
+
+import {Script, console} from "forge-std/Script.sol";
+import {IDiamondProxy} from "../src/generated/IDiamondProxy.sol";
+import {OnReIds} from "../src/libraries/OnReIds.sol";
+import {
+    MakeOfferConfigParams,
+    OfferFlow,
+    PropAmmConfig,
+    QuoterKind,
+    ConfigurableVaultKind
+} from "../src/types/OnReTypes.sol";
+
+///      Run: forge script script/PropAmmAssetToManagedOfferMainnet.s.sol --rpc-url $ETH_MAINNET_RPC_URL
+contract PropAmmManagedToAssetOfferMainnet is Script {
+    // TODO: fill in before running.
+    address constant DIAMOND = 0xF43b84eC9829a2d8D273fB4EC082FC357ed59DEa;
+    address constant SAFE = 0x0F8326Eff929B23d01991990c5b4bC1dd9B5e8a4;
+
+    address constant MANAGED_TOKEN = 0xFD78290f92DD3Ebbf1DF224EEA10F04D5BE500b3;
+    address constant ASSET_TOKEN = 0x977048BfC71b5B0143b057508712974A7Ec18468;
+
+    bytes32 constant FEE_CONFIG_ID = 0xC2990AFCA3939851ED4EBF93B8A36D35CE539FDEDF446BBE5289A89A9626694D;
+    bytes32 constant PROCEEDS_VAULT_ID = 0x9A4B6E53B2F935D25C3D8A22A4B20F256AC5EB4E7EA4B9266CECC63326E53149;
+
+    uint64 constant QUOTER_INSTANCE_ID = 0;
+
+    uint64 constant LIQUIDITY_VAULT_INSTANCE_ID = 0;
+    uint16 constant LIQUIDITY_VAULT_REFILL_TARGET_BPS = 0; // TODO: Check
+
+    // --- PropAmm config ---
+    uint16 constant CURVE_PEG_HAIRCUT_BPS = 3650;
+    uint32 constant CURVE_EXPONENT_SCALED = 19_000;
+    uint32 constant CADENCE_THRESHOLD = 20;
+    uint32 constant CADENCE_WAVE_SCALED = 2_000;
+    uint64 constant EPOCH_DURATION_SECONDS = 300;
+    uint32 constant WALL_SENSITIVITY_SCALED = 20_000;
+
+    function run() external {
+        require(DIAMOND != address(0) && SAFE != address(0), "DIAMOND/SAFE not set");
+        require(MANAGED_TOKEN != address(0) && ASSET_TOKEN != address(0), "tokens not set");
+        require(
+            FEE_CONFIG_ID != bytes32(0) && PROCEEDS_VAULT_ID != bytes32(0), "FEE_CONFIG_ID/PROCEEDS_VAULT_ID not set"
+        );
+
+        bytes32 quoterId = OnReIds._quoterId(QuoterKind.PropAmm, QUOTER_INSTANCE_ID);
+        bytes32 offerId = OnReIds._offerConfigId(MANAGED_TOKEN, ASSET_TOKEN, OfferFlow.Permissionless);
+        bytes32 liquidityVaultId =
+            OnReIds._configurableVaultId(ConfigurableVaultKind.Liquidity, LIQUIDITY_VAULT_INSTANCE_ID);
+
+        IDiamondProxy app = IDiamondProxy(DIAMOND);
+
+        bytes memory createQuoterData =
+            abi.encodeCall(IDiamondProxy.createQuoter, (QuoterKind.PropAmm, QUOTER_INSTANCE_ID));
+
+        bytes memory configurePropAmmData = abi.encodeCall(
+            IDiamondProxy.configurePropAmm,
+            (
+                quoterId,
+                ASSET_TOKEN,
+                MANAGED_TOKEN,
+                PropAmmConfig({
+                    epochDurationSeconds: EPOCH_DURATION_SECONDS,
+                    curveExponentScaled: CURVE_EXPONENT_SCALED,
+                    cadenceThreshold: CADENCE_THRESHOLD,
+                    cadenceWaveScaled: CADENCE_WAVE_SCALED,
+                    wallSensitivityScaled: WALL_SENSITIVITY_SCALED,
+                    curvePegHaircutBps: CURVE_PEG_HAIRCUT_BPS
+                })
+            )
+        );
+
+        bytes memory createLiquidityVaultData = abi.encodeCall(
+            IDiamondProxy.createConfigurableVault,
+            (ConfigurableVaultKind.Liquidity, LIQUIDITY_VAULT_INSTANCE_ID, SAFE, LIQUIDITY_VAULT_REFILL_TARGET_BPS)
+        );
+
+        bytes memory makeOfferData = abi.encodeCall(
+            IDiamondProxy.makeOfferConfig,
+            (MakeOfferConfigParams({
+                    tokenIn: MANAGED_TOKEN,
+                    tokenOut: ASSET_TOKEN,
+                    flow: OfferFlow.Permissionless,
+                    quoterId: quoterId,
+                    feeConfigId: FEE_CONFIG_ID,
+                    proceedsVaultId: PROCEEDS_VAULT_ID,
+                    liquidityVaultId: liquidityVaultId
+                }))
+        );
+
+        vm.startPrank(SAFE);
+        (bool ok,) = DIAMOND.call(createQuoterData);
+        require(ok, "createQuoter simulation failed");
+
+        (ok,) = DIAMOND.call(configurePropAmmData);
+        require(ok, "configurePropAmm simulation failed");
+
+        (ok,) = DIAMOND.call(createLiquidityVaultData);
+        require(ok, "createConfigurableVault (liquidity) simulation failed");
+
+        (ok,) = DIAMOND.call(makeOfferData);
+        require(ok, "makeOfferConfig simulation failed");
+        vm.stopPrank();
+
+        require(app.getOfferConfig(offerId).quoterId == quoterId, "offer quoter not set");
+        require(app.getOfferConfig(offerId).liquidityVaultId == liquidityVaultId, "offer liquidity vault not set");
+
+        console.log("Safe:            ", SAFE);
+        console.log("Offer ID:        ", vm.toString(offerId));
+        console.log("PropAmm quoter:  ", vm.toString(quoterId));
+        console.log("Liquidity vault: ", vm.toString(liquidityVaultId));
+        console.log("Epoch start:     ", app.getPropAmmState(quoterId).epochStart);
+        console.log("");
+        console.log("Tx 1: createQuoter");
+        console.log("  to:   ", DIAMOND);
+        console.log("  value: 0");
+        console.log("  data: ", vm.toString(createQuoterData));
+        console.log("Tx 2: configurePropAmm");
+        console.log("  to:   ", DIAMOND);
+        console.log("  value: 0");
+        console.log("  data: ", vm.toString(configurePropAmmData));
+        console.log("Tx 3: createConfigurableVault (liquidity)");
+        console.log("  to:   ", DIAMOND);
+        console.log("  value: 0");
+        console.log("  data: ", vm.toString(createLiquidityVaultData));
+        console.log("Tx 4: makeOfferConfig");
+        console.log("  to:   ", DIAMOND);
+        console.log("  value: 0");
+        console.log("  data: ", vm.toString(makeOfferData));
+    }
+}

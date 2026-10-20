@@ -20,9 +20,11 @@ deploy-testnet-dry:	## Preview a testnet deploy without sending transactions
 	pnpm run deploy:testnet:dry
 dtd: deploy-testnet-dry
 
-deploy-mainnet-dry:	## Preview a mainnet deploy without sending transactions
-	pnpm run deploy:mainnet:dry
-dmd: deploy-mainnet-dry
+deploy-mainnet-test-dry:	## Preview a mainnet-test deploy without sending transactions
+	pnpm run deploy:mainnet_test:dry
+
+deploy-mainnet-live-dry:	## Preview a mainnet-live deploy without sending transactions
+	pnpm run deploy:mainnet_live:dry
 
 java-local:	## Generate java bindings and publish to local maven repository
 	cd bindings/java && ./gradlew publishToMavenLocal

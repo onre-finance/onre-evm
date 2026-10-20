@@ -26,6 +26,15 @@ deploy-mainnet-test-dry:	## Preview a mainnet-test deploy without sending transa
 deploy-mainnet-live-dry:	## Preview a mainnet-live deploy without sending transactions
 	pnpm run deploy:mainnet_live:dry
 
+deploy-mainnet-test:	## Deploy mainnet-test smart contract
+	pnpm run deploy:mainnet_test
+
+deploy-mainnet-live:	## Deploy mainnet-live smart contract
+	pnpm run deploy:mainnet_live
+
 java-local:	## Generate java bindings and publish to local maven repository
 	cd bindings/java && ./gradlew publishToMavenLocal
 jl: publish-java-locally
+
+fork-mainnet:	## Fork Ethereum Mainnet using Anvil
+	anvil --fork-url $ETH_MAINNET_RPC_URL

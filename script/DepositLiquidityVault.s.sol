@@ -28,22 +28,17 @@ contract DepositLiquidityVault is Script {
         bytes memory depositData =
             abi.encodeCall(IDiamondProxy.depositConfigurableVault, (liquidityVaultId, ASSET_TOKEN, AMOUNT));
 
-        bytes memory mintData = abi.encodeWithSelector(bytes4(0x40c10f19), SAFE, AMOUNT);
-
         uint256 balanceBefore = app.configurableVaultBalance(liquidityVaultId, ASSET_TOKEN);
         uint256 safeBalance = IERC20(ASSET_TOKEN).balanceOf(SAFE);
 
-//        require(
-//            safeBalance >= AMOUNT,
-//            string.concat("Safe USDC balance below AMOUNT, simulation skipped. Balance: ", vm.toString(safeBalance))
-//        );
+        require(
+            safeBalance >= AMOUNT,
+            string.concat("Safe asset balance below AMOUNT. Balance: ", vm.toString(safeBalance))
+        );
 
         vm.startPrank(SAFE);
 
-        (bool ok,) = ASSET_TOKEN.call(mintData);
-        require(ok, "mint simulation failed");
-
-        (ok,) = ASSET_TOKEN.call(approveData);
+        (bool ok,) = ASSET_TOKEN.call(approveData);
         require(ok, "approve simulation failed");
 
         (ok,) = DIAMOND.call(depositData);
@@ -51,7 +46,10 @@ contract DepositLiquidityVault is Script {
 
         vm.stopPrank();
 
-        console.log("Simulated vault balance after: ", app.configurableVaultBalance(liquidityVaultId, ASSET_TOKEN));
+        uint256 balanceAfter = app.configurableVaultBalance(liquidityVaultId, ASSET_TOKEN);
+        require(balanceAfter == balanceBefore + AMOUNT, "unexpected vault balance after deposit");
+
+        console.log("Simulated vault balance after: ", balanceAfter);
 
         console.log("Safe:            ", SAFE);
         console.log("Liquidity vault: ", vm.toString(liquidityVaultId));

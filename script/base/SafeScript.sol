@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {Script, console} from "forge-std/Script.sol";
+import {console} from "forge-std/Script.sol";
+import {EnvironmentScript} from "./EnvironmentScript.sol";
 
 /// Records Safe transactions, simulates each one as SAFE when added, and prints them as to/value/data.
-abstract contract SafeScript is Script {
+abstract contract SafeScript is EnvironmentScript {
     struct SafeTx {
         address to;
         bytes data;

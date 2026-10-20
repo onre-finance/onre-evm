@@ -1,26 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {Script, console} from "forge-std/Script.sol";
+import {EnvironmentScript} from "./base/EnvironmentScript.sol";
+import {console} from "forge-std/Script.sol";
 import {IDiamondProxy} from "../src/generated/IDiamondProxy.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
 
-/// SAFE must hold DEFAULT_ADMIN_ROLE. SAFE becomes admin and CCIP admin;
+/// The configured Safe must hold DEFAULT_ADMIN_ROLE. The Safe becomes admin and CCIP admin;
 /// the Diamond is auto-added as minter and burner.
-/// Run:
-/// forge script script/DeployManagedToken.s.sol --rpc-url $ETH_MAINNET_RPC_URL
-contract DeployManagedToken is Script {
-    // TODO: fill in before running.
-    address constant DIAMOND = address(0);
-    address constant SAFE = address(0);
-
+/// Run with ONRE_ENV set and --rpc-url for the selected environment.
+contract DeployManagedToken is EnvironmentScript {
     string constant NAME = "";
     string constant SYMBOL = "";
     uint8 constant DECIMALS = 9;
     bytes32 constant SALT = bytes32(0);
 
     function run() external {
-        require(DIAMOND != address(0) && SAFE != address(0), "DIAMOND/SAFE not set");
+        Environment memory env = _loadEnvironment();
         require(bytes(NAME).length != 0 && bytes(SYMBOL).length != 0, "NAME/SYMBOL not set");
 
         bytes memory creationCode = type(ManagedToken).creationCode;
@@ -30,24 +26,24 @@ contract DeployManagedToken is Script {
         bytes memory deployImplData = abi.encodePacked(SALT, creationCode);
         bytes memory deployTokenData = abi.encodeCall(
             IDiamondProxy.deployManagedToken,
-            (impl, NAME, SYMBOL, DECIMALS, SAFE, SAFE, new address[](0), new address[](0))
+            (impl, NAME, SYMBOL, DECIMALS, env.safe, env.safe, new address[](0), new address[](0))
         );
 
-        vm.startPrank(SAFE);
+        vm.startPrank(env.safe);
 
         bool ok;
         (ok,) = CREATE2_FACTORY.call(deployImplData);
         require(ok && impl.code.length != 0, "implementation deployment simulation failed");
 
         bytes memory ret;
-        (ok, ret) = DIAMOND.call(deployTokenData);
+        (ok, ret) = env.diamond.call(deployTokenData);
         require(ok, "deployManagedToken simulation failed");
 
         vm.stopPrank();
         address managedToken = abi.decode(ret, (address));
-        require(IDiamondProxy(DIAMOND).isManagedTokenDeployed(managedToken), "managed token not registered");
+        require(IDiamondProxy(env.diamond).isManagedTokenDeployed(managedToken), "managed token not registered");
 
-        console.log("Safe:            ", SAFE);
+        console.log("Safe:            ", env.safe);
         console.log("Implementation:  ", impl);
         console.log("Managed token:   ", managedToken, "(simulated; depends on Diamond nonce)");
         console.log("");
@@ -58,7 +54,7 @@ contract DeployManagedToken is Script {
         console.log("  data: ", vm.toString(deployImplData));
 
         console.log("Tx 2: deployManagedToken");
-        console.log("  to:   ", DIAMOND);
+        console.log("  to:   ", env.diamond);
         console.log("  value: 0");
         console.log("  data: ", vm.toString(deployTokenData));
     }

@@ -1,21 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {Script, console} from "forge-std/Script.sol";
+import {EnvironmentScript} from "./base/EnvironmentScript.sol";
+import {console} from "forge-std/Script.sol";
 import {IDiamondProxy} from "../src/generated/IDiamondProxy.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import {MakeOfferConfigParams, OfferFlow, QuoterKind} from "../src/types/OnReTypes.sol";
 
-/// SAFE must hold DEFAULT_ADMIN_ROLE.
-/// Run: forge script script/AssetToManagedPermissionedOffer.s.sol --rpc-url $RPC_URL
-contract AssetToManagedPermissionedOffer is Script {
-    // TODO: fill in before running.
-    address constant DIAMOND = 0x3DBd1B71332f7935dc2DAeFD16C353Ba055d690D;
-    address constant SAFE = 0x99CDC01fF619EB512F50161B296D0910a5b06738;
-
-    address constant MANAGED_TOKEN = 0x3D6b4235A796563781ADf6505882e5d45867FE49;
-    address constant ASSET_TOKEN = 0xd3eDe529DFA604761c24DF35879D39d9358165FF;
-
+/// The configured Safe must hold DEFAULT_ADMIN_ROLE.
+/// Run with ONRE_ENV set and --rpc-url for the selected environment.
+contract AssetToManagedPermissionedOffer is EnvironmentScript {
     bytes32 constant FEE_VAULT_ID = 0x07bb608cea39e3d4b78d130da64b81e26ab8855f8cfe81106bb80fb5b324ac2b;
     bytes32 constant PROCEEDS_VAULT_ID = 0x9a4b6e53b2f935d25c3d8a22a4b20f256ac5eb4e7ea4b9266cecc63326e53149;
 
@@ -26,14 +20,14 @@ contract AssetToManagedPermissionedOffer is Script {
     uint256 constant MIN_FEE_AMOUNT = 0;
 
     function run() external {
-        require(DIAMOND != address(0) && SAFE != address(0), "DIAMOND/SAFE not set");
-        require(MANAGED_TOKEN != address(0) && ASSET_TOKEN != address(0), "tokens not set");
+        Environment memory env = _loadEnvironment();
+        require(env.managedToken != address(0) && env.assetToken != address(0), "tokens not set");
         require(FEE_VAULT_ID != bytes32(0) && PROCEEDS_VAULT_ID != bytes32(0), "FEE_VAULT_ID/PROCEEDS_VAULT_ID not set");
 
         bytes32 quoterId = OnReIds._quoterId(QuoterKind.Nav, QUOTER_INSTANCE_ID);
         bytes32 feeConfigId = OnReIds._feeConfigId(FEE_CONFIG_INSTANCE_ID);
-        bytes32 offerId = OnReIds._offerConfigId(ASSET_TOKEN, MANAGED_TOKEN, OfferFlow.Permissioned);
-        IDiamondProxy app = IDiamondProxy(DIAMOND);
+        bytes32 offerId = OnReIds._offerConfigId(env.assetToken, env.managedToken, OfferFlow.Permissioned);
+        IDiamondProxy app = IDiamondProxy(env.diamond);
 
         bytes[] memory data = new bytes[](3);
         string[3] memory names = ["createQuoter", "createFeeConfig", "makeOfferConfig"];
@@ -44,8 +38,8 @@ contract AssetToManagedPermissionedOffer is Script {
         data[2] = abi.encodeCall(
             IDiamondProxy.makeOfferConfig,
             (MakeOfferConfigParams({
-                    tokenIn: ASSET_TOKEN,
-                    tokenOut: MANAGED_TOKEN,
+                    tokenIn: env.assetToken,
+                    tokenOut: env.managedToken,
                     flow: OfferFlow.Permissioned,
                     quoterId: quoterId,
                     feeConfigId: feeConfigId,
@@ -54,16 +48,16 @@ contract AssetToManagedPermissionedOffer is Script {
                 }))
         );
 
-        vm.startPrank(SAFE);
+        vm.startPrank(env.safe);
         for (uint256 i; i < data.length; ++i) {
-            (bool ok,) = DIAMOND.call(data[i]);
+            (bool ok,) = env.diamond.call(data[i]);
             require(ok, string.concat(names[i], " simulation failed"));
         }
         vm.stopPrank();
 
         require(app.getOfferConfig(offerId).quoterId == quoterId, "offer quoter not set");
 
-        console.log("Safe:            ", SAFE);
+        console.log("Safe:            ", env.safe);
         console.log("Quoter ID:       ", vm.toString(quoterId));
         console.log("Fee vault:       ", vm.toString(FEE_VAULT_ID));
         console.log("Proceeds vault:  ", vm.toString(PROCEEDS_VAULT_ID));
@@ -72,7 +66,7 @@ contract AssetToManagedPermissionedOffer is Script {
         for (uint256 i; i < data.length; ++i) {
             console.log("");
             console.log(string.concat("Tx ", vm.toString(i + 1), ": ", names[i]));
-            console.log("  to:   ", DIAMOND);
+            console.log("  to:   ", env.diamond);
             console.log("  value: 0");
             console.log("  data: ", vm.toString(data[i]));
         }

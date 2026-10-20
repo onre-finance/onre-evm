@@ -8,6 +8,7 @@ optimizer_runs = 1
 via_ir = true
 bytecode_hash = "none"
 cbor_metadata = false
+fs_permissions = [{ access = "read", path = "./script/config" }]
 
 [fmt]
 # `src/generated` is written by `gemforge build` in Gemforge's own style, and

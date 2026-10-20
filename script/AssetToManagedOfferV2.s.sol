@@ -12,18 +12,9 @@ import {
 } from "../src/types/OnReTypes.sol";
 import {OnReOps} from "./base/OnReOps.sol";
 
-/// SAFE must hold DEFAULT_ADMIN_ROLE.
-/// Run: forge script script/AssetToManagedOfferV2.s.sol --rpc-url $RPC_URL
+/// The configured Safe must hold DEFAULT_ADMIN_ROLE.
+/// Run with ONRE_ENV set and --rpc-url for the selected environment.
 contract AssetToManagedOfferV2 is OnReOps {
-    // TODO: fill in before running.
-    address constant DIAMOND = 0x3DBd1B71332f7935dc2DAeFD16C353Ba055d690D;
-    address constant SAFE = 0x99CDC01fF619EB512F50161B296D0910a5b06738;
-
-
-    address constant MANAGED_TOKEN = 0x3D6b4235A796563781ADf6505882e5d45867FE49;
-    address constant ASSET_TOKEN = 0xd3eDe529DFA604761c24DF35879D39d9358165FF;
-    address constant SETTLEMENT_ACCOUNT = 0x3D6b4235A796563781ADf6505882e5d45867FE49;
-
     uint64 constant QUOTER_INSTANCE_ID = 0;
 
     uint64 constant FEE_VAULT_INSTANCE_ID = 0;
@@ -43,12 +34,13 @@ contract AssetToManagedOfferV2 is OnReOps {
     uint64 constant PRICE_FIX_DURATION = 86_400;
 
     function run() external {
-        _init(DIAMOND, SAFE);
-        require(MANAGED_TOKEN != address(0) && ASSET_TOKEN != address(0), "tokens not set");
-        require(SETTLEMENT_ACCOUNT != address(0), "SETTLEMENT_ACCOUNT not set");
+        Environment memory env = _loadEnvironment();
+        _init(env.diamond, env.safe);
+        require(env.managedToken != address(0) && env.assetToken != address(0), "tokens not set");
+        require(env.settlementAccount != address(0), "SETTLEMENT_ACCOUNT not set");
 
-        _setPermissionlessSettlementAccount(SETTLEMENT_ACCOUNT);
-        bytes32 pricerId = _createPricer(MANAGED_TOKEN, PricingDenomination.Usd);
+        _setPermissionlessSettlementAccount(env.settlementAccount);
+        bytes32 pricerId = _createPricer(env.managedToken, PricingDenomination.Usd);
         _addPricingVector(
             pricerId,
             PricingVector({
@@ -68,8 +60,8 @@ contract AssetToManagedOfferV2 is OnReOps {
         bytes32 feeConfigId = _createFeeConfig(FEE_CONFIG_INSTANCE_ID, FEE_BPS, MIN_FEE_AMOUNT, feeVaultId);
         bytes32 offerId = _makeOfferConfig(
             MakeOfferConfigParams({
-                tokenIn: ASSET_TOKEN,
-                tokenOut: MANAGED_TOKEN,
+                tokenIn: env.assetToken,
+                tokenOut: env.managedToken,
                 flow: OfferFlow.Permissionless,
                 quoterId: quoterId,
                 feeConfigId: feeConfigId,

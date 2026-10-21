@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {EnvironmentScript} from "./base/EnvironmentScript.sol";
-import {console} from "forge-std/Script.sol";
 import {IDiamondProxy} from "../src/generated/IDiamondProxy.sol";
-import {OnReIds} from "../src/libraries/OnReIds.sol";
 import {
     ConfigurableVaultKind,
     MakeOfferConfigParams,
@@ -13,10 +10,11 @@ import {
     PricingVector,
     QuoterKind
 } from "../src/types/OnReTypes.sol";
+import {OnReOps} from "./base/OnReOps.sol";
 
 /// The configured Safe must hold DEFAULT_ADMIN_ROLE.
 /// Run with ONRE_ENV set and --rpc-url for the selected environment.
-contract AssetToManagedOffer is EnvironmentScript {
+contract AssetToManagedOffer is OnReOps {
     uint64 constant QUOTER_INSTANCE_ID = 0;
 
     uint64 constant FEE_VAULT_INSTANCE_ID = 0;
@@ -37,91 +35,49 @@ contract AssetToManagedOffer is EnvironmentScript {
 
     function run() external {
         Environment memory env = _loadEnvironment();
+        _init(env.diamond, env.safe);
         require(env.managedToken != address(0) && env.assetToken != address(0), "tokens not set");
         require(env.settlementAccount != address(0), "SETTLEMENT_ACCOUNT not set");
 
-        bytes32 pricerId = OnReIds._pricerId(env.managedToken, PricingDenomination.Usd);
-        bytes32 quoterId = OnReIds._quoterId(QuoterKind.NavPermissionless, QUOTER_INSTANCE_ID);
-        bytes32 feeVaultId = OnReIds._configurableVaultId(ConfigurableVaultKind.Fee, FEE_VAULT_INSTANCE_ID);
-        bytes32 proceedsVaultId =
-            OnReIds._configurableVaultId(ConfigurableVaultKind.Proceeds, PROCEEDS_VAULT_INSTANCE_ID);
-        bytes32 feeConfigId = OnReIds._feeConfigId(FEE_CONFIG_INSTANCE_ID);
-        bytes32 offerId = OnReIds._offerConfigId(env.assetToken, env.managedToken, OfferFlow.Permissionless);
-        IDiamondProxy app = IDiamondProxy(env.diamond);
-
-        bytes[] memory data = new bytes[](8);
-        string[8] memory names = [
-            "setPermissionlessSettlementAccount",
-            "createPricer",
-            "addPricingVector",
-            "createQuoter",
-            "createConfigurableVault (Fee)",
-            "createConfigurableVault (Proceeds)",
-            "createFeeConfig",
-            "makeOfferConfig"
-        ];
-        data[0] = abi.encodeCall(IDiamondProxy.setPermissionlessSettlementAccount, (env.settlementAccount));
-        data[1] = abi.encodeCall(IDiamondProxy.createPricer, (env.managedToken, PricingDenomination.Usd));
-        data[2] = abi.encodeCall(
-            IDiamondProxy.addPricingVector,
-            (
-                pricerId,
-                PricingVector({
-                    startTime: START_TIME,
-                    baseTime: BASE_TIME,
-                    basePrice: BASE_PRICE,
-                    apr: APR,
-                    priceFixDuration: PRICE_FIX_DURATION
-                })
-            )
+        _setPermissionlessSettlementAccount(env.settlementAccount);
+        bytes32 pricerId = _createPricer(env.managedToken, PricingDenomination.Usd);
+        _addPricingVector(
+            pricerId,
+            PricingVector({
+                startTime: START_TIME,
+                baseTime: BASE_TIME,
+                basePrice: BASE_PRICE,
+                apr: APR,
+                priceFixDuration: PRICE_FIX_DURATION
+            })
         );
-        data[3] = abi.encodeCall(IDiamondProxy.createQuoter, (QuoterKind.NavPermissionless, QUOTER_INSTANCE_ID));
-        data[4] = abi.encodeCall(
-            IDiamondProxy.createConfigurableVault,
-            (ConfigurableVaultKind.Fee, FEE_VAULT_INSTANCE_ID, env.safe, VAULT_REFILL_TARGET_BPS)
+        bytes32 quoterId = _createQuoter(QuoterKind.NavPermissionless, QUOTER_INSTANCE_ID);
+        bytes32 feeVaultId =
+            _createConfigurableVault(ConfigurableVaultKind.Fee, FEE_VAULT_INSTANCE_ID, VAULT_REFILL_TARGET_BPS);
+        bytes32 proceedsVaultId = _createConfigurableVault(
+            ConfigurableVaultKind.Proceeds, PROCEEDS_VAULT_INSTANCE_ID, VAULT_REFILL_TARGET_BPS
         );
-        data[5] = abi.encodeCall(
-            IDiamondProxy.createConfigurableVault,
-            (ConfigurableVaultKind.Proceeds, PROCEEDS_VAULT_INSTANCE_ID, env.safe, VAULT_REFILL_TARGET_BPS)
-        );
-        data[6] = abi.encodeCall(
-            IDiamondProxy.createFeeConfig, (FEE_CONFIG_INSTANCE_ID, FEE_BPS, MIN_FEE_AMOUNT, feeVaultId)
-        );
-        data[7] = abi.encodeCall(
-            IDiamondProxy.makeOfferConfig,
-            (MakeOfferConfigParams({
-                    tokenIn: env.assetToken,
-                    tokenOut: env.managedToken,
-                    flow: OfferFlow.Permissionless,
-                    quoterId: quoterId,
-                    feeConfigId: feeConfigId,
-                    proceedsVaultId: proceedsVaultId,
-                    liquidityVaultId: bytes32(0)
-                }))
+        bytes32 feeConfigId = _createFeeConfig(FEE_CONFIG_INSTANCE_ID, FEE_BPS, MIN_FEE_AMOUNT, feeVaultId);
+        bytes32 offerId = _makeOfferConfig(
+            MakeOfferConfigParams({
+                tokenIn: env.assetToken,
+                tokenOut: env.managedToken,
+                flow: OfferFlow.Permissionless,
+                quoterId: quoterId,
+                feeConfigId: feeConfigId,
+                proceedsVaultId: proceedsVaultId,
+                liquidityVaultId: bytes32(0)
+            })
         );
 
-        vm.startPrank(env.safe);
-        for (uint256 i; i < data.length; ++i) {
-            (bool ok,) = env.diamond.call(data[i]);
-            require(ok, string.concat(names[i], " simulation failed"));
-        }
-        vm.stopPrank();
+        require(IDiamondProxy(diamond).getOfferConfig(offerId).quoterId == quoterId, "offer quoter not set");
 
-        require(app.getOfferConfig(offerId).quoterId == quoterId, "offer quoter not set");
-
-        console.log("Safe:            ", env.safe);
-        console.log("Pricer ID:       ", vm.toString(pricerId));
-        console.log("Quoter ID:       ", vm.toString(quoterId));
-        console.log("Fee vault:       ", vm.toString(feeVaultId));
-        console.log("Proceeds vault:  ", vm.toString(proceedsVaultId));
-        console.log("Fee config ID:   ", vm.toString(feeConfigId));
-        console.log("Offer ID:        ", vm.toString(offerId));
-        for (uint256 i; i < data.length; ++i) {
-            console.log("");
-            console.log(string.concat("Tx ", vm.toString(i + 1), ": ", names[i]));
-            console.log("  to:   ", env.diamond);
-            console.log("  value: 0");
-            console.log("  data: ", vm.toString(data[i]));
-        }
+        _log("Pricer ID", pricerId);
+        _log("Quoter ID", quoterId);
+        _log("Fee vault", feeVaultId);
+        _log("Proceeds vault", proceedsVaultId);
+        _log("Fee config ID", feeConfigId);
+        _log("Offer ID", offerId);
+        _printTxs();
     }
 }

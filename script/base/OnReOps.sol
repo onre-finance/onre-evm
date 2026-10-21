@@ -81,10 +81,13 @@ abstract contract OnReOps is SafeScript {
         return abi.decode(ret, (bytes32));
     }
 
+    function _setOfferConfigEnabled(bytes32 offerId, bool enabled) internal {
+        _diamondCall("setOfferConfigEnabled", abi.encodeCall(IDiamondProxy.setOfferConfigEnabled, (offerId, enabled)));
+    }
+
     function _depositConfigurableVault(bytes32 vaultId, address token, uint256 amount) internal {
         _diamondCall(
-            "depositConfigurableVault",
-            abi.encodeCall(IDiamondProxy.depositConfigurableVault, (vaultId, token, amount))
+            "depositConfigurableVault", abi.encodeCall(IDiamondProxy.depositConfigurableVault, (vaultId, token, amount))
         );
     }
 

@@ -16,10 +16,10 @@ abstract contract SafeScript is EnvironmentScript {
     address internal diamond;
     address internal safe;
 
-    function _init(address diamond_, address safe_) internal {
-        require(diamond_ != address(0) && safe_ != address(0), "DIAMOND/SAFE not set");
-        diamond = diamond_;
-        safe = safe_;
+    function _init(address _diamond, address _safe) internal {
+        require(_diamond != address(0) && _safe != address(0), "DIAMOND/SAFE not set");
+        diamond = _diamond;
+        safe = _safe;
     }
 
     /// Records the tx and simulates it as SAFE. Bubbles the revert data on failure.
@@ -41,15 +41,15 @@ abstract contract SafeScript is EnvironmentScript {
         return _call(diamond, name, data);
     }
 
-    function _log(string memory label, bytes32 value) internal view {
+    function _log(string memory label, bytes32 value) internal pure {
         console.log(string.concat(label, ": ", vm.toString(value)));
     }
 
-    function _log(string memory label, address value) internal view {
+    function _log(string memory label, address value) internal pure {
         console.log(string.concat(label, ": ", vm.toString(value)));
     }
 
-    function _log(string memory label, uint256 value) internal view {
+    function _log(string memory label, uint256 value) internal pure {
         console.log(string.concat(label, ": ", vm.toString(value)));
     }
 

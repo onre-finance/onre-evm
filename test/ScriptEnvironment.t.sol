@@ -38,7 +38,7 @@ contract ScriptEnvironmentTest is Test {
         vm.expectRevert("RPC chain does not match ONRE_ENV");
         harness.load("ethereum-mainnet-test");
         vm.expectRevert("RPC chain does not match ONRE_ENV");
-        harness.load("ethereum-mainnet-production");
+        harness.load("ethereum-mainnet-live");
     }
 
     function test_RejectAmbiguousOrUnknownEnvironment() public {

@@ -27,9 +27,7 @@ abstract contract EnvironmentScript is Script {
         uint256 expectedChainId;
         if (nameHash == keccak256("base-sepolia")) {
             expectedChainId = 84532;
-        } else if (
-            nameHash == keccak256("ethereum-mainnet-test") || nameHash == keccak256("ethereum-mainnet-production")
-        ) {
+        } else if (nameHash == keccak256("ethereum-mainnet-test") || nameHash == keccak256("ethereum-mainnet-live")) {
             expectedChainId = 1;
         } else {
             revert("Unknown ONRE_ENV");

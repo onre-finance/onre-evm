@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {Script, console} from "forge-std/Script.sol";
+import {Script, StdStyle, console} from "forge-std/Script.sol";
 
 /// Shared configuration for Safe operation scripts. ONRE_ENV must be selected explicitly.
 abstract contract EnvironmentScript is Script {
+    using StdStyle for *;
+
     struct Environment {
         uint256 chainId;
         address diamond;
@@ -17,9 +19,9 @@ abstract contract EnvironmentScript is Script {
     function _loadEnvironment() internal view returns (Environment memory env) {
         string memory name = vm.envString("ONRE_ENV");
         env = _loadEnvironment(name);
-        console.log("Environment:", name);
-        console.log("Chain ID:", env.chainId);
-        console.log("Diamond:", env.diamond);
+        console.log("Environment:", name.magenta().bold());
+        console.log("Chain ID:", env.chainId.cyan());
+        console.log("Diamond:", env.diamond.cyan());
     }
 
     function _loadEnvironment(string memory name) internal view returns (Environment memory env) {

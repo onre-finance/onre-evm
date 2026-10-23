@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {console} from "forge-std/Script.sol";
+import {StdStyle, console} from "forge-std/Script.sol";
 import {EnvironmentScript} from "./EnvironmentScript.sol";
 
 /// Records Safe transactions, simulates each one as SAFE when added, and prints them as to/value/data.
 abstract contract SafeScript is EnvironmentScript {
+    using StdStyle for *;
+
     struct SafeTx {
         address to;
         bytes data;
@@ -30,7 +32,7 @@ abstract contract SafeScript is EnvironmentScript {
         vm.prank(safe);
         (ok, ret) = to.call(data);
         if (!ok) {
-            console.log(string.concat(name, " simulation failed"));
+            console.log(string.concat(name, " simulation failed").bold().red());
             assembly ("memory-safe") {
                 revert(add(ret, 0x20), mload(ret))
             }
@@ -42,25 +44,25 @@ abstract contract SafeScript is EnvironmentScript {
     }
 
     function _log(string memory label, bytes32 value) internal pure {
-        console.log(string.concat(label, ": ", vm.toString(value)));
+        console.log(string.concat(label, ": ", value.cyanBytes32()));
     }
 
     function _log(string memory label, address value) internal pure {
-        console.log(string.concat(label, ": ", vm.toString(value)));
+        console.log(string.concat(label, ": ", value.cyan()));
     }
 
     function _log(string memory label, uint256 value) internal pure {
-        console.log(string.concat(label, ": ", vm.toString(value)));
+        console.log(string.concat(label, ": ", value.cyan()));
     }
 
     function _printTxs() internal view {
-        console.log("Safe:", safe);
+        console.log("Safe:", safe.cyan());
         for (uint256 i; i < _txs.length; ++i) {
             console.log("");
-            console.log(string.concat("Tx ", vm.toString(i + 1), ": ", _txs[i].name));
-            console.log("  to:   ", _txs[i].to);
-            console.log("  value: 0");
-            console.log("  data: ", vm.toString(_txs[i].data));
+            console.log(string.concat("Tx ", vm.toString(i + 1), ": ", _txs[i].name).yellow().bold());
+            console.log("  to:   ".dim(), _txs[i].to.cyan());
+            console.log("  value:".dim(), uint256(0).cyan());
+            console.log("  data: ".dim(), _txs[i].data.greenBytes());
         }
     }
 }

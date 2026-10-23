@@ -23,11 +23,15 @@ abstract contract OnReOps is SafeScript {
     }
 
     function _setPermissionlessSettlementAccount(address account) internal {
-        _diamondCall("setPermissionlessSettlementAccount", abi.encodeCall(IDiamondProxy.setPermissionlessSettlementAccount, (account)));
+        _diamondCall(
+            "setPermissionlessSettlementAccount",
+            abi.encodeCall(IDiamondProxy.setPermissionlessSettlementAccount, (account))
+        );
     }
 
     function _createPricer(address managedToken, PricingDenomination denomination) internal returns (bytes32) {
-        bytes memory ret = _diamondCall("createPricer", abi.encodeCall(IDiamondProxy.createPricer, (managedToken, denomination)));
+        bytes memory ret =
+            _diamondCall("createPricer", abi.encodeCall(IDiamondProxy.createPricer, (managedToken, denomination)));
         return abi.decode(ret, (bytes32));
     }
 
@@ -40,12 +44,20 @@ abstract contract OnReOps is SafeScript {
         return abi.decode(ret, (bytes32));
     }
 
-    function _configurePropAmm(bytes32 quoterId, address assetToken, address managedToken, PropAmmConfig memory config) internal {
-        _diamondCall("configurePropAmm", abi.encodeCall(IDiamondProxy.configurePropAmm, (quoterId, assetToken, managedToken, config)));
+    function _configurePropAmm(bytes32 quoterId, address assetToken, address managedToken, PropAmmConfig memory config)
+        internal
+    {
+        _diamondCall(
+            "configurePropAmm",
+            abi.encodeCall(IDiamondProxy.configurePropAmm, (quoterId, assetToken, managedToken, config))
+        );
     }
 
     /// Withdrawal destination is the Safe.
-    function _createConfigurableVault(ConfigurableVaultKind kind, uint64 instanceId, uint16 refillTargetBps) internal returns (bytes32) {
+    function _createConfigurableVault(ConfigurableVaultKind kind, uint64 instanceId, uint16 refillTargetBps)
+        internal
+        returns (bytes32)
+    {
         bytes memory ret = _diamondCall(
             string.concat("createConfigurableVault (", _vaultKindName(kind), ")"),
             abi.encodeCall(IDiamondProxy.createConfigurableVault, (kind, instanceId, safe, refillTargetBps))
@@ -58,7 +70,8 @@ abstract contract OnReOps is SafeScript {
         returns (bytes32)
     {
         bytes memory ret = _diamondCall(
-            "createFeeConfig", abi.encodeCall(IDiamondProxy.createFeeConfig, (instanceId, basisPoints, minimumFeeAmount, feeVaultId))
+            "createFeeConfig",
+            abi.encodeCall(IDiamondProxy.createFeeConfig, (instanceId, basisPoints, minimumFeeAmount, feeVaultId))
         );
         return abi.decode(ret, (bytes32));
     }
@@ -73,7 +86,9 @@ abstract contract OnReOps is SafeScript {
     }
 
     function _depositConfigurableVault(bytes32 vaultId, address token, uint256 amount) internal {
-        _diamondCall("depositConfigurableVault", abi.encodeCall(IDiamondProxy.depositConfigurableVault, (vaultId, token, amount)));
+        _diamondCall(
+            "depositConfigurableVault", abi.encodeCall(IDiamondProxy.depositConfigurableVault, (vaultId, token, amount))
+        );
     }
 
     // --- Managed token ---
@@ -89,10 +104,16 @@ abstract contract OnReOps is SafeScript {
     }
 
     /// Safe becomes admin and CCIP admin. Returned address is simulated and depends on the Diamond nonce.
-    function _deployManagedToken(address impl, string memory name, string memory symbol, uint8 decimals) internal returns (address) {
+    function _deployManagedToken(address impl, string memory name, string memory symbol, uint8 decimals)
+        internal
+        returns (address)
+    {
         bytes memory ret = _diamondCall(
             "deployManagedToken",
-            abi.encodeCall(IDiamondProxy.deployManagedToken, (impl, name, symbol, decimals, safe, safe, new address[](0), new address[](0)))
+            abi.encodeCall(
+                IDiamondProxy.deployManagedToken,
+                (impl, name, symbol, decimals, safe, safe, new address[](0), new address[](0))
+            )
         );
         return abi.decode(ret, (address));
     }

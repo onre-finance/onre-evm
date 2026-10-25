@@ -22,7 +22,8 @@
     "verify:mainnet_test": "gemforge verify mainnet_test",
     "verify:mainnet_live": "gemforge verify mainnet_live",
     "devnet": "anvil",
-    "test:integration": "bash scripts/test-gemforge-integration.sh"
+    "test:integration": "bash scripts/test-gemforge-integration.sh",
+    "test:buy-offers:anvil": "node scripts/test-buy-offers-anvil.cjs"
   },
   "devDependencies": {
     "dotenv": "^16.6.1",

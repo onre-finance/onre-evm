@@ -2,7 +2,91 @@
   "chainId": 1,
   "diamond": "0xF43b84eC9829a2d8D273fB4EC082FC357ed59DEa",
   "safe": "0x0F8326Eff929B23d01991990c5b4bC1dd9B5e8a4",
-  "managedToken": "0xFD78290f92DD3Ebbf1DF224EEA10F04D5BE500b3",
-  "assetToken": "0x977048BfC71b5B0143b057508712974A7Ec18468",
-  "settlementAccount": "0xC22A0bfEAD93EfD2FE861CbABED82661c3BFEAc3"
+  "settlementAccount": "0xC22A0bfEAD93EfD2FE861CbABED82661c3BFEAc3",
+  "pricers": {
+    "onyc-usd": {
+      "managedToken": "0xFD78290f92DD3Ebbf1DF224EEA10F04D5BE500b3",
+      "denomination": "usd",
+      "activationDelaySeconds": 3600,
+      "vector": {
+        "startTime": 0,
+        "baseTime": 1791920295,
+        "basePrice": 1146935367,
+        "apr": 104555,
+        "priceFixDuration": 86400
+      }
+    }
+  },
+  "quoters": {
+    "nav-permissionless": {
+      "kind": "navPermissionless",
+      "instanceId": 0
+    },
+    "usdc-prop-amm": {
+      "kind": "propAmm",
+      "instanceId": 0,
+      "managedToken": "0xFD78290f92DD3Ebbf1DF224EEA10F04D5BE500b3",
+      "assetToken": "0x977048BfC71b5B0143b057508712974A7Ec18468",
+      "config": {
+        "epochDurationSeconds": 300,
+        "curveExponentScaled": 19000,
+        "cadenceThreshold": 20,
+        "cadenceWaveScaled": 2000,
+        "wallSensitivityScaled": 20000,
+        "curvePegHaircutBps": 3650
+      }
+    }
+  },
+  "vaults": {
+    "fees": {
+      "kind": "fee",
+      "instanceId": 0,
+      "withdrawalDestination": "0x0F8326Eff929B23d01991990c5b4bC1dd9B5e8a4",
+      "refillTargetBps": 0
+    },
+    "proceeds": {
+      "kind": "proceeds",
+      "instanceId": 0,
+      "withdrawalDestination": "0x0F8326Eff929B23d01991990c5b4bC1dd9B5e8a4",
+      "refillTargetBps": 0
+    },
+    "liquidity": {
+      "kind": "liquidity",
+      "instanceId": 0,
+      "withdrawalDestination": "0x0F8326Eff929B23d01991990c5b4bC1dd9B5e8a4",
+      "refillTargetBps": 0
+    }
+  },
+  "feeConfigs": {
+    "trade-fee": {
+      "instanceId": 0,
+      "basisPoints": 20,
+      "minimumFeeAmount": 0,
+      "feeVault": "fees"
+    }
+  },
+  "offers": {
+    "usdc-to-onyc": {
+      "managedToken": "0xFD78290f92DD3Ebbf1DF224EEA10F04D5BE500b3",
+      "assetToken": "0x977048BfC71b5B0143b057508712974A7Ec18468",
+      "direction": "assetToManaged",
+      "flow": "permissionless",
+      "pricer": "onyc-usd",
+      "quoter": "nav-permissionless",
+      "feeConfig": "trade-fee",
+      "proceedsVault": "proceeds",
+      "liquidityVault": "none"
+    },
+    "onyc-to-usdc-prop": {
+      "managedToken": "0xFD78290f92DD3Ebbf1DF224EEA10F04D5BE500b3",
+      "assetToken": "0x977048BfC71b5B0143b057508712974A7Ec18468",
+      "direction": "managedToAsset",
+      "flow": "permissionless",
+      "pricer": "onyc-usd",
+      "quoter": "usdc-prop-amm",
+      "feeConfig": "trade-fee",
+      "proceedsVault": "proceeds",
+      "liquidityVault": "liquidity"
+    }
+  }
 }

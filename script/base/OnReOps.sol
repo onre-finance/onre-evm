@@ -14,14 +14,8 @@ import {
 } from "../../src/types/OnReTypes.sol";
 import {SafeScript} from "./SafeScript.sol";
 
-/// Composable OnRe operations. Each op is recorded as a Safe tx, simulated, and returns the created ID if any.
+/// Shared operations record and simulate calls through SafeScript.
 abstract contract OnReOps is SafeScript {
-    // --- Diamond ---
-
-    function _addApprover(address approver) internal {
-        _diamondCall("addApprover", abi.encodeCall(IDiamondProxy.addApprover, (approver)));
-    }
-
     function _setPermissionlessSettlementAccount(address account) internal {
         _diamondCall(
             "setPermissionlessSettlementAccount",
@@ -29,19 +23,16 @@ abstract contract OnReOps is SafeScript {
         );
     }
 
-    function _createPricer(address managedToken, PricingDenomination denomination) internal returns (bytes32) {
-        bytes memory ret =
-            _diamondCall("createPricer", abi.encodeCall(IDiamondProxy.createPricer, (managedToken, denomination)));
-        return abi.decode(ret, (bytes32));
+    function _createPricer(address managedToken, PricingDenomination denomination) internal {
+        _diamondCall("createPricer", abi.encodeCall(IDiamondProxy.createPricer, (managedToken, denomination)));
     }
 
     function _addPricingVector(bytes32 pricerId, PricingVector memory vector) internal {
         _diamondCall("addPricingVector", abi.encodeCall(IDiamondProxy.addPricingVector, (pricerId, vector)));
     }
 
-    function _createQuoter(QuoterKind kind, uint64 instanceId) internal returns (bytes32) {
-        bytes memory ret = _diamondCall("createQuoter", abi.encodeCall(IDiamondProxy.createQuoter, (kind, instanceId)));
-        return abi.decode(ret, (bytes32));
+    function _createQuoter(QuoterKind kind, uint64 instanceId) internal {
+        _diamondCall("createQuoter", abi.encodeCall(IDiamondProxy.createQuoter, (kind, instanceId)));
     }
 
     function _configurePropAmm(bytes32 quoterId, address assetToken, address managedToken, PropAmmConfig memory config)
@@ -53,32 +44,29 @@ abstract contract OnReOps is SafeScript {
         );
     }
 
-    /// Withdrawal destination is the Safe.
-    function _createConfigurableVault(ConfigurableVaultKind kind, uint64 instanceId, uint16 refillTargetBps)
-        internal
-        returns (bytes32)
-    {
-        bytes memory ret = _diamondCall(
-            string.concat("createConfigurableVault (", _vaultKindName(kind), ")"),
-            abi.encodeCall(IDiamondProxy.createConfigurableVault, (kind, instanceId, safe, refillTargetBps))
+    function _createConfigurableVault(
+        ConfigurableVaultKind kind,
+        uint64 instanceId,
+        address destination,
+        uint16 refillTargetBps
+    ) internal {
+        _diamondCall(
+            "createConfigurableVault",
+            abi.encodeCall(IDiamondProxy.createConfigurableVault, (kind, instanceId, destination, refillTargetBps))
         );
-        return abi.decode(ret, (bytes32));
     }
 
     function _createFeeConfig(uint64 instanceId, uint16 basisPoints, uint256 minimumFeeAmount, bytes32 feeVaultId)
         internal
-        returns (bytes32)
     {
-        bytes memory ret = _diamondCall(
+        _diamondCall(
             "createFeeConfig",
             abi.encodeCall(IDiamondProxy.createFeeConfig, (instanceId, basisPoints, minimumFeeAmount, feeVaultId))
         );
-        return abi.decode(ret, (bytes32));
     }
 
-    function _makeOfferConfig(MakeOfferConfigParams memory params) internal returns (bytes32) {
-        bytes memory ret = _diamondCall("makeOfferConfig", abi.encodeCall(IDiamondProxy.makeOfferConfig, (params)));
-        return abi.decode(ret, (bytes32));
+    function _makeOfferConfig(MakeOfferConfigParams memory params) internal {
+        _diamondCall("makeOfferConfig", abi.encodeCall(IDiamondProxy.makeOfferConfig, (params)));
     }
 
     function _setOfferConfigEnabled(bytes32 offerId, bool enabled) internal {
@@ -118,21 +106,13 @@ abstract contract OnReOps is SafeScript {
         return abi.decode(ret, (address));
     }
 
-    // --- ERC20 ---
-
-    function _approve(address token, address spender, uint256 amount) internal {
-        _call(token, "approve", abi.encodeCall(IERC20.approve, (spender, amount)));
-    }
-
-    function _mint(address token, address to, uint256 amount) internal {
-        // `0x40c10f19` = mint(address, amount)
-        _call(token, "mint", abi.encodeWithSelector(0x40c10f19, to, amount));
-    }
-
-    function _vaultKindName(ConfigurableVaultKind kind) private pure returns (string memory) {
-        if (kind == ConfigurableVaultKind.Fee) return "Fee";
-        if (kind == ConfigurableVaultKind.Proceeds) return "Proceeds";
-        if (kind == ConfigurableVaultKind.Liquidity) return "Liquidity";
-        return "BufferReserve";
+    /// Approves only when needed; reset first for tokens requiring a zero allowance.
+    function _ensureApproval(address token, uint256 amount) internal {
+        require(token != address(0), "Approval token not set");
+        uint256 allowance = IERC20(token).allowance(safe, diamond);
+        if (allowance >= amount) return;
+        if (allowance != 0) _call(token, "approve", abi.encodeCall(IERC20.approve, (diamond, 0)));
+        _call(token, "approve", abi.encodeCall(IERC20.approve, (diamond, amount)));
+        require(IERC20(token).allowance(safe, diamond) >= amount, "Token approval not set");
     }
 }

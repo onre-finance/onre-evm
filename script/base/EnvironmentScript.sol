@@ -11,12 +11,10 @@ abstract contract EnvironmentScript is Script {
         uint256 chainId;
         address diamond;
         address safe;
-        address managedToken;
-        address assetToken;
         address settlementAccount;
     }
 
-    function _loadEnvironment() internal view returns (Environment memory env) {
+    function _loadEnvironment() internal view virtual returns (Environment memory env) {
         string memory name = vm.envString("ONRE_ENV");
         env = _loadEnvironment(name);
         console.log("Environment:", name.magenta().bold());
@@ -42,8 +40,6 @@ abstract contract EnvironmentScript is Script {
 
         env.diamond = vm.parseJsonAddress(json, ".diamond");
         env.safe = vm.parseJsonAddress(json, ".safe");
-        env.managedToken = vm.parseJsonAddress(json, ".managedToken");
-        env.assetToken = vm.parseJsonAddress(json, ".assetToken");
         env.settlementAccount = vm.parseJsonAddress(json, ".settlementAccount");
         require(env.diamond != address(0) && env.safe != address(0), "Environment diamond/safe not set");
     }

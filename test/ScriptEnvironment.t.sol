@@ -23,8 +23,6 @@ contract ScriptEnvironmentTest is Test {
         assertEq(env.chainId, 84532);
         assertTrue(env.diamond != address(0));
         assertTrue(env.safe != address(0));
-        assertTrue(env.assetToken != address(0));
-        assertTrue(env.managedToken != address(0));
     }
 
     function test_RejectBaseSepoliaOnMainnet() public {

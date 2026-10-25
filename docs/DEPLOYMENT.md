@@ -5,6 +5,116 @@ diffs the compiled facet ABIs against the on-chain loupe and applies exactly the
 cuts that differ, so there is no hand-written deployment script to keep in sync
 with the facet set.
 
+## Configured offers
+
+`script/config/<ONRE_ENV>.json` defines named `pricers`, `quoters`, `vaults`,
+`feeConfigs`, and `offers`. Each offer explicitly specifies its `managedToken`,
+`assetToken`, `direction`, `flow`, and references to its components. Names are
+configuration references; contract IDs are still derived by `OnReIds`.
+
+- Pricers specify a managed token, `denomination: "usd"`, vector, and activation delay.
+- Quoters specify `kind` (`nav`, `navPermissionless`, or `propAmm`) and `instanceId`.
+  Prop AMM definitions also specify their exact managed/asset pair and `config`.
+- Vaults specify `kind` (`fee`, `proceeds`, `liquidity`, or `bufferReserve`),
+  `instanceId`, `withdrawalDestination`, and `refillTargetBps`.
+- Fee configs specify `instanceId`, `basisPoints`, `minimumFeeAmount`, and their
+  named `feeVault`. Different offers can reference different fee configs and quoters.
+- Offers specify `direction` (`assetToManaged` or `managedToAsset`) and `flow`
+  (`permissionless`, `permissioned`, or `worker`). `liquidityVault: "none"` encodes
+  a zero liquidity-vault reference. Sells require a named liquidity-kind vault.
+
+A named pricer reference must match the offer's managed token and its on-chain USD
+pricer identity: the contracts derive this binding rather than storing a separate
+pricer ID in each offer. Permissioned and worker offers require a `nav` quoter;
+worker offers must use `managedToAsset`. Permissionless offers use
+`navPermissionless` or a pair-matching `propAmm` quoter. Repeated component IDs and
+repeated directed token-pair/flow identities are rejected, even under different
+configuration names. Separate quoter/fee instances need separate instance IDs.
+
+Production (`ethereum-mainnet-live`) contains two permissionless NAV buy offers using
+native Ethereum [USDC](https://developers.circle.com/stablecoins/usdc-contract-addresses)
+and [USDG](https://docs.paxos.com/guides/stablecoin/usdg/mainnet). They reference the
+same `onyc-usd` pricer, `nav-permissionless` quoter, `buy-fee` config, and `proceeds`
+vault. These references are independent per offer and can be changed separately.
+Both buys use `liquidityVault: "none"`; proceeds/fees are accounted per token.
+
+Production also defines `onyc-to-usdg-prop`: a permissionless `managedToAsset`
+offer referencing `onyc-usd`, its own `usdg-prop-amm` quoter, a new `usdg-prop-fee`
+config at 20 bps, a new `usdg-prop-proceeds` vault, and `usdg-liquidity`. The fee is
+charged in ONyc. The liquidity vault has refill target zero, so it must be funded
+explicitly; no automatic refill is configured. The Prop AMM parameters are the
+values from the existing sell script: 300-second epochs, curve exponent 19000,
+cadence threshold 20, cadence wave 2000, wall sensitivity 20000, and peg haircut
+3650. Sell input is burned after its fee, USDG is paid from liquidity, and sell
+pressure is recorded in this separate quoter instance.
+
+The pricing baseline matches both Solana production offers observed at slot
+461251574: `baseTime=1789776000`, `basePrice=1146935367`, `apr=104555`, and
+`priceFixDuration=86400`. EVM rejects historical activation times. A pricer's
+`vector.startTime=0` prepares activation at simulation time plus
+`activationDelaySeconds` (currently 3600), preserving the Solana baseline.
+Execute the Safe batch before the printed activation timestamp; buys become
+executable at that time. Regenerate unexecuted batches if their activation passes.
+
+```bash
+ONRE_ENV=ethereum-mainnet-live forge script script/SetupOffers.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
+ONRE_ENV=ethereum-mainnet-live forge script script/ApproveSettlementTokens.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
+```
+
+Setup creates missing components in dependency order, reuses matching components,
+and updates existing offer references. It does not silently enable disabled
+offers or rewrite shared pricing/fee policies. A matching completed setup emits
+no new calls. The legacy buy, permissioned-buy, and Prop AMM sell script names
+select matching flow/direction/quoter definitions from this same configuration.
+The allowance script approves the Diamond for both tokens of each configured
+permissionless offer, skipping maximum allowances and permissioned/worker offers.
+Execute setup calls from the admin Safe and allowance calls from the settlement
+Safe. Neither script broadcasts. There are no top-level token defaults: the
+token pair comes from each offer, and the pricer/quoter pair bindings are explicit.
+
+To fund the configured USDG liquidity vault, use its offer name and an amount in
+USDG base units (the example is 10,000 USDG with six decimals):
+
+```bash
+ONRE_ENV=ethereum-mainnet-live forge script script/DepositLiquidityVault.s.sol --sig "run(string,uint256)" "onyc-to-usdg-prop" 10000000000 --rpc-url "$ETH_MAINNET_RPC_URL"
+```
+
+The deposit script reads that offer's asset token and named liquidity vault,
+checks the live offer's vault reference, requires the admin Safe to already hold
+the funds, and prints any needed approval followed by the deposit call. It does
+not mint tokens, and funding is separate from offer creation.
+
+```bash
+pnpm test:buy-offers:anvil
+```
+
+This runs setup and allowance scripts against a disposable production fork,
+applies their calls through local Safe impersonation, advances to vector
+activation, funds a local user from forked holders, and takes both production buy
+offers. It also funds the admin Safe locally, runs the named liquidity deposit
+script, and sells 100 ONyc through the USDG Prop AMM offer. It verifies per-offer
+references, minimum output, fees, separate proceeds, liquidity debits, recorded
+sell pressure, unchanged settlement balances, and repeat setup. It also exercises
+the legacy buy/sell entry points, token deployment, settlement updates, and disabling
+an offer, including repeat calls. Evidence is saved
+under `.ignore/buy-offers-anvil/`. No mainnet transactions are sent. Override the
+fork provider with `ETH_MAINNET_RPC_URL`; `USDC_HOLDER`/`USDG_HOLDER` select fork-only
+funding donors when automatic discovery is unavailable.
+
+The remaining operations use the same Safe simulation and calldata output:
+
+```bash
+ONRE_ENV=ethereum-mainnet-live forge script script/SetSettlementAccount.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
+ONRE_ENV=ethereum-mainnet-live forge script script/DisableOffer.s.sol --sig "run(bytes32)" <offerId> --rpc-url "$ETH_MAINNET_RPC_URL"
+ONRE_ENV=ethereum-mainnet-test forge script script/DeployManagedToken.s.sol --sig "run(string,string,uint8,bytes32)" "Test Token" "TEST" 9 0x0000000000000000000000000000000000000000000000000000000000000001 --rpc-url "$ETH_MAINNET_RPC_URL"
+```
+
+Settlement updates and disabling an offer emit no calls when already applied.
+Token deployment accepts metadata and the implementation's CREATE2 salt as arguments;
+choose an unused salt. It prints the implementation deployment and Diamond token
+creation calls for the configured admin Safe. The simulated token address depends
+on the Diamond nonce when the batch executes.
+
 ## Quick start
 
 ```bash

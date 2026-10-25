@@ -11,7 +11,9 @@ contract DisableOffer is OnReOps {
         _init(env.diamond, env.safe);
         require(offerId != bytes32(0), "Offer ID not set");
 
-        _setOfferConfigEnabled(offerId, false);
+        if (IDiamondProxy(diamond).getOfferConfig(offerId).enabled) {
+            _setOfferConfigEnabled(offerId, false);
+        }
         require(!IDiamondProxy(diamond).getOfferConfig(offerId).enabled, "offer still enabled");
 
         _log("Disabled offer ID", offerId);

@@ -12,7 +12,9 @@ contract SetSettlementAccount is OnReOps {
         require(env.settlementAccount != address(0), "SETTLEMENT_ACCOUNT not set");
 
         _log("Previous settlement account", IDiamondProxy(diamond).permissionlessSettlementAccount());
-        _setPermissionlessSettlementAccount(env.settlementAccount);
+        if (IDiamondProxy(diamond).permissionlessSettlementAccount() != env.settlementAccount) {
+            _setPermissionlessSettlementAccount(env.settlementAccount);
+        }
         require(
             IDiamondProxy(diamond).permissionlessSettlementAccount() == env.settlementAccount,
             "settlement account not set"

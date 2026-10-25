@@ -2,7 +2,112 @@
   "chainId": 84532,
   "diamond": "0x3DBd1B71332f7935dc2DAeFD16C353Ba055d690D",
   "safe": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
-  "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
-  "assetToken": "0xd3eDe529DFA604761c24DF35879D39d9358165FF",
-  "settlementAccount": "0xB374880032984b8a56BE3CA28032775EB6F31D6C"
+  "settlementAccount": "0xB374880032984b8a56BE3CA28032775EB6F31D6C",
+  "pricers": {
+    "onyc-usd": {
+      "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "denomination": "usd",
+      "activationDelaySeconds": 3600,
+      "vector": {
+        "startTime": 0,
+        "baseTime": 1789776000,
+        "basePrice": 1146935367,
+        "apr": 104555,
+        "priceFixDuration": 86400
+      }
+    }
+  },
+  "quoters": {
+    "nav-permissionless": {
+      "kind": "navPermissionless",
+      "instanceId": 0
+    },
+    "usdc-prop-amm": {
+      "kind": "propAmm",
+      "instanceId": 0,
+      "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "assetToken": "0xd3eDe529DFA604761c24DF35879D39d9358165FF",
+      "config": {
+        "epochDurationSeconds": 300,
+        "curveExponentScaled": 19000,
+        "cadenceThreshold": 20,
+        "cadenceWaveScaled": 2000,
+        "wallSensitivityScaled": 20000,
+        "curvePegHaircutBps": 3650
+      }
+    },
+    "nav-permissioned": {
+      "kind": "nav",
+      "instanceId": 0
+    }
+  },
+  "vaults": {
+    "fees": {
+      "kind": "fee",
+      "instanceId": 0,
+      "withdrawalDestination": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
+      "refillTargetBps": 0
+    },
+    "proceeds": {
+      "kind": "proceeds",
+      "instanceId": 0,
+      "withdrawalDestination": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
+      "refillTargetBps": 0
+    },
+    "liquidity": {
+      "kind": "liquidity",
+      "instanceId": 0,
+      "withdrawalDestination": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
+      "refillTargetBps": 0
+    }
+  },
+  "feeConfigs": {
+    "permissionless-fee": {
+      "instanceId": 0,
+      "basisPoints": 0,
+      "minimumFeeAmount": 0,
+      "feeVault": "fees"
+    },
+    "permissioned-fee": {
+      "instanceId": 1,
+      "basisPoints": 20,
+      "minimumFeeAmount": 0,
+      "feeVault": "fees"
+    }
+  },
+  "offers": {
+    "usdc-to-onyc": {
+      "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "assetToken": "0xd3eDe529DFA604761c24DF35879D39d9358165FF",
+      "direction": "assetToManaged",
+      "flow": "permissionless",
+      "pricer": "onyc-usd",
+      "quoter": "nav-permissionless",
+      "feeConfig": "permissionless-fee",
+      "proceedsVault": "proceeds",
+      "liquidityVault": "none"
+    },
+    "onyc-to-usdc-prop": {
+      "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "assetToken": "0xd3eDe529DFA604761c24DF35879D39d9358165FF",
+      "direction": "managedToAsset",
+      "flow": "permissionless",
+      "pricer": "onyc-usd",
+      "quoter": "usdc-prop-amm",
+      "feeConfig": "permissionless-fee",
+      "proceedsVault": "proceeds",
+      "liquidityVault": "liquidity"
+    },
+    "usdc-to-onyc-permissioned": {
+      "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "assetToken": "0xd3eDe529DFA604761c24DF35879D39d9358165FF",
+      "direction": "assetToManaged",
+      "flow": "permissioned",
+      "pricer": "onyc-usd",
+      "quoter": "nav-permissioned",
+      "feeConfig": "permissioned-fee",
+      "proceedsVault": "proceeds",
+      "liquidityVault": "none"
+    }
+  }
 }

@@ -20,6 +20,7 @@ abstract contract SafeScript is EnvironmentScript {
 
     function _init(address _diamond, address _safe) internal {
         require(_diamond != address(0) && _safe != address(0), "DIAMOND/SAFE not set");
+        delete _txs;
         diamond = _diamond;
         safe = _safe;
     }

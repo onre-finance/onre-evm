@@ -72,7 +72,7 @@
     },
     "usdg-prop-fee": {
       "instanceId": 1,
-      "basisPoints": 20,
+      "basisPoints": 30,
       "minimumFeeAmount": 0,
       "feeVault": "fees"
     }

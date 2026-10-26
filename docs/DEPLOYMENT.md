@@ -41,7 +41,7 @@ Both buys use `liquidityVault: "none"`; proceeds/fees are accounted per token.
 
 Production also defines `onyc-to-usdg-prop`: a permissionless `managedToAsset`
 offer referencing `onyc-usd`, its own `usdg-prop-amm` quoter, a new `usdg-prop-fee`
-config at 20 bps, a new `usdg-prop-proceeds` vault, and `usdg-liquidity`. The fee is
+config at 30 bps, a new `usdg-prop-proceeds` vault, and `usdg-liquidity`. The fee is
 charged in ONyc. The liquidity vault has refill target zero, so it must be funded
 explicitly; no automatic refill is configured. The Prop AMM parameters are the
 values from the existing sell script: 300-second epochs, curve exponent 19000,

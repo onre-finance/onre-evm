@@ -110,11 +110,35 @@ async function main() {
     for (const tx of setup) await send(config.safe, tx.to, tx.data)
     console.log(`Applied ${setup.length} admin setup calls on Anvil`)
 
+    const offerIdFor = offer => id('onre.offer_config', 'address,address,uint8', [
+      offer.direction === 'assetToManaged' ? offer.assetToken : offer.managedToken,
+      offer.direction === 'assetToManaged' ? offer.managedToken : offer.assetToken,
+      { permissioned: 0, permissionless: 1, worker: 2 }[offer.flow],
+    ])
+    const disabledOffers = allOffers.filter(offer => !offer.enabled)
+    const now = await rpc(local, 'eth_getBlockByNumber', ['latest', false])
+    for (const definition of allOffers) {
+      const offerId = offerIdFor(definition)
+      assert.equal(words(await read(config.diamond, calldata('getOfferConfig(bytes32)', offerId)))[10], definition.enabled ? 1n : 0n)
+      if (!definition.enabled) {
+        const data = calldata('takeOffer((bytes32,uint256,uint256,uint64,(address,uint64),bytes))', `(${offerId},1000000,0,${BigInt(now.timestamp) + 3600n},(${zeroAddress},0),0x)`)
+        const disabledError = calldata('OfferConfigDisabledError(bytes32)', offerId)
+        const [caller] = await rpc(local, 'eth_accounts')
+        await assert.rejects(rpc(local, 'eth_call', [{ from: caller, to: config.diamond, data }, 'latest']), error => error.data === disabledError)
+      }
+    }
+    assert.equal((await runScript('script/SetupOffers.s.sol', 'initial-rerun.log')).length, 0)
+    console.log(`PASS: initial setup matches configured enabled states; ${disabledOffers.length} disabled offers reject trades; rerun emits no calls`)
+
     const approvals = await runScript('script/ApproveSettlementTokens.s.sol', 'approvals.log')
     batch('settlement-approvals.batch.json', config.settlementAccount, approvals)
     await impersonate(config.settlementAccount)
     for (const tx of approvals) await send(config.settlementAccount, tx.to, tx.data)
     console.log(`Applied ${approvals.length} settlement approval calls on Anvil`)
+
+    // Enable only on this disposable Anvil fork to retain buy/sell and withdrawal regression coverage.
+    for (const offer of disabledOffers) await send(config.safe, config.diamond, calldata('setOfferConfigEnabled(bytes32,bool)', offerIdFor(offer), true))
+    if (disabledOffers.length) console.log(`Temporarily enabled ${disabledOffers.length} offers locally for trade/withdrawal tests`)
 
     const pricerId = id('onre.pricer', 'address,uint8', [managedToken, 0])
     const pricer = words(await read(config.diamond, calldata('getPricer(bytes32)', pricerId)))
@@ -347,6 +371,13 @@ async function main() {
       console.log(`PASS: 100 ONyc -> ${format(quote[4], decimals)} ${symbol} through Prop AMM; ${feeDefinition.basisPoints} bps fee, liquidity debited, hop unchanged`)
     }
     const withdrawals = await testVaultWithdrawals()
+    const restore = await runScript('script/SetupOffers.s.sol', 'restore-configured-state.log')
+    assert.equal(restore.length, disabledOffers.length, 'Setup must disable the temporarily enabled offers again')
+    for (const tx of restore) {
+      assert.ok(disabledOffers.some(offer => tx.data === calldata('setOfferConfigEnabled(bytes32,bool)', offerIdFor(offer), false)))
+      await send(config.safe, tx.to, tx.data)
+    }
+    for (const offer of allOffers) assert.equal(words(await read(config.diamond, calldata('getOfferConfig(bytes32)', offerIdFor(offer))))[10], offer.enabled ? 1n : 0n)
     const repeated = await runScript('script/SetupOffers.s.sol', 'rerun.log')
     assert.equal(repeated.length, 0, 'Repeated setup must not emit new transactions')
     for (const script of ['AssetToManagedOffer', 'PropAmmManagedToAssetOfferMainnet']) {
@@ -381,6 +412,9 @@ async function main() {
     await assert.rejects(runScript('script/DeployManagedToken.s.sol', 'deploy-repeat.log', deployArgs), /implementation already deployed/)
 
     const disableId = results[0].offerId
+    if (words(await read(config.diamond, calldata('getOfferConfig(bytes32)', disableId)))[10] === 0n) {
+      await send(config.safe, config.diamond, calldata('setOfferConfigEnabled(bytes32,bool)', disableId, true))
+    }
     const disableArgs = ['--sig', 'run(bytes32)', disableId]
     const disable = await runScript('script/DisableOffer.s.sol', 'disable-offer.log', disableArgs)
     assert.equal(disable.length, 1)
@@ -388,7 +422,7 @@ async function main() {
     assert.equal(words(await read(config.diamond, calldata('getOfferConfig(bytes32)', disableId)))[10], 0n)
     assert.equal((await runScript('script/DisableOffer.s.sol', 'disable-repeat.log', disableArgs)).length, 0)
     console.log('PASS: all operational script entry points; token deployment, settlement updates, disabling, and repeat calls')
-    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ environment, forkBlock: String(BigInt(forkBlock)), pricerId, activation: activation.toString(), results, withdrawals, repeatSetupTransactions: repeated.length }, null, 2) + '\n')
+    fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ environment, forkBlock: String(BigInt(forkBlock)), pricerId, activation: activation.toString(), results, withdrawals, configuredDisabledOffers: disabledOffers.map(offer => offer.name), restoredDisabledOffers: restore.length, repeatSetupTransactions: repeated.length }, null, 2) + '\n')
     console.log(`PASS: repeated setup emits no transactions. Evidence: ${output}`)
   } finally {
     anvil.kill('SIGTERM')

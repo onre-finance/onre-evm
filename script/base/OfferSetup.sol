@@ -123,8 +123,9 @@ abstract contract OfferSetup is OfferConfiguration {
                     ? bytes32(0)
                     : _ref(refs.vaults, definition.liquidityVault)
             });
-            bytes32 offerId = _ensureOffer(params);
+            bytes32 offerId = _ensureOffer(params, definition.enabled);
             console.log("Offer:", definition.name);
+            console.log("Enabled:", definition.enabled);
             _log("Offer ID", offerId);
             _log("USD pricer ID", _ref(refs.pricers, definition.pricer));
         }
@@ -249,26 +250,28 @@ abstract contract OfferSetup is OfferConfiguration {
         );
     }
 
-    function _ensureOffer(MakeOfferConfigParams memory params) private returns (bytes32 offerId) {
+    function _ensureOffer(MakeOfferConfigParams memory params, bool enabled) private returns (bytes32 offerId) {
         offerId = OnReIds._offerConfigId(params.tokenIn, params.tokenOut, params.flow);
         IDiamondProxy app = IDiamondProxy(diamond);
         if (!_exists(abi.encodeCall(IDiamondProxy.getOfferConfig, (offerId)), OfferConfigNotFoundError.selector)) {
             _makeOfferConfig(params);
-        } else {
-            OfferConfig memory existing = app.getOfferConfig(offerId);
-            require(existing.enabled, "Offer is disabled; enable it explicitly first");
-            if (!_matches(existing, params)) {
-                _diamondCall(
-                    "updateOfferConfigReferences",
-                    abi.encodeCall(
-                        IDiamondProxy.updateOfferConfigReferences,
-                        (offerId, params.quoterId, params.feeConfigId, params.proceedsVaultId, params.liquidityVaultId)
-                    )
-                );
-            }
         }
+        OfferConfig memory existing = app.getOfferConfig(offerId);
+        // Creation defaults to enabled. Execute creation + disabling in one atomic Safe batch.
+        // Disable existing offers before changing references; enable only after references match.
+        if (!enabled && existing.enabled) _setOfferConfigEnabled(offerId, false);
+        if (!_matches(existing, params)) {
+            _diamondCall(
+                "updateOfferConfigReferences",
+                abi.encodeCall(
+                    IDiamondProxy.updateOfferConfigReferences,
+                    (offerId, params.quoterId, params.feeConfigId, params.proceedsVaultId, params.liquidityVaultId)
+                )
+            );
+        }
+        if (enabled && !existing.enabled) _setOfferConfigEnabled(offerId, true);
         OfferConfig memory offer = app.getOfferConfig(offerId);
-        require(offer.enabled && _matches(offer, params), "Offer verification failed");
+        require(offer.enabled == enabled && _matches(offer, params), "Offer verification failed");
     }
 
     function _matches(OfferConfig memory offer, MakeOfferConfigParams memory params) private pure returns (bool) {

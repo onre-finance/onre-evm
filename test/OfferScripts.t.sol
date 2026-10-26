@@ -13,6 +13,7 @@ import {IDiamondProxy} from "../src/generated/IDiamondProxy.sol";
 import {ManagedToken} from "../src/ManagedToken.sol";
 import {OnReIds} from "../src/libraries/OnReIds.sol";
 import {
+    OfferConfigDisabledError,
     MinimumAmountOutNotMetError,
     ConfigurableVaultNotFoundError,
     InvalidFlowQuoterError,
@@ -54,6 +55,10 @@ contract OfferScriptHarness is SetupOffers {
 
     function transactionCount() external view returns (uint256) {
         return _txs.length;
+    }
+
+    function transactionData(uint256 index) external view returns (bytes memory) {
+        return _txs[index].data;
     }
 
     function runMatching(OfferFlow flow, OfferDirection direction, QuoterKind kind) external {
@@ -175,7 +180,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     "nav-permissionless",
                     "buy-fee",
                     "proceeds",
-                    "none"
+                    "none",
+                    true
                 )
             );
         config.offers
@@ -190,7 +196,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     "nav-permissionless",
                     "buy-fee",
                     "proceeds",
-                    "none"
+                    "none",
+                    true
                 )
             );
         setupScript = new OfferScriptHarness();
@@ -244,6 +251,99 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         setupScript.run();
         assertEq(setupScript.transactionCount(), 0);
         assertEq(app.getPricer(OnReIds._usdPricerId(address(managed))).vectorCount, 1);
+    }
+
+    function test_CreateDisabledOffersAndRerunWithoutTransactions() public {
+        for (uint256 i; i < config.offers.length; ++i) {
+            config.offers[i].enabled = false;
+        }
+        setupScript.configure(environment, config);
+        setupScript.run();
+        uint256 count = setupScript.transactionCount();
+        for (uint256 i; i < config.offers.length; ++i) {
+            bytes32 offerId = _offer(config.offers[i].assetToken);
+            assertFalse(app.getOfferConfig(offerId).enabled);
+            // Each creation is immediately followed by its disable call in the prepared batch.
+            uint256 createIndex = count - 2 * (config.offers.length - i);
+            assertEq(bytes4(setupScript.transactionData(createIndex)), IDiamondProxy.makeOfferConfig.selector);
+            assertEq(
+                setupScript.transactionData(createIndex + 1),
+                abi.encodeCall(IDiamondProxy.setOfferConfigEnabled, (offerId, false))
+            );
+            vm.expectRevert(abi.encodeWithSelector(OfferConfigDisabledError.selector, offerId));
+            app.previewExecution(offerId, 1e6);
+            TakeOfferParams memory params;
+            params.offerConfigId = offerId;
+            params.grossInputAmount = 1e6;
+            params.deadline = uint64(block.timestamp + 60);
+            vm.expectRevert(abi.encodeWithSelector(OfferConfigDisabledError.selector, offerId));
+            vm.prank(user);
+            app.takeOffer(params);
+        }
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 0);
+    }
+
+    function test_ConfigDisablesExistingOffersAndRerunDoesNothing() public {
+        setupScript.run();
+        for (uint256 i; i < config.offers.length; ++i) {
+            config.offers[i].enabled = false;
+        }
+        setupScript.configure(environment, config);
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 2);
+        assertFalse(app.getOfferConfig(_offer(address(usdc))).enabled);
+        assertFalse(app.getOfferConfig(_offer(address(usdg))).enabled);
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 0);
+    }
+
+    function test_ConfigExplicitlyReenablesOnlySelectedOffer() public {
+        for (uint256 i; i < config.offers.length; ++i) {
+            config.offers[i].enabled = false;
+        }
+        setupScript.configure(environment, config);
+        setupScript.run();
+        config.offers[0].enabled = true;
+        setupScript.configure(environment, config);
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 1);
+        assertTrue(app.getOfferConfig(_offer(address(usdc))).enabled);
+        assertFalse(app.getOfferConfig(_offer(address(usdg))).enabled);
+        vm.warp(block.timestamp + 3600);
+        _approveSettlement();
+        assertGt(_buy(usdc, 1000e6), 0);
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 0);
+    }
+
+    function test_DisableBeforeUpdatingReferencesAndKeepDisabled() public {
+        setupScript.run();
+        config.offers[0].enabled = false;
+        config.offers[1].enabled = false;
+        config.offers[1].liquidityVault = "liquidity";
+        config.vaults
+            .push(OfferConfiguration.VaultDefinition("liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0));
+        setupScript.configure(environment, config);
+        setupScript.run();
+        assertEq(
+            setupScript.transactionData(1),
+            abi.encodeCall(IDiamondProxy.setOfferConfigEnabled, (_offer(address(usdc)), false))
+        );
+        assertEq(
+            setupScript.transactionData(2),
+            abi.encodeCall(IDiamondProxy.setOfferConfigEnabled, (_offer(address(usdg)), false))
+        );
+        assertEq(bytes4(setupScript.transactionData(3)), IDiamondProxy.updateOfferConfigReferences.selector);
+        assertFalse(app.getOfferConfig(_offer(address(usdg))).enabled);
+        // Further reference updates work without temporarily re-enabling the disabled offer.
+        config.offers[1].liquidityVault = "none";
+        setupScript.configure(environment, config);
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 1);
+        assertEq(bytes4(setupScript.transactionData(0)), IDiamondProxy.updateOfferConfigReferences.selector);
+        assertFalse(app.getOfferConfig(_offer(address(usdg))).enabled);
+        assertEq(app.getOfferConfig(_offer(address(usdg))).liquidityVaultId, bytes32(0));
     }
 
     function test_ExistingPricingMismatchIsNotSilentlyChanged() public {
@@ -311,7 +411,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     "nav",
                     "buy-fee",
                     "proceeds",
-                    "none"
+                    "none",
+                    true
                 )
             );
         config.offers
@@ -326,7 +427,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     "nav",
                     "buy-fee",
                     "proceeds",
-                    "liquidity"
+                    "liquidity",
+                    true
                 )
             );
         setupScript.configure(environment, config);
@@ -443,6 +545,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         uint256 buys;
         uint256 sells;
         for (uint256 i; i < parsed.offers.length; ++i) {
+            assertFalse(parsed.offers[i].enabled);
             assertEq(parsed.offers[i].pricer, "onyc-usd");
             assertEq(parsed.offers[i].managedToken, parsed.pricers[0].managedToken);
             assertEq(uint8(parsed.offers[i].flow), uint8(OfferFlow.Permissionless));
@@ -502,7 +605,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     "nav",
                     "buy-fee",
                     "proceeds",
-                    "none"
+                    "none",
+                    true
                 )
             );
         setupScript.configure(environment, config);

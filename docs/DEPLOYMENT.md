@@ -9,7 +9,7 @@ with the facet set.
 
 `script/config/<ONRE_ENV>.json` defines named `pricers`, `quoters`, `vaults`,
 `feeConfigs`, and `offers`. Each offer explicitly specifies its `managedToken`,
-`assetToken`, `direction`, `flow`, and references to its components. Names are
+`assetToken`, `direction`, `flow`, `enabled`, and references to its components. Names are
 configuration references; contract IDs are still derived by `OnReIds`.
 
 - Pricers specify a managed token, `denomination: "usd"`, vector, and activation delay.
@@ -22,6 +22,7 @@ configuration references; contract IDs are still derived by `OnReIds`.
 - Offers specify `direction` (`assetToManaged` or `managedToAsset`) and `flow`
   (`permissionless`, `permissioned`, or `worker`). `liquidityVault: "none"` encodes
   a zero liquidity-vault reference. Sells require a named liquidity-kind vault.
+  Each offer requires an explicit `enabled` boolean; setup reconciles that state on-chain.
 
 A named pricer reference must match the offer's managed token and its on-chain USD
 pricer identity: the contracts derive this binding rather than storing a separate
@@ -48,13 +49,26 @@ cadence threshold 20, cadence wave 2000, wall sensitivity 20000, and peg haircut
 3650. Sell input is burned after its fee, USDG is paid from liquidity, and sell
 pressure is recorded in this separate quoter instance.
 
+All three production offers currently have `"enabled": false` in their individual
+entries under `offers`. Base Sepolia and mainnet-test offers remain enabled.
+Setup disables existing active offers when configured false, and enables existing
+disabled offers only when explicitly configured true. Missing offers are created
+and then disabled: the current contract always creates offers enabled. **Execute
+all prepared creation and disable calls in one atomic Safe MultiSend batch** so
+new offers cannot be traded between creation and disabling. Separate transactions
+would leave a temporary active window.
+
+`DisableOffer.s.sol` takes an on-chain offer ID and prepares
+`setOfferConfigEnabled(offerId, false)` if needed. It does not edit the JSON.
+Keep `enabled: false` there to preserve the disabled state on subsequent setup runs.
+
 The pricing baseline matches both Solana production offers observed at slot
 461251574: `baseTime=1789776000`, `basePrice=1146935367`, `apr=104555`, and
 `priceFixDuration=86400`. EVM rejects historical activation times. A pricer's
 `vector.startTime=0` prepares activation at simulation time plus
 `activationDelaySeconds` (currently 3600), preserving the Solana baseline.
-Execute the Safe batch before the printed activation timestamp; buys become
-executable at that time. Regenerate unexecuted batches if their activation passes.
+Execute the Safe batch before the printed activation timestamp; offers configured
+as enabled become executable at that time. Regenerate unexecuted batches if their activation passes.
 
 ```bash
 ONRE_ENV=ethereum-mainnet-live forge script script/SetupOffers.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
@@ -62,8 +76,8 @@ ONRE_ENV=ethereum-mainnet-live forge script script/ApproveSettlementTokens.s.sol
 ```
 
 Setup creates missing components in dependency order, reuses matching components,
-and updates existing offer references. It does not silently enable disabled
-offers or rewrite shared pricing/fee policies. A matching completed setup emits
+and updates existing offer references and enabled states to match the configuration.
+It does not rewrite shared pricing/fee policies. A matching completed setup emits
 no new calls. The legacy buy, permissioned-buy, and Prop AMM sell script names
 select matching flow/direction/quoter definitions from this same configuration.
 The allowance script approves the Diamond for both tokens of each configured
@@ -89,14 +103,16 @@ pnpm test:buy-offers:anvil
 ```
 
 This runs setup and allowance scripts against a disposable production fork,
-applies their calls through local Safe impersonation, advances to vector
-activation, funds a local user from forked holders, and takes both production buy
+applies their calls through local Safe impersonation, checks the configured enabled
+states and rejected trades for disabled offers, then temporarily enables them only
+on Anvil for trading and withdrawal tests. It advances to vector activation, funds a local user from forked holders, and takes both production buy
 offers. It also funds the admin Safe locally, runs the named liquidity deposit
 script, and sells 100 ONyc through the USDG Prop AMM offer. It verifies per-offer
 references, minimum output, fees, separate proceeds, liquidity debits, recorded
 sell pressure, unchanged settlement balances, and repeat setup. It also exercises
 the legacy buy/sell entry points, token deployment, settlement updates, and disabling
-an offer, including repeat calls. Evidence is saved
+an offer, including repeat calls. It restores the configured disabled states through
+setup before verifying that a repeat setup emits no calls. Evidence is saved
 under `.ignore/buy-offers-anvil/`. No mainnet transactions are sent. Override the
 fork provider with `ETH_MAINNET_RPC_URL`; `USDC_HOLDER`/`USDG_HOLDER` select fork-only
 funding donors when automatic discovery is unavailable.

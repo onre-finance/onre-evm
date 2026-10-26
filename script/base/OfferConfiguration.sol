@@ -59,6 +59,7 @@ abstract contract OfferConfiguration is OnReOps {
         string feeConfig;
         string proceedsVault;
         string liquidityVault;
+        bool enabled;
     }
 
     struct Configuration {
@@ -148,18 +149,19 @@ abstract contract OfferConfiguration is OnReOps {
         config.offers = new OfferDefinition[](names.length);
         for (uint256 i; i < names.length; ++i) {
             string memory p = _path("offers", names[i]);
-            config.offers[i] = OfferDefinition({
-                name: names[i],
-                managedToken: vm.parseJsonAddress(json, string.concat(p, ".managedToken")),
-                assetToken: vm.parseJsonAddress(json, string.concat(p, ".assetToken")),
-                direction: _direction(vm.parseJsonString(json, string.concat(p, ".direction"))),
-                flow: _flow(vm.parseJsonString(json, string.concat(p, ".flow"))),
-                pricer: vm.parseJsonString(json, string.concat(p, ".pricer")),
-                quoter: vm.parseJsonString(json, string.concat(p, ".quoter")),
-                feeConfig: vm.parseJsonString(json, string.concat(p, ".feeConfig")),
-                proceedsVault: vm.parseJsonString(json, string.concat(p, ".proceedsVault")),
-                liquidityVault: vm.parseJsonString(json, string.concat(p, ".liquidityVault"))
-            });
+            OfferDefinition memory offer;
+            offer.name = names[i];
+            offer.managedToken = vm.parseJsonAddress(json, string.concat(p, ".managedToken"));
+            offer.assetToken = vm.parseJsonAddress(json, string.concat(p, ".assetToken"));
+            offer.direction = _direction(vm.parseJsonString(json, string.concat(p, ".direction")));
+            offer.flow = _flow(vm.parseJsonString(json, string.concat(p, ".flow")));
+            offer.pricer = vm.parseJsonString(json, string.concat(p, ".pricer"));
+            offer.quoter = vm.parseJsonString(json, string.concat(p, ".quoter"));
+            offer.feeConfig = vm.parseJsonString(json, string.concat(p, ".feeConfig"));
+            offer.proceedsVault = vm.parseJsonString(json, string.concat(p, ".proceedsVault"));
+            offer.liquidityVault = vm.parseJsonString(json, string.concat(p, ".liquidityVault"));
+            offer.enabled = vm.parseJsonBool(json, string.concat(p, ".enabled"));
+            config.offers[i] = offer;
         }
     }
 

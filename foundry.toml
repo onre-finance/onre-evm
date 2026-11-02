@@ -8,6 +8,7 @@ optimizer_runs = 1
 via_ir = true
 bytecode_hash = "none"
 cbor_metadata = false
+fs_permissions = [{ access = "read", path = "./script/config" }]
 
 [fmt]
 # `src/generated` is written by `gemforge build` in Gemforge's own style, and
@@ -15,6 +16,7 @@ cbor_metadata = false
 # placeholder is not parseable Solidity until it is rendered.
 # Note: forge 1.5.1 does not match these files with a `dir/**` glob; `dir/*.sol` does.
 ignore = ["src/generated/*.sol", "templates/*.sol"]
+line_length = 120
 
 [lint]
 # `lib/` is excluded by default; tests use Foundry's test_ naming convention.

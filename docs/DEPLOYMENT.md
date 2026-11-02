@@ -5,6 +5,136 @@ diffs the compiled facet ABIs against the on-chain loupe and applies exactly the
 cuts that differ, so there is no hand-written deployment script to keep in sync
 with the facet set.
 
+## Configured offers
+
+`script/config/<ONRE_ENV>.json` defines named `pricers`, `quoters`, `vaults`,
+`feeConfigs`, and `offers`. Each offer explicitly specifies its `managedToken`,
+`assetToken`, `direction`, `flow`, `enabled`, and references to its components. Names are
+configuration references; contract IDs are still derived by `OnReIds`.
+
+- Pricers specify a managed token, `denomination: "usd"`, vector, and activation delay.
+- Quoters specify `kind` (`nav`, `navPermissionless`, or `propAmm`) and `instanceId`.
+  Prop AMM definitions also specify their exact managed/asset pair and `config`.
+- Vaults specify `kind` (`fee`, `proceeds`, `liquidity`, or `bufferReserve`),
+  `instanceId`, `withdrawalDestination`, and `refillTargetBps`.
+- Fee configs specify `instanceId`, `basisPoints`, `minimumFeeAmount`, and their
+  named `feeVault`. Different offers can reference different fee configs and quoters.
+- Offers specify `direction` (`assetToManaged` or `managedToAsset`) and `flow`
+  (`permissionless`, `permissioned`, or `worker`). `liquidityVault: "none"` encodes
+  a zero liquidity-vault reference. Sells require a named liquidity-kind vault.
+  Each offer requires an explicit `enabled` boolean; setup reconciles that state on-chain.
+
+A named pricer reference must match the offer's managed token and its on-chain USD
+pricer identity: the contracts derive this binding rather than storing a separate
+pricer ID in each offer. Permissioned and worker offers require a `nav` quoter;
+worker offers must use `managedToAsset`. Permissionless offers use
+`navPermissionless` or a pair-matching `propAmm` quoter. Repeated component IDs and
+repeated directed token-pair/flow identities are rejected, even under different
+configuration names. Separate quoter/fee instances need separate instance IDs.
+
+Production (`ethereum-mainnet-live`) contains two permissionless NAV buy offers using
+native Ethereum [USDC](https://developers.circle.com/stablecoins/usdc-contract-addresses)
+and [USDG](https://docs.paxos.com/guides/stablecoin/usdg/mainnet). They reference the
+same `onyc-usd` pricer, `nav-permissionless` quoter, `buy-fee` config, and `proceeds`
+vault. These references are independent per offer and can be changed separately.
+Both buys use `liquidityVault: "none"`; proceeds/fees are accounted per token.
+
+Production also defines `onyc-to-usdg-prop`: a permissionless `managedToAsset`
+offer referencing `onyc-usd`, its own `usdg-prop-amm` quoter, a new `usdg-prop-fee`
+config at 30 bps, a new `usdg-prop-proceeds` vault, and `usdg-liquidity`. The fee is
+charged in ONyc. The liquidity vault has refill target zero, so it must be funded
+explicitly; no automatic refill is configured. The Prop AMM parameters are the
+values from the existing sell script: 300-second epochs, curve exponent 19000,
+cadence threshold 20, cadence wave 2000, wall sensitivity 20000, and peg haircut
+3650. Sell input is burned after its fee, USDG is paid from liquidity, and sell
+pressure is recorded in this separate quoter instance.
+
+All three production offers currently have `"enabled": false` in their individual
+entries under `offers`. Base Sepolia and mainnet-test offers remain enabled.
+Setup disables existing active offers when configured false, and enables existing
+disabled offers only when explicitly configured true. Missing offers are created
+and then disabled: the current contract always creates offers enabled. **Execute
+all prepared creation and disable calls in one atomic Safe MultiSend batch** so
+new offers cannot be traded between creation and disabling. Separate transactions
+would leave a temporary active window.
+
+`DisableOffer.s.sol` takes an on-chain offer ID and prepares
+`setOfferConfigEnabled(offerId, false)` if needed. It does not edit the JSON.
+Keep `enabled: false` there to preserve the disabled state on subsequent setup runs.
+
+The pricing baseline matches both Solana production offers observed at slot
+461251574: `baseTime=1789776000`, `basePrice=1146935367`, `apr=104555`, and
+`priceFixDuration=86400`. EVM rejects historical activation times. A pricer's
+`vector.startTime=0` prepares activation at simulation time plus
+`activationDelaySeconds` (currently 3600), preserving the Solana baseline.
+Execute the Safe batch before the printed activation timestamp; offers configured
+as enabled become executable at that time. Regenerate unexecuted batches if their activation passes.
+
+```bash
+ONRE_ENV=ethereum-mainnet-live forge script script/SetupOffers.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
+ONRE_ENV=ethereum-mainnet-live forge script script/ApproveSettlementTokens.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
+```
+
+Setup creates missing components in dependency order, reuses matching components,
+and updates existing offer references and enabled states to match the configuration.
+It does not rewrite shared pricing/fee policies. A matching completed setup emits
+no new calls. The legacy buy, permissioned-buy, and Prop AMM sell script names
+select matching flow/direction/quoter definitions from this same configuration.
+The allowance script approves the Diamond for both tokens of each configured
+permissionless offer, skipping maximum allowances and permissioned/worker offers.
+Execute setup calls from the admin Safe and allowance calls from the settlement
+Safe. Neither script broadcasts. There are no top-level token defaults: the
+token pair comes from each offer, and the pricer/quoter pair bindings are explicit.
+
+To fund the configured USDG liquidity vault, use its offer name and an amount in
+USDG base units (the example is 10,000 USDG with six decimals):
+
+```bash
+ONRE_ENV=ethereum-mainnet-live forge script script/DepositLiquidityVault.s.sol --sig "run(string,uint256)" "onyc-to-usdg-prop" 10000000000 --rpc-url "$ETH_MAINNET_RPC_URL"
+```
+
+The deposit script reads that offer's asset token and named liquidity vault,
+checks the live offer's vault reference, requires the admin Safe to already hold
+the funds, and prints any needed approval followed by the deposit call. It does
+not mint tokens, and funding is separate from offer creation.
+
+The remaining operations use the same Safe simulation and calldata output:
+
+```bash
+ONRE_ENV=ethereum-mainnet-live forge script script/SetSettlementAccount.s.sol --rpc-url "$ETH_MAINNET_RPC_URL"
+ONRE_ENV=ethereum-mainnet-live forge script script/DisableOffer.s.sol --sig "run(bytes32)" <offerId> --rpc-url "$ETH_MAINNET_RPC_URL"
+ONRE_ENV=ethereum-mainnet-test forge script script/DeployManagedToken.s.sol --sig "run(string,string,uint8,bytes32)" "Test Token" "TEST" 9 0x0000000000000000000000000000000000000000000000000000000000000001 --rpc-url "$ETH_MAINNET_RPC_URL"
+```
+
+Settlement updates and disabling an offer emit no calls when already applied.
+Token deployment accepts metadata and the implementation's CREATE2 salt as arguments;
+choose an unused salt. It prints the implementation deployment and Diamond token
+creation calls for the configured admin Safe. The simulated token address depends
+on the Diamond nonce when the batch executes.
+
+## Base Sepolia BUFFER initialization
+
+`script/config/base-sepolia.json` contains the `buffer` configuration. Its three
+vault references point to entries under `vaults` with `bufferManagedToken` set.
+These vault IDs derive from the managed token and BUFFER role, independently of
+normal offer vault IDs. Offer setup skips unused BUFFER vault definitions.
+
+```bash
+ONRE_ENV=base-sepolia forge script script/InitializeBuffer.s.sol --rpc-url "$BASE_SEPOLIA_RPC_URL"
+```
+
+This script requires a fresh BUFFER and rejects other environments. It initializes
+the reserve, management-fee, and performance-fee vaults, assigns their configured
+withdrawal destinations, and applies the configured controller, gross APR, and fees.
+The current gross APR is 20%, with management fee 300 bps, performance fee 500 bps,
+and the performance-fee high-watermark policy enabled. Supply and watermark baselines come from chain state.
+
+Execute the printed calls together from the configured Safe. The
+`setBufferController` call targets the **managed token**, with the Diamond as its
+argument; the other initialization calls target the Diamond. Simulation prints
+calldata and does not broadcast transactions. An existing BUFFER is left untouched
+because initialization reverts rather than resetting it.
+
 ## Quick start
 
 ```bash

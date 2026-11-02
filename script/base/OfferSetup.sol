@@ -100,6 +100,10 @@ abstract contract OfferSetup is OfferConfiguration {
             _ensurePricer(config.pricers[i], refs.pricers.ids[i]);
         }
         for (uint256 i; i < config.vaults.length; ++i) {
+            // Merely listing BUFFER vaults must not make unrelated offers depend on BUFFER initialization.
+            if (config.vaults[i].bufferManagedToken != address(0) && !_usesVault(config, config.vaults[i].name)) {
+                continue;
+            }
             _ensureVault(config.vaults[i], refs.vaults.ids[i]);
         }
         for (uint256 i; i < config.quoters.length; ++i) {
@@ -146,9 +150,7 @@ abstract contract OfferSetup is OfferConfiguration {
             _define(r.quoters, i, c.quoters[i].name, OnReIds._quoterId(c.quoters[i].kind, c.quoters[i].instanceId));
         }
         for (uint256 i; i < c.vaults.length; ++i) {
-            _define(
-                r.vaults, i, c.vaults[i].name, OnReIds._configurableVaultId(c.vaults[i].kind, c.vaults[i].instanceId)
-            );
+            _define(r.vaults, i, c.vaults[i].name, _vaultId(c.vaults[i]));
         }
         for (uint256 i; i < c.feeConfigs.length; ++i) {
             _define(r.fees, i, c.feeConfigs[i].name, OnReIds._feeConfigId(c.feeConfigs[i].instanceId));
@@ -203,6 +205,7 @@ abstract contract OfferSetup is OfferConfiguration {
         if (!_exists(
                 abi.encodeCall(IDiamondProxy.getConfigurableVault, (vaultId)), ConfigurableVaultNotFoundError.selector
             )) {
+            require(definition.bufferManagedToken == address(0), "Initialize BUFFER before using its vaults");
             _createConfigurableVault(
                 definition.kind, definition.instanceId, definition.withdrawalDestination, definition.refillTargetBps
             );
@@ -213,6 +216,16 @@ abstract contract OfferSetup is OfferConfiguration {
                 && vault.refillTargetBps == definition.refillTargetBps,
             "Existing vault differs from config"
         );
+    }
+
+    function _usesVault(Configuration memory config, string memory name) private pure returns (bool) {
+        for (uint256 i; i < config.feeConfigs.length; ++i) {
+            if (_is(config.feeConfigs[i].feeVault, name)) return true;
+        }
+        for (uint256 i; i < config.offers.length; ++i) {
+            if (_is(config.offers[i].proceedsVault, name) || _is(config.offers[i].liquidityVault, name)) return true;
+        }
+        return false;
     }
 
     function _ensureQuoter(QuoterDefinition memory definition, bytes32 quoterId) private {

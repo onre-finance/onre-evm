@@ -98,25 +98,6 @@ checks the live offer's vault reference, requires the admin Safe to already hold
 the funds, and prints any needed approval followed by the deposit call. It does
 not mint tokens, and funding is separate from offer creation.
 
-```bash
-pnpm test:buy-offers:anvil
-```
-
-This runs setup and allowance scripts against a disposable production fork,
-applies their calls through local Safe impersonation, checks the configured enabled
-states and rejected trades for disabled offers, then temporarily enables them only
-on Anvil for trading and withdrawal tests. It advances to vector activation, funds a local user from forked holders, and takes both production buy
-offers. It also funds the admin Safe locally, runs the named liquidity deposit
-script, and sells 100 ONyc through the USDG Prop AMM offer. It verifies per-offer
-references, minimum output, fees, separate proceeds, liquidity debits, recorded
-sell pressure, unchanged settlement balances, and repeat setup. It also exercises
-the legacy buy/sell entry points, token deployment, settlement updates, and disabling
-an offer, including repeat calls. It restores the configured disabled states through
-setup before verifying that a repeat setup emits no calls. Evidence is saved
-under `.ignore/buy-offers-anvil/`. No mainnet transactions are sent. Override the
-fork provider with `ETH_MAINNET_RPC_URL`; `USDC_HOLDER`/`USDG_HOLDER` select fork-only
-funding donors when automatic discovery is unavailable.
-
 The remaining operations use the same Safe simulation and calldata output:
 
 ```bash
@@ -130,6 +111,29 @@ Token deployment accepts metadata and the implementation's CREATE2 salt as argum
 choose an unused salt. It prints the implementation deployment and Diamond token
 creation calls for the configured admin Safe. The simulated token address depends
 on the Diamond nonce when the batch executes.
+
+## Base Sepolia BUFFER initialization
+
+`script/config/base-sepolia.json` contains the `buffer` configuration. Its three
+vault references point to entries under `vaults` with `bufferManagedToken` set.
+These vault IDs derive from the managed token and BUFFER role, independently of
+normal offer vault IDs. Offer setup skips unused BUFFER vault definitions.
+
+```bash
+ONRE_ENV=base-sepolia forge script script/InitializeBuffer.s.sol --rpc-url "$BASE_SEPOLIA_RPC_URL"
+```
+
+This script requires a fresh BUFFER and rejects other environments. It initializes
+the reserve, management-fee, and performance-fee vaults, assigns their configured
+withdrawal destinations, and applies the configured controller, gross APR, and fees.
+The current gross APR is 20%, with management fee 300 bps, performance fee 500 bps,
+and the performance-fee high-watermark policy enabled. Supply and watermark baselines come from chain state.
+
+Execute the printed calls together from the configured Safe. The
+`setBufferController` call targets the **managed token**, with the Diamond as its
+argument; the other initialization calls target the Diamond. Simulation prints
+calldata and does not broadcast transactions. An existing BUFFER is left untouched
+because initialization reverts rather than resetting it.
 
 ## Quick start
 

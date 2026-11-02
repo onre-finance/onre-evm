@@ -38,6 +38,8 @@ abstract contract OfferConfiguration is OnReOps {
         uint64 instanceId;
         address withdrawalDestination;
         uint16 refillTargetBps;
+        // Nonzero for vaults created by initializeBuffer; instance IDs are BUFFER's fixed 0/1/2 roles.
+        address bufferManagedToken;
     }
 
     struct FeeDefinition {
@@ -124,14 +126,7 @@ abstract contract OfferConfiguration is OnReOps {
         names = vm.parseJsonKeys(json, ".vaults");
         config.vaults = new VaultDefinition[](names.length);
         for (uint256 i; i < names.length; ++i) {
-            string memory p = _path("vaults", names[i]);
-            config.vaults[i] = VaultDefinition({
-                name: names[i],
-                kind: _vaultKind(vm.parseJsonString(json, string.concat(p, ".kind"))),
-                instanceId: _u64(json, string.concat(p, ".instanceId")),
-                withdrawalDestination: vm.parseJsonAddress(json, string.concat(p, ".withdrawalDestination")),
-                refillTargetBps: _u16(json, string.concat(p, ".refillTargetBps"))
-            });
+            config.vaults[i] = _parseVaultDefinition(json, names[i]);
         }
         names = vm.parseJsonKeys(json, ".feeConfigs");
         config.feeConfigs = new FeeDefinition[](names.length);
@@ -172,13 +167,55 @@ abstract contract OfferConfiguration is OnReOps {
         revert(string.concat("Unknown offer: ", name));
     }
 
+    function _parseVaultDefinition(string memory json, string memory name)
+        internal
+        pure
+        returns (VaultDefinition memory vault)
+    {
+        string memory p = _path("vaults", name);
+        vault.name = name;
+        vault.kind = _vaultKind(vm.parseJsonString(json, string.concat(p, ".kind")));
+        vault.instanceId = _u64(json, string.concat(p, ".instanceId"));
+        vault.withdrawalDestination = vm.parseJsonAddress(json, string.concat(p, ".withdrawalDestination"));
+        vault.refillTargetBps = _u16(json, string.concat(p, ".refillTargetBps"));
+        string[] memory keys = vm.parseJsonKeys(json, p);
+        for (uint256 i; i < keys.length; ++i) {
+            if (!_is(keys[i], "bufferManagedToken")) continue;
+            vault.bufferManagedToken = vm.parseJsonAddress(json, string.concat(p, ".bufferManagedToken"));
+            require(vault.bufferManagedToken != address(0), "BUFFER managed token not set");
+            break;
+        }
+    }
+
+    /// BUFFER vaults use token-derived IDs, distinct from normal kind/instance IDs.
+    function _vaultId(VaultDefinition memory vault) internal pure returns (bytes32) {
+        if (vault.bufferManagedToken == address(0)) {
+            return OnReIds._configurableVaultId(vault.kind, vault.instanceId);
+        }
+        if (
+            vault.kind == ConfigurableVaultKind.BufferReserve
+                && vault.instanceId == OnReIds.BUFFER_RESERVE_VAULT_INSTANCE_ID
+        ) {
+            return OnReIds._bufferReserveVaultId(vault.bufferManagedToken);
+        }
+        if (vault.kind == ConfigurableVaultKind.Fee) {
+            if (vault.instanceId == OnReIds.BUFFER_MANAGEMENT_FEE_VAULT_INSTANCE_ID) {
+                return OnReIds._bufferManagementFeeVaultId(vault.bufferManagedToken);
+            }
+            if (vault.instanceId == OnReIds.BUFFER_PERFORMANCE_FEE_VAULT_INSTANCE_ID) {
+                return OnReIds._bufferPerformanceFeeVaultId(vault.bufferManagedToken);
+            }
+        }
+        revert("Invalid BUFFER vault kind/instanceId");
+    }
+
     function _liquidityVaultId(Configuration memory config, string memory name) internal pure returns (bytes32) {
         require(!_is(name, "none"), "Offer has no liquidity vault");
         for (uint256 i; i < config.vaults.length; ++i) {
             VaultDefinition memory vault = config.vaults[i];
             if (!_is(vault.name, name)) continue;
             require(vault.kind == ConfigurableVaultKind.Liquidity, "Offer vault must be liquidity kind");
-            return OnReIds._configurableVaultId(vault.kind, vault.instanceId);
+            return _vaultId(vault);
         }
         revert(string.concat("Unknown liquidity vault: ", name));
     }

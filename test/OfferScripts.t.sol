@@ -164,9 +164,16 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     PropAmmConfig(0, 0, 0, 0, 0, 0)
                 )
             );
-        config.vaults.push(OfferConfiguration.VaultDefinition("fees", ConfigurableVaultKind.Fee, 0, address(this), 0));
         config.vaults
-            .push(OfferConfiguration.VaultDefinition("proceeds", ConfigurableVaultKind.Proceeds, 0, address(this), 0));
+            .push(
+                OfferConfiguration.VaultDefinition("fees", ConfigurableVaultKind.Fee, 0, address(this), 0, address(0))
+            );
+        config.vaults
+                .push(
+                OfferConfiguration.VaultDefinition(
+                    "proceeds", ConfigurableVaultKind.Proceeds, 0, address(this), 0, address(0)
+                )
+            );
         config.feeConfigs.push(OfferConfiguration.FeeDefinition("buy-fee", 0, 0, 0, "fees"));
         config.offers
             .push(
@@ -323,7 +330,11 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         config.offers[1].enabled = false;
         config.offers[1].liquidityVault = "liquidity";
         config.vaults
-            .push(OfferConfiguration.VaultDefinition("liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0));
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0, address(0)
+                )
+            );
         setupScript.configure(environment, config);
         setupScript.run();
         assertEq(
@@ -395,10 +406,78 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         setupScript.run();
     }
 
+    function test_UnusedBufferVaultDefinitionsDoNotRequireInitialization() public {
+        _addBufferVaultDefinitions();
+        setupScript.configure(environment, config);
+        setupScript.run();
+        assertTrue(app.getOfferConfig(_offer(address(usdc))).enabled);
+        bytes32 managementVault = OnReIds._bufferManagementFeeVaultId(address(managed));
+        vm.expectRevert(abi.encodeWithSelector(ConfigurableVaultNotFoundError.selector, managementVault));
+        app.getConfigurableVault(managementVault);
+    }
+
+    function test_ReferencingMissingBufferVaultRequiresInitialization() public {
+        _addBufferVaultDefinitions();
+        config.feeConfigs[0].feeVault = "onyc-management-fees";
+        setupScript.configure(environment, config);
+        vm.expectRevert("Initialize BUFFER before using its vaults");
+        setupScript.run();
+    }
+
+    function test_OffersCanReuseBothNamedBufferFeeVaults() public {
+        app.initializeBuffer(address(managed));
+        bytes32 managementVault = OnReIds._bufferManagementFeeVaultId(address(managed));
+        bytes32 performanceVault = OnReIds._bufferPerformanceFeeVaultId(address(managed));
+        app.updateConfigurableVault(managementVault, address(this), 0);
+        app.updateConfigurableVault(performanceVault, address(this), 0);
+        _addBufferVaultDefinitions();
+        config.feeConfigs[0].basisPoints = 20;
+        config.feeConfigs[0].feeVault = "onyc-management-fees";
+        config.feeConfigs.push(OfferConfiguration.FeeDefinition("usdg-fee", 1, 50, 0, "onyc-performance-fees"));
+        config.offers[1].feeConfig = "usdg-fee";
+        setupScript.configure(environment, config);
+        setupScript.run();
+        assertEq(app.getFeeConfig(app.getOfferConfig(_offer(address(usdc))).feeConfigId).feeVaultId, managementVault);
+        assertEq(app.getFeeConfig(app.getOfferConfig(_offer(address(usdg))).feeConfigId).feeVaultId, performanceVault);
+        vm.warp(block.timestamp + 3600);
+        _approveSettlement();
+        _buy(usdc, 1000e6);
+        _buy(usdg, 1000e6);
+        assertEq(app.configurableVaultBalance(managementVault, address(usdc)), 2e6);
+        assertEq(app.configurableVaultBalance(performanceVault, address(usdg)), 5e6);
+        setupScript.run();
+        assertEq(setupScript.transactionCount(), 0);
+    }
+
+    function _addBufferVaultDefinitions() private {
+        config.vaults
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "onyc-buffer-reserve", ConfigurableVaultKind.BufferReserve, 0, address(this), 0, address(managed)
+                )
+            );
+        config.vaults
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "onyc-management-fees", ConfigurableVaultKind.Fee, 1, address(this), 0, address(managed)
+                )
+            );
+        config.vaults
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "onyc-performance-fees", ConfigurableVaultKind.Fee, 2, address(this), 0, address(managed)
+                )
+            );
+    }
+
     function test_CreatePermissionedAndWorkerOffersFromExplicitDefinitions() public {
         _addNavQuoter();
         config.vaults
-            .push(OfferConfiguration.VaultDefinition("liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0));
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0, address(0)
+                )
+            );
         config.offers
             .push(
                 OfferConfiguration.OfferDefinition(
@@ -454,7 +533,11 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                 )
             );
         config.vaults
-            .push(OfferConfiguration.VaultDefinition("usdg-fees", ConfigurableVaultKind.Fee, 1, address(this), 0));
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "usdg-fees", ConfigurableVaultKind.Fee, 1, address(this), 0, address(0)
+                )
+            );
         config.feeConfigs.push(OfferConfiguration.FeeDefinition("usdg-fee", 1, 50, 0, "usdg-fees"));
         config.offers[1].quoter = "usdg-nav";
         config.offers[1].feeConfig = "usdg-fee";
@@ -533,6 +616,18 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         assertGt(setupScript.transactionCount(), 0);
         setupScript.run();
         assertEq(setupScript.transactionCount(), 0);
+    }
+
+    function test_ParseBaseSepoliaIncludesThreeBufferVaultsAndNoBufferFeeConfigs() public {
+        OfferConfigurationHarness reader = new OfferConfigurationHarness();
+        OfferConfiguration.Configuration memory parsed = reader.parse(vm.readFile("script/config/base-sepolia.json"));
+        assertEq(parsed.vaults.length, 6);
+        assertEq(parsed.feeConfigs.length, 2);
+        uint256 bufferVaults;
+        for (uint256 i; i < parsed.vaults.length; ++i) {
+            if (parsed.vaults[i].bufferManagedToken != address(0)) ++bufferVaults;
+        }
+        assertEq(bufferVaults, 3);
     }
 
     function test_ParseProductionNamedDefinitions() public {
@@ -619,7 +714,11 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
 
     function _addUsdGLiquidityReference() private {
         config.vaults
-            .push(OfferConfiguration.VaultDefinition("liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0));
+            .push(
+                OfferConfiguration.VaultDefinition(
+                    "liquidity", ConfigurableVaultKind.Liquidity, 0, address(this), 0, address(0)
+                )
+            );
         config.offers[1].liquidityVault = "liquidity";
     }
 

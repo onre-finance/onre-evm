@@ -3,6 +3,16 @@
   "diamond": "0x3DBd1B71332f7935dc2DAeFD16C353Ba055d690D",
   "safe": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
   "settlementAccount": "0xB374880032984b8a56BE3CA28032775EB6F31D6C",
+  "buffer": {
+    "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+    "reserveVault": "onyc-buffer-reserve",
+    "managementFeeVault": "onyc-management-fees",
+    "performanceFeeVault": "onyc-performance-fees",
+    "grossApr": 200000,
+    "managementFeeBasisPoints": 300,
+    "performanceFeeBasisPoints": 500,
+    "performanceFeeHighWatermarkEnabled": true
+  },
   "pricers": {
     "onyc-usd": {
       "managedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
@@ -42,6 +52,27 @@
     }
   },
   "vaults": {
+    "onyc-buffer-reserve": {
+      "kind": "bufferReserve",
+      "instanceId": 0,
+      "bufferManagedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "withdrawalDestination": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
+      "refillTargetBps": 0
+    },
+    "onyc-management-fees": {
+      "kind": "fee",
+      "instanceId": 1,
+      "bufferManagedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "withdrawalDestination": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
+      "refillTargetBps": 0
+    },
+    "onyc-performance-fees": {
+      "kind": "fee",
+      "instanceId": 2,
+      "bufferManagedToken": "0x3D6b4235A796563781ADf6505882e5d45867FE49",
+      "withdrawalDestination": "0x99CDC01fF619EB512F50161B296D0910a5b06738",
+      "refillTargetBps": 0
+    },
     "fees": {
       "kind": "fee",
       "instanceId": 0,

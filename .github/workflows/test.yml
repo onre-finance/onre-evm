@@ -55,5 +55,7 @@ jobs:
       - name: Run Forge tests
         run: forge test -vvv
 
-      - name: Run Gemforge deployment and upgrade integration test
+      - name: Check Gemforge production facet changes
+        env:
+          ETH_MAINNET_RPC_URL: ${{ secrets.ETH_MAINNET_RPC_URL }}
         run: pnpm test:integration

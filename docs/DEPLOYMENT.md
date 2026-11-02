@@ -243,6 +243,13 @@ input as user to settlement account to Diamond and output as Diamond or mint to
 settlement account to user. The account is a transient hop, not an inventory
 source, and its token balances are unchanged after successful settlement.
 
+## Checking production facet changes
+
+With `ETH_MAINNET_RPC_URL` in your shell or `.env`, run `pnpm test:integration`.
+This builds the contracts and runs `gemforge deploy mainnet_live --dry`, reporting
+proposed facet changes against production without sending transactions.
+CI reads the RPC URL from the `ETH_MAINNET_RPC_URL` repository secret.
+
 ## What an upgrade does
 
 `gemforge deploy <target>` on an existing deployment reads `facets()` from the

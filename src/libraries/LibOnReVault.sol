@@ -22,12 +22,14 @@ import {
 import {
     ConfigurableVaultAccrued,
     ConfigurableVaultCreated,
+    ConfigurableVaultDebited,
     ConfigurableVaultUpdated,
     ConfigurableVaultWithdrawn
 } from "../types/OnReAppEvents.sol";
 import {ConfigurableVault, ConfigurableVaultKind} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
+import {LibOnReMarketMakerGuard} from "./LibOnReMarketMakerGuard.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
 import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
@@ -35,6 +37,14 @@ import {MAX_BASIS_POINTS} from "./OnReConstants.sol";
 /// @notice Configuration, accounting, and token movement for reusable vault instances.
 library LibOnReVault {
     using SafeERC20 for IERC20;
+
+    modifier guardMarketMakerVault(bytes32 vaultId) {
+        bool guarded =
+            LibOnReStorage._appStorage().configurableVaults[vaultId].kind == ConfigurableVaultKind.MarketMaker;
+        if (guarded) LibOnReMarketMakerGuard._enter();
+        _;
+        if (guarded) LibOnReMarketMakerGuard._exit();
+    }
 
     function _createConfigurableVault(
         ConfigurableVaultKind kind,
@@ -86,7 +96,10 @@ library LibOnReVault {
         emit ConfigurableVaultUpdated(vaultId, withdrawalDestination, refillTargetBps);
     }
 
-    function _depositConfigurableVault(bytes32 vaultId, address token, uint256 amount) internal {
+    function _depositConfigurableVault(bytes32 vaultId, address token, uint256 amount)
+        internal
+        guardMarketMakerVault(vaultId)
+    {
         LibOnReValidation._requireConfigurableVault(vaultId);
         if (token == address(0)) revert ZeroAddressError();
         if (amount == 0) revert InvalidAmountError();
@@ -97,6 +110,7 @@ library LibOnReVault {
 
     function _withdrawConfigurableVault(bytes32 vaultId, address token, uint256 amount)
         internal
+        guardMarketMakerVault(vaultId)
         returns (uint256 withdrawnAmount)
     {
         if (amount == 0) revert InvalidAmountError();
@@ -105,7 +119,11 @@ library LibOnReVault {
         return amount;
     }
 
-    function _withdrawAllConfigurableVault(bytes32 vaultId, address token) internal returns (uint256 withdrawnAmount) {
+    function _withdrawAllConfigurableVault(bytes32 vaultId, address token)
+        internal
+        guardMarketMakerVault(vaultId)
+        returns (uint256 withdrawnAmount)
+    {
         address destination = _requireWithdrawalDestination(vaultId, token);
         withdrawnAmount = _balance(vaultId, token);
         if (withdrawnAmount == 0) revert ZeroBalanceError();
@@ -116,7 +134,10 @@ library LibOnReVault {
         if (LibOnReStorage._appStorage().isKilled) revert KilledError();
         if (token == address(0)) revert ZeroAddressError();
         ConfigurableVault storage vault = LibOnReValidation._requireConfigurableVault(vaultId);
-        if (vault.kind == ConfigurableVaultKind.Liquidity || vault.kind == ConfigurableVaultKind.BufferReserve) {
+        if (
+            vault.kind == ConfigurableVaultKind.Liquidity || vault.kind == ConfigurableVaultKind.BufferReserve
+                || vault.kind == ConfigurableVaultKind.MarketMaker
+        ) {
             LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
         } else if (vault.kind != ConfigurableVaultKind.Fee && vault.kind != ConfigurableVaultKind.Proceeds) {
             revert UnsupportedConfigurableVaultKindError(uint8(vault.kind));
@@ -180,12 +201,22 @@ library LibOnReVault {
         return LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token];
     }
 
+    /// @notice Reserve MM inventory for a swap without transferring any other vault's tokens.
+    function _debitMarketMaker(bytes32 vaultId, address token, uint256 amount) internal {
+        LibOnReValidation._requireVaultKind(vaultId, ConfigurableVaultKind.MarketMaker);
+        uint256 available = _balance(vaultId, token);
+        if (amount > available) revert InsufficientBalanceError(available, amount);
+        uint256 newBalance = available - amount;
+        LibOnReStorage._appStorage().configurableVaultBalances[vaultId][token] = newBalance;
+        emit ConfigurableVaultDebited(vaultId, token, amount, newBalance);
+    }
+
     function _validateRefillTarget(ConfigurableVaultKind kind, uint16 refillTargetBps) private pure {
         if (refillTargetBps > MAX_BASIS_POINTS) revert InvalidBasisPointsError();
         if (kind == ConfigurableVaultKind.Liquidity) return;
         if (
             kind == ConfigurableVaultKind.Fee || kind == ConfigurableVaultKind.Proceeds
-                || kind == ConfigurableVaultKind.BufferReserve
+                || kind == ConfigurableVaultKind.BufferReserve || kind == ConfigurableVaultKind.MarketMaker
         ) {
             if (refillTargetBps != 0) revert InvalidBasisPointsError();
             return;

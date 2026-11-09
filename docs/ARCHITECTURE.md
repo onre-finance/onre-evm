@@ -28,7 +28,10 @@ generates against, so the layout has to match what its templates import. See
   `takeOffer` execution.
 - `OnReFulfillmentFacet` implements escrowed worker requests and partial fills.
 - `OnReConfigurableVaultFacet` implements reusable Fee, Proceeds, Liquidity,
-  and BufferReserve vault instances.
+  BufferReserve, and MarketMaker vault instances.
+- `OnReMarketMakerFacet` implements executor-authorized, hookless Uniswap v4
+  swaps with separate MM inventory and existing boss authority. See
+  [`docs/MARKET_MAKER.md`](MARKET_MAKER.md).
 - `OnReBufferFacet` implements per-token Buffer configuration, accrual, manual
   settlement, boss-authorized reserve burns for USD asset adjustments, and the
   token supply-change callback.
@@ -61,6 +64,9 @@ The internal libraries follow the same responsibility boundaries:
   configuration.
 - `LibOnReBuffer` owns per-token Buffer accrual, fee splitting, supply
   reconciliation, NAV-preserving reserve burns, and logical-vault accounting.
+- `LibOnReMarketMaker` owns MM configuration, local emergency control,
+  the authenticated v4 unlock callback, and exact swap settlement against a
+  dedicated MarketMaker configurable vault.
 - `OnReMath` owns shared pure arithmetic; domain libraries add policy around
   those calculations rather than duplicating the formulas.
 
@@ -139,17 +145,22 @@ lookahead. This admission check does not rewrite vectors already in storage.
 
 ## Vault boundary
 
-The Diamond has four reusable vault kinds: `Fee`, `Proceeds`, `Liquidity`, and
-`BufferReserve`. Each vault instance has one fixed withdrawal destination and
-an independent logical balance per ERC-20 token. Tokens remain physically held
-by the Diamond.
+The Diamond has five reusable vault kinds: `Fee`, `Proceeds`, `Liquidity`,
+`BufferReserve`, and `MarketMaker`. Each vault instance has one fixed withdrawal
+destination and an independent logical balance per ERC-20 token. Tokens remain
+physically held by the Diamond.
 
-Anyone may deposit. Fee and Proceeds withdrawals are permissionless; Liquidity
-and BufferReserve withdrawals require `DEFAULT_ADMIN_ROLE`. Withdrawals can only
-send to the configured destination. `withdrawConfigurableVault` requires a
+Anyone may deposit. Fee and Proceeds withdrawals are permissionless; Liquidity,
+BufferReserve, and MarketMaker withdrawals require `DEFAULT_ADMIN_ROLE`.
+Withdrawals can only send to the configured destination. `withdrawConfigurableVault` requires a
 nonzero amount; `withdrawAllConfigurableVault` withdraws the selected token's
 full logical vault balance and reverts if it is empty. Both paths reject
 fee-on-transfer assets through exact balance accounting.
+
+MarketMaker vaults use the same deposit, withdrawal, configured-destination, and
+per-token balance APIs. They have a zero refill target. A bot can spend only the
+MarketMaker vault selected by its boss-approved configuration. Its Uniswap
+callback and standard vault entrypoints share a transient reentrancy lock.
 
 Buffer accrual mints the full
 amount to the Diamond and divides that balance between one BufferReserve vault

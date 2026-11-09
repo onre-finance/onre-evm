@@ -49,12 +49,17 @@ contract OnReDiamondTest is Test, OnReDiamondTestHelper {
 
     function test_AtomicDeploymentInstallsStandardAndApplicationFacets() public view {
         IDiamondLoupe loupe = IDiamondLoupe(address(app));
-        assertEq(loupe.facetAddresses().length, 13);
-        assertEq(loupe.facets().length, 13);
+        assertEq(loupe.facetAddresses().length, 14);
+        assertEq(loupe.facets().length, 14);
         assertTrue(loupe.facetAddress(IDiamondProxy.deployManagedToken.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.registerManagedToken.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.initializeBuffer.selector) != address(0));
         assertTrue(loupe.facetAddress(IDiamondProxy.marketStats.selector) != address(0));
+        assertTrue(loupe.facetAddress(IDiamondProxy.swapUniswapV4.selector) != address(0));
+        assertEq(
+            loupe.facetAddress(IDiamondProxy.unlockCallback.selector),
+            loupe.facetAddress(IDiamondProxy.swapUniswapV4.selector)
+        );
         assertNotEq(
             loupe.facetAddress(IDiamondProxy.registerManagedToken.selector),
             loupe.facetAddress(IDiamondProxy.marketStats.selector)

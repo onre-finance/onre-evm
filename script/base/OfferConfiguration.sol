@@ -280,6 +280,7 @@ abstract contract OfferConfiguration is OnReOps {
         if (_is(name, "proceeds")) return ConfigurableVaultKind.Proceeds;
         if (_is(name, "liquidity")) return ConfigurableVaultKind.Liquidity;
         if (_is(name, "bufferReserve")) return ConfigurableVaultKind.BufferReserve;
+        if (_is(name, "marketMaker")) return ConfigurableVaultKind.MarketMaker;
         revert("Unknown vault kind");
     }
 

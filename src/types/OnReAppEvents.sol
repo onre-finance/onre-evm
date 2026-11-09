@@ -173,6 +173,26 @@ event ApproverRemoved(address indexed approver);
 event PermissionlessSettlementAccountUpdated(address indexed previousAccount, address indexed newAccount);
 event KillSwitchSet(bool isKilled);
 
+event MarketMakerConfigured(
+    address indexed poolManager,
+    address indexed managedToken,
+    address indexed assetToken,
+    uint24 fee,
+    int24 tickSpacing,
+    bytes32 vaultId
+);
+event MarketMakerExecutorUpdated(address indexed previousExecutor, address indexed newExecutor);
+event MarketMakerKillSwitchSet(bool killed);
+event ConfigurableVaultDebited(bytes32 indexed vaultId, address indexed token, uint256 amount, uint256 newBalance);
+event MarketMakerSwapped(
+    bytes32 indexed vaultId,
+    address indexed tokenIn,
+    address indexed tokenOut,
+    uint256 maximumAmountIn,
+    uint256 actualAmountIn,
+    uint256 amountOut
+);
+
 event BossTransferStarted(address indexed currentBoss, address indexed pendingBoss);
 event BossTransferCancelled(address indexed currentBoss, address indexed cancelledPendingBoss);
 event BossTransferred(address indexed previousBoss, address indexed newBoss);

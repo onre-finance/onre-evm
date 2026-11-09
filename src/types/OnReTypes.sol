@@ -26,7 +26,27 @@ enum ConfigurableVaultKind {
     Fee,
     Proceeds,
     Liquidity,
-    BufferReserve
+    BufferReserve,
+    MarketMaker
+}
+
+/// @notice One boss-approved, fixed-fee, hookless ERC20 pool for market-maker inventory.
+struct MarketMakerConfig {
+    address poolManager;
+    address managedToken;
+    address assetToken;
+    uint24 fee;
+    int24 tickSpacing;
+    bytes32 vaultId;
+}
+
+struct MarketMakerSwapParams {
+    bool sellManagedToken;
+    uint128 amountIn;
+    uint128 minimumAmountOut;
+    /// @dev Uniswap Q64.96 pool price, token1/token0. Zero selects the directional protocol boundary.
+    uint160 sqrtPriceLimitX96;
+    uint64 deadline;
 }
 
 struct InitializeParams {

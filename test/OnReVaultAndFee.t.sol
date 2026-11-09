@@ -29,7 +29,7 @@ contract OnReVaultAndFeeTest is OnReAppTestBase {
     }
 
     function test_WithdrawalModesPreservePermissionsAndLogicalBalances() public {
-        for (uint8 kind; kind < 4; ++kind) {
+        for (uint8 kind; kind <= uint8(ConfigurableVaultKind.MarketMaker); ++kind) {
             bytes32 vaultId = app.createConfigurableVault(ConfigurableVaultKind(kind), 30, vaultDestination, 0);
             usd.mint(address(this), 25e6);
             usd.approve(address(app), 25e6);
@@ -37,7 +37,8 @@ contract OnReVaultAndFeeTest is OnReAppTestBase {
             uint256 destinationBefore = usd.balanceOf(vaultDestination);
 
             bool restricted = ConfigurableVaultKind(kind) == ConfigurableVaultKind.Liquidity
-                || ConfigurableVaultKind(kind) == ConfigurableVaultKind.BufferReserve;
+                || ConfigurableVaultKind(kind) == ConfigurableVaultKind.BufferReserve
+                || ConfigurableVaultKind(kind) == ConfigurableVaultKind.MarketMaker;
             if (restricted) {
                 bytes memory unauthorized = abi.encodeWithSelector(
                     IAccessControl.AccessControlUnauthorizedAccount.selector, user, app.DEFAULT_ADMIN_ROLE()

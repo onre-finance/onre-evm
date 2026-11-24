@@ -584,20 +584,22 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         setupScript.run();
     }
 
-    function test_RejectPermissionedOfferWithWrongQuoter() public {
+    function test_PermissionedOfferAcceptsTheConfiguredNavQuoter() public {
         config.offers[0].flow = OfferFlow.Permissioned;
         setupScript.configure(environment, config);
-        vm.expectRevert(InvalidFlowQuoterError.selector);
         setupScript.run();
+        assertEq(uint8(app.getOfferConfig(_offer(address(usdc))).flow), uint8(OfferFlow.Permissioned));
     }
 
-    function test_RejectWorkerBuyDirection() public {
+    function test_CreateWorkerBuyOffer() public {
         _addNavQuoter();
         config.offers[0].flow = OfferFlow.Worker;
         config.offers[0].quoter = "nav";
         setupScript.configure(environment, config);
-        vm.expectRevert(InvalidOfferDirectionError.selector);
         setupScript.run();
+        OfferConfigView memory offer = app.getOfferConfig(_offer(address(usdc)));
+        assertEq(uint8(offer.flow), uint8(OfferFlow.Worker));
+        assertEq(uint8(offer.direction), uint8(OfferDirection.AssetToManaged));
     }
 
     function test_CreateConfiguredPropAmmQuoterAndOffer() public {

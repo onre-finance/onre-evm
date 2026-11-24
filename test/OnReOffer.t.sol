@@ -33,18 +33,16 @@ contract OnReOfferTest is OnReAppTestBase {
         assertEq(workerConfig.tokenOutDecimals, 6);
     }
 
-    function test_OfferReferenceUpdateRejectsWrongFlowQuoter() public {
-        vm.expectRevert(InvalidFlowQuoterError.selector);
+    function test_OfferReferencesAcceptEitherNavQuoterForAnyAccess() public {
         app.updateOfferConfigReferences(
             permissionedOfferId, navPermissionlessQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
-        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, navQuoterId);
+        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, navPermissionlessQuoterId);
 
-        vm.expectRevert(InvalidFlowQuoterError.selector);
         app.updateOfferConfigReferences(
             permissionlessOfferId, navQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
-        assertEq(app.getOfferConfig(permissionlessOfferId).quoterId, navPermissionlessQuoterId);
+        assertEq(app.getOfferConfig(permissionlessOfferId).quoterId, navQuoterId);
     }
 
     function test_TakeOfferPermissionedRequiresApprovalAndRoutesInputFee() public {

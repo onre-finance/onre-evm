@@ -64,6 +64,87 @@ contract OnReOfferModeTest is OnReAppTestBase {
         );
     }
 
+    function test_PermissionedOfferCanUseAPropAmmQuoter() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
+        bytes32 offerId =
+            _make(address(managedToken), address(usd), OfferAccess.Permissioned, OfferExecution.Instant, propAmmId);
+        _depositLiquidity(1_000e6);
+        managedToken.mint(user, 100e9);
+        ApprovalMessage memory approval = ApprovalMessage({user: user, expiry: uint64(block.timestamp + 1 hours)});
+
+        vm.startPrank(user);
+        managedToken.approve(address(app), 100e9);
+        // Without an approval the permissioned offer stays closed, whatever its quoter.
+        vm.expectRevert(InvalidApprovalError.selector);
+        app.takeOffer(_takeOfferParams(offerId, 100e9));
+        uint256 amountOut =
+            app.takeOffer(_permissionedTakeOfferParams(offerId, 100e9, approval, _signApproval(approval)));
+        vm.stopPrank();
+
+        // 99 managed tokens net of the 1% fee, priced at NAV 1.0 and reduced by the curve haircut.
+        assertGt(amountOut, 0);
+        assertLt(amountOut, 99e6);
+        assertEq(usd.balanceOf(user), amountOut);
+    }
+
+    function test_WorkerOfferCanBuyManagedTokens() public {
+        bytes32 offerId =
+            _make(address(usd), address(managedToken), OfferAccess.Permissionless, OfferExecution.Worker, navQuoterId);
+        _fundAndApproveUsd(user, 100e6);
+
+        vm.prank(user);
+        bytes32 requestId = app.createFulfillmentRequest(offerId, 1, 100e6);
+        assertEq(usd.balanceOf(user), 0);
+        vm.prank(worker);
+        assertEq(app.fulfillWorkerRequest(requestId, 40e6), 39.6e9);
+        vm.prank(worker);
+        assertEq(app.fulfillWorkerRequest(requestId, 60e6), 59.4e9);
+
+        assertEq(managedToken.balanceOf(user), 99e9);
+        assertEq(app.configurableVaultBalance(feeVaultId, address(usd)), 1e6);
+        assertEq(app.configurableVaultBalance(proceedsVaultId, address(usd)), 99e6);
+    }
+
+    function test_WorkerOfferCanUseAPropAmmQuoter() public {
+        bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
+        bytes32 offerId =
+            _make(address(managedToken), address(usd), OfferAccess.Permissionless, OfferExecution.Worker, propAmmId);
+        _depositLiquidity(1_000e6);
+        managedToken.mint(user, 100e9);
+
+        vm.startPrank(user);
+        managedToken.approve(address(app), 100e9);
+        bytes32 requestId = app.createFulfillmentRequest(offerId, 1, 100e9);
+        vm.stopPrank();
+        vm.prank(worker);
+        uint256 amountOut = app.fulfillWorkerRequest(requestId, 100e9);
+
+        assertGt(amountOut, 0);
+        assertLt(amountOut, 99e6);
+        assertEq(usd.balanceOf(user), amountOut);
+        // The fill is recorded as sell pressure on the quoter, like an instant trade.
+        assertEq(app.getPropAmmState(propAmmId).currentSellTradeCount, 1);
+    }
+
+    function _make(address tokenIn, address tokenOut, OfferAccess access, OfferExecution execution, bytes32 quoterId)
+        private
+        returns (bytes32)
+    {
+        return app.makeOfferConfig(
+            MakeOfferConfigParams({
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                instanceId: 50,
+                access: access,
+                execution: execution,
+                quoterId: quoterId,
+                feeConfigId: feeConfigId,
+                proceedsVaultId: proceedsVaultId,
+                liquidityVaultId: liquidityVaultId
+            })
+        );
+    }
+
     function _assertMode(bytes32 offerId, OfferAccess access, OfferExecution execution, OfferFlow legacyFlow)
         private
         view

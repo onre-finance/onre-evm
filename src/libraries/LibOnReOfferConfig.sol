@@ -5,7 +5,6 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {LibOnReStorage} from "../diamond/LibOnReStorage.sol";
 import {
     InvalidDecimalsError,
-    InvalidFlowQuoterError,
     InvalidOfferDirectionError,
     InvalidTokenError,
     LiquidityVaultRequiredError,
@@ -177,7 +176,7 @@ library LibOnReOfferConfig {
     ) private {
         LibOnReValidation._requirePricer(OnReIds._usdPricerId(LibOnReValidation._offerManagedToken(offer)));
         Quoter storage quoter = LibOnReValidation._requireQuoter(quoterId);
-        _validateFlowQuoter(offer, quoterId, quoter);
+        _validateQuoter(offer, quoterId, quoter);
         FeeConfig storage feeConfig = LibOnReValidation._requireFeeConfig(feeConfigId);
         LibOnReValidation._requireVaultKind(feeConfig.feeVaultId, ConfigurableVaultKind.Fee);
         LibOnReValidation._requireVaultKind(proceedsVaultId, ConfigurableVaultKind.Proceeds);
@@ -194,37 +193,12 @@ library LibOnReOfferConfig {
         offer.liquidityVaultId = liquidityVaultId;
     }
 
-    function _validateFlowQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter) private view {
-        if (offer.execution == OfferExecution.Worker) {
-            _validateWorkerQuoter(offer, quoter);
-            return;
-        }
-        if (offer.access == OfferAccess.Permissioned) {
-            _validateNavQuoter(quoter);
-            return;
-        }
-        _validatePermissionlessQuoter(offer, quoterId, quoter);
-    }
-
-    function _validateNavQuoter(Quoter storage quoter) private view {
-        if (quoter.kind != QuoterKind.Nav) revert InvalidFlowQuoterError();
-    }
-
-    function _validatePermissionlessQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter)
-        private
-        view
-    {
-        if (quoter.kind == QuoterKind.NavPermissionless) return;
+    /// @dev Access and execution do not restrict the quoter. A Prop AMM quoter is bound to one pair;
+    /// `NavPermissionless` is a deprecated alias of `Nav` kept for existing quoters and their IDs.
+    function _validateQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter) private view {
         if (quoter.kind == QuoterKind.PropAmm) {
             LibOnRePropAmm._validatePair(quoterId, LibOnReStorage._appStorage().propAmmStates[quoterId], offer);
-            return;
         }
-        revert InvalidFlowQuoterError();
-    }
-
-    function _validateWorkerQuoter(OfferConfig storage offer, Quoter storage quoter) private view {
-        _validateNavQuoter(quoter);
-        if (offer.direction != OfferDirection.ManagedToAsset) revert InvalidOfferDirectionError();
     }
 
     function _deriveDirection(address tokenIn, address tokenOut) private view returns (OfferDirection) {

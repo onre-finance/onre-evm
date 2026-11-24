@@ -32,6 +32,8 @@ enum OfferDirection {
 
 enum QuoterKind {
     Nav,
+    /// @dev Deprecated alias of `Nav`. It cannot be removed: its ordinal is stored in existing
+    /// quoters and hashed into quoter IDs. Access is a property of the offer, not of the quoter.
     NavPermissionless,
     PropAmm
 }

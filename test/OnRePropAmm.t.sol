@@ -198,11 +198,11 @@ contract OnRePropAmmTest is OnReAppTestBase {
         assertEq(harness.utilizationPower(utilization, exponentSteps * 10_000), expected);
     }
 
-    function test_PropAmmIsPermissionlessAndBoundToItsPair() public {
+    function test_PropAmmSuitsAnyAccessAndIsBoundToItsPair() public {
         bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
 
-        vm.expectRevert(InvalidFlowQuoterError.selector);
         app.updateOfferConfigReferences(permissionedOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId);
+        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, propAmmId);
 
         MockUsd alternativeUsd = new MockUsd();
         bytes32 expectedOfferId = OnReIds._offerConfigId(

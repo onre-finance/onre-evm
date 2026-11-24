@@ -112,6 +112,7 @@ abstract contract OnReAppTestBase is Test, OnReDiamondTestHelper {
             MakeOfferConfigParams({
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
+                instanceId: uint64(uint8(flow)),
                 flow: flow,
                 quoterId: quoter,
                 feeConfigId: feeConfig,

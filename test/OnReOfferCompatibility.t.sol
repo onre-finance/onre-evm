@@ -3,6 +3,7 @@ pragma solidity 0.8.35;
 
 import {Vm} from "forge-std/Vm.sol";
 import "../src/types/OnReTypes.sol";
+import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
 /// @notice Pins what deployed offers and their integrators depend on: offer IDs,
@@ -28,6 +29,13 @@ contract OnReOfferCompatibilityTest is OnReAppTestBase {
         assertEq(_legacyOfferId(USDC, ONYC, OfferFlow.Permissionless), USDC_TO_ONYC_OFFER_ID);
         assertEq(_legacyOfferId(USDG, ONYC, OfferFlow.Permissionless), USDG_TO_ONYC_OFFER_ID);
         assertEq(_legacyOfferId(ONYC, USDG, OfferFlow.Permissionless), ONYC_TO_USDG_OFFER_ID);
+    }
+
+    function test_InstanceDerivationReproducesLiveMainnetOfferIds() public pure {
+        // A formerly permissionless offer is instance 1 of its pair.
+        assertEq(OnReIds._offerConfigId(USDC, ONYC, 1), USDC_TO_ONYC_OFFER_ID);
+        assertEq(OnReIds._offerConfigId(USDG, ONYC, 1), USDG_TO_ONYC_OFFER_ID);
+        assertEq(OnReIds._offerConfigId(ONYC, USDG, 1), ONYC_TO_USDG_OFFER_ID);
     }
 
     function test_OfferIdsOfEveryLegacyFlowAreStable() public view {

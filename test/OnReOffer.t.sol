@@ -11,12 +11,16 @@ import "./helpers/OnReAppTestBase.sol";
 contract OnReOfferTest is OnReAppTestBase {
     function test_OfferIdentityIncludesDirectedPairAndFlow() public view {
         assertEq(
-            permissionedOfferId, OnReIds._offerConfigId(address(usd), address(managedToken), OfferFlow.Permissioned)
+            permissionedOfferId,
+            OnReIds._offerConfigId(address(usd), address(managedToken), uint64(uint8(OfferFlow.Permissioned)))
         );
         assertEq(
-            permissionlessOfferId, OnReIds._offerConfigId(address(usd), address(managedToken), OfferFlow.Permissionless)
+            permissionlessOfferId,
+            OnReIds._offerConfigId(address(usd), address(managedToken), uint64(uint8(OfferFlow.Permissionless)))
         );
-        assertEq(workerOfferId, OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Worker));
+        assertEq(
+            workerOfferId, OnReIds._offerConfigId(address(managedToken), address(usd), uint64(uint8(OfferFlow.Worker)))
+        );
         assertTrue(permissionedOfferId != permissionlessOfferId);
 
         OfferConfigView memory permissioned = app.getOfferConfig(permissionedOfferId);
@@ -248,7 +252,7 @@ contract OnReOfferTest is OnReAppTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 LiquidityVaultRequiredError.selector,
-                OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Permissionless)
+                OnReIds._offerConfigId(address(managedToken), address(usd), uint64(uint8(OfferFlow.Permissionless)))
             )
         );
         _makeOffer(

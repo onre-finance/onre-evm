@@ -205,8 +205,9 @@ contract OnRePropAmmTest is OnReAppTestBase {
         app.updateOfferConfigReferences(permissionedOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId);
 
         MockUsd alternativeUsd = new MockUsd();
-        bytes32 expectedOfferId =
-            OnReIds._offerConfigId(address(alternativeUsd), address(managedToken), OfferFlow.Permissionless);
+        bytes32 expectedOfferId = OnReIds._offerConfigId(
+            address(alternativeUsd), address(managedToken), uint64(uint8(OfferFlow.Permissionless))
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
                 InvalidPropAmmPairError.selector, propAmmId, address(alternativeUsd), address(managedToken)
@@ -216,6 +217,7 @@ contract OnRePropAmmTest is OnReAppTestBase {
             MakeOfferConfigParams({
                 tokenIn: address(alternativeUsd),
                 tokenOut: address(managedToken),
+                instanceId: uint64(uint8(OfferFlow.Permissionless)),
                 flow: OfferFlow.Permissionless,
                 quoterId: propAmmId,
                 feeConfigId: feeConfigId,

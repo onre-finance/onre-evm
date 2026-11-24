@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {ConfigurableVaultKind, OfferFlow, PricingDenomination, QuoterKind} from "../types/OnReTypes.sol";
+import {ConfigurableVaultKind, PricingDenomination, QuoterKind} from "../types/OnReTypes.sol";
 
 library OnReIds {
     uint64 internal constant BUFFER_RESERVE_VAULT_INSTANCE_ID = 0;
@@ -50,8 +50,10 @@ library OnReIds {
         return keccak256(abi.encode(BUFFER_PERFORMANCE_FEE_VAULT_SEED, managedToken));
     }
 
-    function _offerConfigId(address tokenIn, address tokenOut, OfferFlow flow) internal pure returns (bytes32) {
-        return keccak256(abi.encode(OFFER_CONFIG_SEED, tokenIn, tokenOut, flow));
+    /// @dev Offers created before instance IDs hashed their flow in this position. Both encode
+    /// as one word, so those offers keep their ID as the instance equal to their flow ordinal.
+    function _offerConfigId(address tokenIn, address tokenOut, uint64 instanceId) internal pure returns (bytes32) {
+        return keccak256(abi.encode(OFFER_CONFIG_SEED, tokenIn, tokenOut, instanceId));
     }
 
     function _fulfillmentRequestId(bytes32 offerConfigId_, address user, uint64 requestId)

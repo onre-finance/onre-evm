@@ -107,7 +107,7 @@ contract SettlementApprovalHarness is ApproveSettlementTokens {
 }
 
 contract OfferConfigurationHarness is OfferConfiguration {
-    function parse(string memory json) external pure returns (Configuration memory) {
+    function parse(string memory json) external view returns (Configuration memory) {
         return _parseOfferConfiguration(json);
     }
 }
@@ -183,6 +183,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(usdc),
                     OfferDirection.AssetToManaged,
                     OfferFlow.Permissionless,
+                    uint64(uint8(OfferFlow.Permissionless)),
                     "onyc-usd",
                     "nav-permissionless",
                     "buy-fee",
@@ -199,6 +200,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(usdg),
                     OfferDirection.AssetToManaged,
                     OfferFlow.Permissionless,
+                    uint64(uint8(OfferFlow.Permissionless)),
                     "onyc-usd",
                     "nav-permissionless",
                     "buy-fee",
@@ -486,6 +488,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(usdc),
                     OfferDirection.AssetToManaged,
                     OfferFlow.Permissioned,
+                    uint64(uint8(OfferFlow.Permissioned)),
                     "onyc-usd",
                     "nav",
                     "buy-fee",
@@ -502,6 +505,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(usdg),
                     OfferDirection.ManagedToAsset,
                     OfferFlow.Worker,
+                    uint64(uint8(OfferFlow.Worker)),
                     "onyc-usd",
                     "nav",
                     "buy-fee",
@@ -512,8 +516,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
             );
         setupScript.configure(environment, config);
         setupScript.run();
-        bytes32 permissioned = OnReIds._offerConfigId(address(usdc), address(managed), OfferFlow.Permissioned);
-        bytes32 worker = OnReIds._offerConfigId(address(managed), address(usdg), OfferFlow.Worker);
+        bytes32 permissioned =
+            OnReIds._offerConfigId(address(usdc), address(managed), uint64(uint8(OfferFlow.Permissioned)));
+        bytes32 worker = OnReIds._offerConfigId(address(managed), address(usdg), uint64(uint8(OfferFlow.Worker)));
         assertEq(uint8(app.getOfferConfig(permissioned).flow), uint8(OfferFlow.Permissioned));
         assertEq(uint8(app.getOfferConfig(worker).flow), uint8(OfferFlow.Worker));
         assertEq(app.getOfferConfig(worker).tokenIn, address(managed));
@@ -696,6 +701,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(usdc),
                     OfferDirection.AssetToManaged,
                     OfferFlow.Permissioned,
+                    uint64(uint8(OfferFlow.Permissioned)),
                     "onyc-usd",
                     "nav",
                     "buy-fee",
@@ -706,7 +712,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
             );
         setupScript.configure(environment, config);
         setupScript.runMatching(OfferFlow.Permissioned, OfferDirection.AssetToManaged, QuoterKind.Nav);
-        bytes32 permissionedId = OnReIds._offerConfigId(address(usdc), address(managed), OfferFlow.Permissioned);
+        bytes32 permissionedId =
+            OnReIds._offerConfigId(address(usdc), address(managed), uint64(uint8(OfferFlow.Permissioned)));
         assertEq(uint8(app.getOfferConfig(permissionedId).flow), uint8(OfferFlow.Permissioned));
         assertEq(app.getOfferConfig(permissionedId).tokenIn, address(usdc));
         assertEq(app.getPricer(OnReIds._usdPricerId(address(managed))).managedToken, address(managed));
@@ -760,7 +767,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
     }
 
     function _offer(address asset) private view returns (bytes32) {
-        return OnReIds._offerConfigId(asset, address(managed), OfferFlow.Permissionless);
+        return OnReIds._offerConfigId(asset, address(managed), uint64(uint8(OfferFlow.Permissionless)));
     }
 
     function _buy(MockUsd asset, uint256 input) private returns (uint256 output) {

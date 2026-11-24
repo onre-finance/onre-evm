@@ -56,6 +56,7 @@ abstract contract OfferConfiguration is OnReOps {
         address assetToken;
         OfferDirection direction;
         OfferFlow flow;
+        uint64 instanceId;
         string pricer;
         string quoter;
         string feeConfig;
@@ -78,7 +79,7 @@ abstract contract OfferConfiguration is OnReOps {
         return _parseOfferConfiguration(json);
     }
 
-    function _parseOfferConfiguration(string memory json) internal pure returns (Configuration memory config) {
+    function _parseOfferConfiguration(string memory json) internal view returns (Configuration memory config) {
         string[] memory names = vm.parseJsonKeys(json, ".pricers");
         config.pricers = new PricerDefinition[](names.length);
         for (uint256 i; i < names.length; ++i) {
@@ -150,6 +151,10 @@ abstract contract OfferConfiguration is OnReOps {
             offer.assetToken = vm.parseJsonAddress(json, string.concat(p, ".assetToken"));
             offer.direction = _direction(vm.parseJsonString(json, string.concat(p, ".direction")));
             offer.flow = _flow(vm.parseJsonString(json, string.concat(p, ".flow")));
+            // Offers created before instance IDs keep their ID as the instance equal to their flow ordinal.
+            offer.instanceId = vm.keyExistsJson(json, string.concat(p, ".instanceId"))
+                ? _u64(json, string.concat(p, ".instanceId"))
+                : uint64(uint8(offer.flow));
             offer.pricer = vm.parseJsonString(json, string.concat(p, ".pricer"));
             offer.quoter = vm.parseJsonString(json, string.concat(p, ".quoter"));
             offer.feeConfig = vm.parseJsonString(json, string.concat(p, ".feeConfig"));

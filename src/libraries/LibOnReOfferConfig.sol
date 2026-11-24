@@ -32,7 +32,7 @@ import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {OnReIds} from "./OnReIds.sol";
 import {MAX_TOKEN_DECIMALS} from "./OnReConstants.sol";
 
-/// @notice Pair-and-flow offer configuration and reference validation.
+/// @notice Pair-and-instance offer configuration and reference validation.
 library LibOnReOfferConfig {
     function _makeOfferConfig(MakeOfferConfigParams calldata params) internal returns (bytes32 offerConfigId) {
         LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
@@ -48,12 +48,13 @@ library LibOnReOfferConfig {
             revert InvalidDecimalsError();
         }
 
-        offerConfigId = OnReIds._offerConfigId(params.tokenIn, params.tokenOut, params.flow);
+        offerConfigId = OnReIds._offerConfigId(params.tokenIn, params.tokenOut, params.instanceId);
         OfferConfig storage offer = LibOnReStorage._appStorage().offerConfigs[offerConfigId];
         if (offer.exists) revert OfferConfigAlreadyExistsError(offerConfigId);
 
         offer.tokenIn = params.tokenIn;
         offer.tokenOut = params.tokenOut;
+        offer.instanceId = params.instanceId;
         offer.flow = params.flow;
         offer.direction = direction;
         offer.tokenInDecimals = tokenInDecimals;

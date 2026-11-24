@@ -119,6 +119,7 @@ abstract contract OfferSetup is OfferConfiguration {
             MakeOfferConfigParams memory params = MakeOfferConfigParams({
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
+                instanceId: definition.instanceId,
                 flow: definition.flow,
                 quoterId: _ref(refs.quoters, definition.quoter),
                 feeConfigId: _ref(refs.fees, definition.feeConfig),
@@ -165,7 +166,7 @@ abstract contract OfferSetup is OfferConfiguration {
                 "Invalid offer tokens"
             );
             (address tokenIn, address tokenOut) = _tokens(offer);
-            _define(offers, i, offer.name, OnReIds._offerConfigId(tokenIn, tokenOut, offer.flow));
+            _define(offers, i, offer.name, OnReIds._offerConfigId(tokenIn, tokenOut, offer.instanceId));
         }
     }
 
@@ -264,7 +265,7 @@ abstract contract OfferSetup is OfferConfiguration {
     }
 
     function _ensureOffer(MakeOfferConfigParams memory params, bool enabled) private returns (bytes32 offerId) {
-        offerId = OnReIds._offerConfigId(params.tokenIn, params.tokenOut, params.flow);
+        offerId = OnReIds._offerConfigId(params.tokenIn, params.tokenOut, params.instanceId);
         IDiamondProxy app = IDiamondProxy(diamond);
         if (!_exists(abi.encodeCall(IDiamondProxy.getOfferConfig, (offerId)), OfferConfigNotFoundError.selector)) {
             _makeOfferConfig(params);

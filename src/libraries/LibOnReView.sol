@@ -72,6 +72,10 @@ library LibOnReView {
         });
     }
 
+    function _getOfferConfigV2(bytes32 offerConfigId) internal view returns (OfferConfig memory) {
+        return LibOnReValidation._requireOfferConfig(offerConfigId);
+    }
+
     function _getFulfillmentRequest(bytes32 fulfillmentRequestId) internal view returns (FulfillmentRequest memory) {
         return LibOnReValidation._requireFulfillmentRequest(fulfillmentRequestId);
     }

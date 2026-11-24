@@ -122,10 +122,14 @@ struct BufferState {
     bool exists;
 }
 
+/// @dev Stored per offer ID. Existing offers must keep their slot layout: only pack new
+/// fields into free bytes of a slot or append them after `exists`.
 struct OfferConfig {
     address tokenIn;
     OfferFlow flow;
     OfferDirection direction;
+    /// @dev Identity within the directed pair: the offer ID is derived from `(tokenIn, tokenOut, instanceId)`.
+    uint64 instanceId;
     bytes32 quoterId;
     bytes32 feeConfigId;
     bytes32 proceedsVaultId;
@@ -157,6 +161,7 @@ struct OfferConfigView {
 struct MakeOfferConfigParams {
     address tokenIn;
     address tokenOut;
+    uint64 instanceId;
     OfferFlow flow;
     bytes32 quoterId;
     bytes32 feeConfigId;

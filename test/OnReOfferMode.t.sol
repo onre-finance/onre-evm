@@ -47,21 +47,79 @@ contract OnReOfferModeTest is OnReAppTestBase {
         );
     }
 
-    function test_RevertWhen_WorkerOfferIsPermissioned() public {
-        vm.expectRevert(abi.encodeWithSelector(UnsupportedOfferFlowError.selector, uint8(OfferFlow.Worker)));
-        app.makeOfferConfig(
-            MakeOfferConfigParams({
-                tokenIn: address(managedToken),
-                tokenOut: address(usd),
-                instanceId: 9,
-                access: OfferAccess.Permissioned,
-                execution: OfferExecution.Worker,
-                quoterId: navQuoterId,
-                feeConfigId: feeConfigId,
-                proceedsVaultId: proceedsVaultId,
-                liquidityVaultId: liquidityVaultId
-            })
-        );
+    function test_PermissionedWorkerOfferTakesRequestsWithAnApproval() public {
+        bytes32 offerId =
+            _make(address(managedToken), address(usd), OfferAccess.Permissioned, OfferExecution.Worker, navQuoterId);
+        // Only access changes what a user must present; the legacy view still calls it a worker offer.
+        assertEq(uint8(app.getOfferConfig(offerId).flow), uint8(OfferFlow.Worker));
+        _depositLiquidity(1_000e6);
+        managedToken.mint(user, 100e9);
+        ApprovalMessage memory approval = ApprovalMessage({user: user, expiry: uint64(block.timestamp + 1 hours)});
+        bytes memory signature = _signApproval(approval);
+
+        vm.startPrank(user);
+        managedToken.approve(address(app), 100e9);
+        vm.expectRevert(InvalidApprovalError.selector);
+        app.createFulfillmentRequest(offerId, 1, 100e9);
+        bytes32 requestId = app.createFulfillmentRequestWithApproval(offerId, 1, 100e9, approval, signature);
+        vm.stopPrank();
+        assertEq(managedToken.balanceOf(address(app)), 100e9);
+
+        // The approval gates creation only: a fill after its expiry still settles.
+        vm.warp(block.timestamp + 2 hours);
+        vm.prank(worker);
+        assertEq(app.fulfillWorkerRequest(requestId, 100e9), 99e6);
+        assertEq(usd.balanceOf(user), 99e6);
+    }
+
+    function test_RevertWhen_WorkerRequestApprovalIsInvalid() public {
+        bytes32 offerId =
+            _make(address(managedToken), address(usd), OfferAccess.Permissioned, OfferExecution.Worker, navQuoterId);
+        managedToken.mint(user, 100e9);
+        vm.prank(user);
+        managedToken.approve(address(app), 100e9);
+        ApprovalMessage memory approval = ApprovalMessage({user: user, expiry: uint64(block.timestamp + 1 hours)});
+
+        // Signed by someone who is not an approver.
+        bytes memory foreignSignature = _signApprovalWithKey(approval, 0xBAD);
+        vm.expectRevert(InvalidApprovalError.selector);
+        vm.prank(user);
+        app.createFulfillmentRequestWithApproval(offerId, 1, 100e9, approval, foreignSignature);
+
+        // Issued to another user.
+        ApprovalMessage memory otherApproval = ApprovalMessage({user: worker, expiry: approval.expiry});
+        bytes memory otherSignature = _signApproval(otherApproval);
+        vm.expectRevert(InvalidApprovalError.selector);
+        vm.prank(user);
+        app.createFulfillmentRequestWithApproval(offerId, 1, 100e9, otherApproval, otherSignature);
+
+        // Expired.
+        bytes memory signature = _signApproval(approval);
+        vm.warp(block.timestamp + 2 hours);
+        vm.expectRevert(InvalidApprovalError.selector);
+        vm.prank(user);
+        app.createFulfillmentRequestWithApproval(offerId, 1, 100e9, approval, signature);
+    }
+
+    function test_RevertWhen_ApprovalIsSentToAPermissionlessWorkerOffer() public {
+        managedToken.mint(user, 100e9);
+        ApprovalMessage memory approval = ApprovalMessage({user: user, expiry: uint64(block.timestamp + 1 hours)});
+        bytes memory signature = _signApproval(approval);
+
+        vm.startPrank(user);
+        managedToken.approve(address(app), 100e9);
+        vm.expectRevert(InvalidApprovalError.selector);
+        app.createFulfillmentRequestWithApproval(workerOfferId, 1, 100e9, approval, signature);
+        vm.stopPrank();
+    }
+
+    function test_RevertWhen_ApprovedRequestTargetsAnInstantOffer() public {
+        ApprovalMessage memory approval = ApprovalMessage({user: user, expiry: uint64(block.timestamp + 1 hours)});
+        bytes memory signature = _signApproval(approval);
+
+        vm.expectRevert(InvalidFlowQuoterError.selector);
+        vm.prank(user);
+        app.createFulfillmentRequestWithApproval(permissionedOfferId, 1, 100e6, approval, signature);
     }
 
     function test_PermissionedOfferCanUseAPropAmmQuoter() public {

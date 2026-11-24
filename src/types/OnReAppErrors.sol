@@ -13,7 +13,6 @@ error InvalidPermissionlessSettlementAccountError(address account);
 error PermissionlessSettlementAccountNotSetError();
 error InvalidOfferDirectionError();
 error InvalidFlowQuoterError();
-error UnsupportedOfferFlowError(uint8 flow);
 error TakeOfferDeadlineExpiredError(uint64 deadline);
 error MinimumAmountOutNotMetError(uint256 minimumAmountOut, uint256 actualAmountOut);
 error WorkerOfferRequiresFulfillmentRequestError(bytes32 offerConfigId);

@@ -6,19 +6,28 @@ import {
     FulfillmentAmountExceedsRemainingError,
     FulfillmentRequestAlreadyExistsError,
     InvalidAmountError,
+    InvalidApprovalError,
     InvalidFlowQuoterError,
     UnauthorizedError
 } from "../types/OnReAppErrors.sol";
 import {FulfillmentRequestCancelled, FulfillmentRequestFilled, FulfillmentRequested} from "../types/OnReAppEvents.sol";
-import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferExecution} from "../types/OnReTypes.sol";
+import {
+    ApprovalMessage,
+    ExecutionAccounting,
+    FulfillmentRequest,
+    OfferAccess,
+    OfferConfig,
+    OfferExecution
+} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
+import {LibOnReApproval} from "./LibOnReApproval.sol";
 import {LibOnReOffer} from "./LibOnReOffer.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {LibOnReVault} from "./LibOnReVault.sol";
 import {OnReIds} from "./OnReIds.sol";
 
-/// @notice Escrowed worker requests that execute against reverse-pair Worker OfferConfigs.
+/// @notice Escrowed requests that the worker fills against offers with Worker execution.
 library LibOnReFulfillment {
     function _createFulfillmentRequest(bytes32 offerConfigId, uint64 requestId, uint256 inputAmount)
         internal
@@ -26,6 +35,35 @@ library LibOnReFulfillment {
     {
         OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
         _requireWorkerExecution(offer);
+        // A permissioned offer only takes requests through `_createFulfillmentRequestWithApproval`.
+        if (offer.access != OfferAccess.Permissionless) revert InvalidApprovalError();
+        fulfillmentRequestId = _escrowRequest(offerConfigId, offer, requestId, inputAmount);
+    }
+
+    /// @dev Access is checked once, when the request is created; fills and cancellation need no approval.
+    function _createFulfillmentRequestWithApproval(
+        bytes32 offerConfigId,
+        uint64 requestId,
+        uint256 inputAmount,
+        ApprovalMessage calldata approval,
+        bytes calldata signature
+    ) internal returns (bytes32 fulfillmentRequestId) {
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
+        _requireWorkerExecution(offer);
+        // A permissionless offer rejects an approval, as `takeOffer` does.
+        if (
+            offer.access != OfferAccess.Permissioned
+                || !LibOnReApproval._isValidForUser(msg.sender, approval, signature)
+        ) {
+            revert InvalidApprovalError();
+        }
+        fulfillmentRequestId = _escrowRequest(offerConfigId, offer, requestId, inputAmount);
+    }
+
+    function _escrowRequest(bytes32 offerConfigId, OfferConfig storage offer, uint64 requestId, uint256 inputAmount)
+        private
+        returns (bytes32 fulfillmentRequestId)
+    {
         if (inputAmount == 0) revert InvalidAmountError();
 
         fulfillmentRequestId = OnReIds._fulfillmentRequestId(offerConfigId, msg.sender, requestId);

@@ -12,7 +12,6 @@ import {
     OfferConfigAlreadyExistsError,
     OfferConfigNotFoundError,
     OfferConfigNotMigratableError,
-    UnsupportedOfferFlowError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
 import {
@@ -63,10 +62,6 @@ library LibOnReOfferConfig {
         offer.tokenIn = params.tokenIn;
         offer.tokenOut = params.tokenOut;
         offer.instanceId = params.instanceId;
-        // Worker requests are created without an approval, so they cannot enforce permissioned access.
-        if (params.execution == OfferExecution.Worker && params.access != OfferAccess.Permissionless) {
-            revert UnsupportedOfferFlowError(uint8(OfferFlow.Worker));
-        }
         offer.access = params.access;
         offer.execution = params.execution;
         offer.direction = direction;

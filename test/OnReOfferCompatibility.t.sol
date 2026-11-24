@@ -45,7 +45,15 @@ contract OnReOfferCompatibilityTest is OnReAppTestBase {
     }
 
     function test_OfferConfigStorageLayoutIsStable() public view {
-        // Slot 0: tokenIn in the low 20 bytes, then one byte each for flow and direction.
+        // Slot 0, low 22 bytes: tokenIn, then one byte each for access and direction. The access
+        // byte held the legacy flow, and Permissioned (0) and Permissionless (1) kept their values.
+        assertEq(
+            _offerSlot(permissionedOfferId, 0) & bytes32(uint256(type(uint176).max)),
+            bytes32(
+                uint256(uint160(address(usd))) | uint256(uint8(OfferFlow.Permissioned)) << 160
+                    | uint256(uint8(OfferDirection.AssetToManaged)) << 168
+            )
+        );
         assertEq(
             _offerSlot(permissionlessOfferId, 0) & bytes32(uint256(type(uint176).max)),
             bytes32(
@@ -53,10 +61,15 @@ contract OnReOfferCompatibilityTest is OnReAppTestBase {
                     | uint256(uint8(OfferDirection.AssetToManaged)) << 168
             )
         );
+        // Slot 0, formerly unused high bytes: instanceId (8 bytes), then execution (1 byte).
+        assertEq(uint256(_offerSlot(permissionlessOfferId, 0)) >> 176, 1);
+        assertEq(uint256(_offerSlot(workerOfferId, 0)) >> 176, uint256(2) | uint256(uint8(OfferExecution.Worker)) << 64);
+        // The one deliberate change: a worker offer stores Permissionless access where the
+        // legacy flow byte held Worker (2). `migrateOfferConfigs` rewrites offers stored that way.
         assertEq(
             _offerSlot(workerOfferId, 0) & bytes32(uint256(type(uint176).max)),
             bytes32(
-                uint256(uint160(address(managedToken))) | uint256(uint8(OfferFlow.Worker)) << 160
+                uint256(uint160(address(managedToken))) | uint256(uint8(OfferAccess.Permissionless)) << 160
                     | uint256(uint8(OfferDirection.ManagedToAsset)) << 168
             )
         );

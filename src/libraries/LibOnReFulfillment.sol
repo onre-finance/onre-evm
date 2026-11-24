@@ -10,7 +10,7 @@ import {
     UnauthorizedError
 } from "../types/OnReAppErrors.sol";
 import {FulfillmentRequestCancelled, FulfillmentRequestFilled, FulfillmentRequested} from "../types/OnReAppEvents.sol";
-import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferFlow} from "../types/OnReTypes.sol";
+import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferExecution} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
 import {LibOnReOffer} from "./LibOnReOffer.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
@@ -25,7 +25,7 @@ library LibOnReFulfillment {
         returns (bytes32 fulfillmentRequestId)
     {
         OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
-        _requireWorkerFlow(offer);
+        _requireWorkerExecution(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
         fulfillmentRequestId = OnReIds._fulfillmentRequestId(offerConfigId, msg.sender, requestId);
@@ -68,7 +68,7 @@ library LibOnReFulfillment {
         LibOnReAccessControl._checkRole(LibOnReRoles.WORKER_ROLE);
         FulfillmentRequest storage request = LibOnReValidation._requireFulfillmentRequest(fulfillmentRequestId);
         OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(request.offerConfigId);
-        _requireWorkerFlow(offer);
+        _requireWorkerExecution(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
         uint256 remainingAmount = request.inputAmount - request.fulfilledInputAmount;
@@ -102,7 +102,7 @@ library LibOnReFulfillment {
         amountOut = accounting.amountOut;
     }
 
-    function _requireWorkerFlow(OfferConfig storage offer) private view {
-        if (offer.flow != OfferFlow.Worker) revert InvalidFlowQuoterError();
+    function _requireWorkerExecution(OfferConfig storage offer) private view {
+        if (offer.execution != OfferExecution.Worker) revert InvalidFlowQuoterError();
     }
 }

@@ -5,9 +5,23 @@ enum PricingDenomination {
     Usd
 }
 
+/// @dev Legacy combined mode. Offers store `OfferAccess` and `OfferExecution`; this enum only
+/// remains in `OfferConfigView` and in the `OfferConfigCreated` and `OfferExecuted` events.
 enum OfferFlow {
     Permissioned,
     Permissionless,
+    Worker
+}
+
+/// @notice Who may trade: users holding an approver signature, or anyone.
+enum OfferAccess {
+    Permissioned,
+    Permissionless
+}
+
+/// @notice How a trade settles: atomically in `takeOffer`, or as an escrowed request the worker fills.
+enum OfferExecution {
+    Instant,
     Worker
 }
 
@@ -126,10 +140,13 @@ struct BufferState {
 /// fields into free bytes of a slot or append them after `exists`.
 struct OfferConfig {
     address tokenIn;
-    OfferFlow flow;
+    /// @dev Occupies the byte that held the legacy `OfferFlow`: Permissioned and Permissionless
+    /// keep their values; a legacy Worker value (2) must be migrated before the offer is read.
+    OfferAccess access;
     OfferDirection direction;
     /// @dev Identity within the directed pair: the offer ID is derived from `(tokenIn, tokenOut, instanceId)`.
     uint64 instanceId;
+    OfferExecution execution;
     bytes32 quoterId;
     bytes32 feeConfigId;
     bytes32 proceedsVaultId;
@@ -162,7 +179,8 @@ struct MakeOfferConfigParams {
     address tokenIn;
     address tokenOut;
     uint64 instanceId;
-    OfferFlow flow;
+    OfferAccess access;
+    OfferExecution execution;
     bytes32 quoterId;
     bytes32 feeConfigId;
     bytes32 proceedsVaultId;

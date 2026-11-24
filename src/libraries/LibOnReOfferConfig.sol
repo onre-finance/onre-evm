@@ -14,13 +14,20 @@ import {
     UnsupportedOfferFlowError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
-import {OfferConfigCreated, OfferConfigEnabledSet, OfferConfigReferencesUpdated} from "../types/OnReAppEvents.sol";
+import {
+    OfferConfigCreated,
+    OfferConfigEnabledSet,
+    OfferConfigModeSet,
+    OfferConfigReferencesUpdated
+} from "../types/OnReAppEvents.sol";
 import {
     ConfigurableVaultKind,
     FeeConfig,
     MakeOfferConfigParams,
+    OfferAccess,
     OfferConfig,
     OfferDirection,
+    OfferExecution,
     OfferFlow,
     Quoter,
     QuoterKind
@@ -55,7 +62,12 @@ library LibOnReOfferConfig {
         offer.tokenIn = params.tokenIn;
         offer.tokenOut = params.tokenOut;
         offer.instanceId = params.instanceId;
-        offer.flow = params.flow;
+        // Worker requests are created without an approval, so they cannot enforce permissioned access.
+        if (params.execution == OfferExecution.Worker && params.access != OfferAccess.Permissionless) {
+            revert UnsupportedOfferFlowError(uint8(OfferFlow.Worker));
+        }
+        offer.access = params.access;
+        offer.execution = params.execution;
         offer.direction = direction;
         offer.tokenInDecimals = tokenInDecimals;
         offer.tokenOutDecimals = tokenOutDecimals;
@@ -69,13 +81,14 @@ library LibOnReOfferConfig {
             offerConfigId,
             params.tokenIn,
             params.tokenOut,
-            params.flow,
+            LibOnReValidation._legacyFlow(offer),
             direction,
             params.quoterId,
             params.feeConfigId,
             params.proceedsVaultId,
             params.liquidityVaultId
         );
+        emit OfferConfigModeSet(offerConfigId, params.instanceId, params.access, params.execution);
     }
 
     function _updateOfferConfigReferences(
@@ -133,19 +146,15 @@ library LibOnReOfferConfig {
     }
 
     function _validateFlowQuoter(OfferConfig storage offer, bytes32 quoterId, Quoter storage quoter) private view {
-        if (offer.flow == OfferFlow.Permissioned) {
-            _validateNavQuoter(quoter);
-            return;
-        }
-        if (offer.flow == OfferFlow.Permissionless) {
-            _validatePermissionlessQuoter(offer, quoterId, quoter);
-            return;
-        }
-        if (offer.flow == OfferFlow.Worker) {
+        if (offer.execution == OfferExecution.Worker) {
             _validateWorkerQuoter(offer, quoter);
             return;
         }
-        revert UnsupportedOfferFlowError(uint8(offer.flow));
+        if (offer.access == OfferAccess.Permissioned) {
+            _validateNavQuoter(quoter);
+            return;
+        }
+        _validatePermissionlessQuoter(offer, quoterId, quoter);
     }
 
     function _validateNavQuoter(Quoter storage quoter) private view {

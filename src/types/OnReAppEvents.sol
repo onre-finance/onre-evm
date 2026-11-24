@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.35;
 
-import {ConfigurableVaultKind, OfferDirection, OfferFlow, PricingDenomination, QuoterKind} from "./OnReTypes.sol";
+import {
+    ConfigurableVaultKind,
+    OfferAccess,
+    OfferDirection,
+    OfferExecution,
+    OfferFlow,
+    PricingDenomination,
+    QuoterKind
+} from "./OnReTypes.sol";
 
 event ManagedTokenRegistered(address indexed managedToken, uint8 decimals);
 event ManagedTokenDeployed(
@@ -60,6 +68,10 @@ event OfferConfigCreated(
     bytes32 feeConfigId,
     bytes32 proceedsVaultId,
     bytes32 liquidityVaultId
+);
+/// @dev Emitted next to `OfferConfigCreated`, whose legacy `flow` cannot express every mode.
+event OfferConfigModeSet(
+    bytes32 indexed offerConfigId, uint64 instanceId, OfferAccess access, OfferExecution execution
 );
 event OfferConfigReferencesUpdated(
     bytes32 indexed offerConfigId,

@@ -6,6 +6,8 @@ import {OnReOps} from "./OnReOps.sol";
 import {
     ConfigurableVaultKind,
     OfferDirection,
+    OfferAccess,
+    OfferExecution,
     OfferFlow,
     PricingDenomination,
     PricingVector,
@@ -258,6 +260,14 @@ abstract contract OfferConfiguration is OnReOps {
 
     function _is(string memory a, string memory b) internal pure returns (bool) {
         return keccak256(bytes(a)) == keccak256(bytes(b));
+    }
+
+    function _access(OfferFlow flow) internal pure returns (OfferAccess) {
+        return flow == OfferFlow.Permissioned ? OfferAccess.Permissioned : OfferAccess.Permissionless;
+    }
+
+    function _execution(OfferFlow flow) internal pure returns (OfferExecution) {
+        return flow == OfferFlow.Worker ? OfferExecution.Worker : OfferExecution.Instant;
     }
 
     function _flow(string memory name) private pure returns (OfferFlow) {

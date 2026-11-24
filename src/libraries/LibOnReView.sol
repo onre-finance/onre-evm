@@ -58,7 +58,7 @@ library LibOnReView {
         OfferConfig storage offer = LibOnReValidation._requireOfferConfig(offerConfigId);
         return OfferConfigView({
             tokenIn: offer.tokenIn,
-            flow: offer.flow,
+            flow: LibOnReValidation._legacyFlow(offer),
             direction: offer.direction,
             quoterId: offer.quoterId,
             feeConfigId: offer.feeConfigId,

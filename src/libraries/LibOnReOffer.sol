@@ -10,7 +10,6 @@ import {
     MinimumAmountOutNotMetError,
     PermissionlessSettlementAccountNotSetError,
     TakeOfferDeadlineExpiredError,
-    UnsupportedOfferFlowError,
     WorkerOfferRequiresFulfillmentRequestError
 } from "../types/OnReAppErrors.sol";
 import {OfferExecuted} from "../types/OnReAppEvents.sol";
@@ -19,9 +18,10 @@ import {
     ConfigurableVault,
     ExecutionAccounting,
     FeeConfig,
+    OfferAccess,
     OfferConfig,
     OfferDirection,
-    OfferFlow,
+    OfferExecution,
     QuoteResult,
     TakeOfferParams
 } from "../types/OnReTypes.sol";
@@ -42,7 +42,7 @@ library LibOnReOffer {
             revert TakeOfferDeadlineExpiredError(params.deadline);
         }
 
-        _validateTakeOfferFlow(params, offer.flow);
+        _validateTakeOfferMode(params, offer);
 
         amountOut =
             _executeCollectedFromUser(params.offerConfigId, offer, params.grossInputAmount, params.minimumAmountOut);
@@ -104,7 +104,7 @@ library LibOnReOffer {
         }
         LibOnReQuoter._recordExecution(offer, accounting.netInputAmount, accounting.price);
 
-        if (offer.flow == OfferFlow.Permissionless) {
+        if (offer.access == OfferAccess.Permissionless) {
             address permissionlessAccount = _requirePermissionlessSettlementAccount(msg.sender);
             LibOnReVault._transferExactTokenAmountFrom(
                 offer.tokenIn, msg.sender, permissionlessAccount, grossInputAmount
@@ -152,7 +152,7 @@ library LibOnReOffer {
         emit OfferExecuted(
             offerConfigId,
             recipient,
-            offer.flow,
+            LibOnReValidation._legacyFlow(offer),
             accounting.grossInputAmount,
             accounting.feeAmount,
             accounting.netInputAmount,
@@ -211,20 +211,18 @@ library LibOnReOffer {
         }
     }
 
-    function _validateTakeOfferFlow(TakeOfferParams calldata params, OfferFlow flow) private view {
-        if (flow == OfferFlow.Permissioned) {
+    function _validateTakeOfferMode(TakeOfferParams calldata params, OfferConfig storage offer) private view {
+        if (offer.execution == OfferExecution.Worker) {
+            revert WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
+        }
+        if (offer.access == OfferAccess.Permissioned) {
             if (!LibOnReApproval._isValidForUser(msg.sender, params.approval, params.signature)) {
                 revert InvalidApprovalError();
             }
             return;
         }
-        if (flow == OfferFlow.Permissionless) {
-            if (params.approval.user != address(0) || params.approval.expiry != 0 || params.signature.length != 0) {
-                revert InvalidApprovalError();
-            }
-            return;
+        if (params.approval.user != address(0) || params.approval.expiry != 0 || params.signature.length != 0) {
+            revert InvalidApprovalError();
         }
-        if (flow == OfferFlow.Worker) revert WorkerOfferRequiresFulfillmentRequestError(params.offerConfigId);
-        revert UnsupportedOfferFlowError(uint8(flow));
     }
 }

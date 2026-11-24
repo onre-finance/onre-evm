@@ -16,7 +16,7 @@ import {
     ConfigurableVault,
     FeeConfig,
     MakeOfferConfigParams,
-    OfferConfig,
+    OfferConfigView,
     OfferDirection,
     OfferFlow,
     Pricer,
@@ -269,7 +269,7 @@ abstract contract OfferSetup is OfferConfiguration {
         if (!_exists(abi.encodeCall(IDiamondProxy.getOfferConfig, (offerId)), OfferConfigNotFoundError.selector)) {
             _makeOfferConfig(params);
         }
-        OfferConfig memory existing = app.getOfferConfig(offerId);
+        OfferConfigView memory existing = app.getOfferConfig(offerId);
         // Creation defaults to enabled. Execute creation + disabling in one atomic Safe batch.
         // Disable existing offers before changing references; enable only after references match.
         if (!enabled && existing.enabled) _setOfferConfigEnabled(offerId, false);
@@ -283,11 +283,11 @@ abstract contract OfferSetup is OfferConfiguration {
             );
         }
         if (enabled && !existing.enabled) _setOfferConfigEnabled(offerId, true);
-        OfferConfig memory offer = app.getOfferConfig(offerId);
+        OfferConfigView memory offer = app.getOfferConfig(offerId);
         require(offer.enabled == enabled && _matches(offer, params), "Offer verification failed");
     }
 
-    function _matches(OfferConfig memory offer, MakeOfferConfigParams memory params) private pure returns (bool) {
+    function _matches(OfferConfigView memory offer, MakeOfferConfigParams memory params) private pure returns (bool) {
         return offer.quoterId == params.quoterId && offer.feeConfigId == params.feeConfigId
             && offer.proceedsVaultId == params.proceedsVaultId && offer.liquidityVaultId == params.liquidityVaultId;
     }

@@ -19,8 +19,8 @@ contract OnReOfferTest is OnReAppTestBase {
         assertEq(workerOfferId, OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Worker));
         assertTrue(permissionedOfferId != permissionlessOfferId);
 
-        OfferConfig memory permissioned = app.getOfferConfig(permissionedOfferId);
-        OfferConfig memory workerConfig = app.getOfferConfig(workerOfferId);
+        OfferConfigView memory permissioned = app.getOfferConfig(permissionedOfferId);
+        OfferConfigView memory workerConfig = app.getOfferConfig(workerOfferId);
         assertEq(uint8(permissioned.direction), uint8(OfferDirection.AssetToManaged));
         assertEq(uint8(workerConfig.direction), uint8(OfferDirection.ManagedToAsset));
         assertEq(permissioned.tokenInDecimals, 6);

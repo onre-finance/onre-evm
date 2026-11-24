@@ -137,6 +137,23 @@ struct OfferConfig {
     bool exists;
 }
 
+/// @notice Stable return shape of `getOfferConfig`.
+/// @dev Integrators decode this layout, so it stays fixed while the stored `OfferConfig` evolves.
+struct OfferConfigView {
+    address tokenIn;
+    OfferFlow flow;
+    OfferDirection direction;
+    bytes32 quoterId;
+    bytes32 feeConfigId;
+    bytes32 proceedsVaultId;
+    bytes32 liquidityVaultId;
+    address tokenOut;
+    uint8 tokenOutDecimals;
+    uint8 tokenInDecimals;
+    bool enabled;
+    bool exists;
+}
+
 struct MakeOfferConfigParams {
     address tokenIn;
     address tokenOut;

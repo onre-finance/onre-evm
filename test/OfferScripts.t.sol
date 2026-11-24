@@ -23,7 +23,7 @@ import {
     ConfigurableVaultKind,
     ExecutionAccounting,
     InitializeParams,
-    OfferConfig,
+    OfferConfigView,
     OfferFlow,
     OfferDirection,
     Pricer,
@@ -213,8 +213,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
 
     function test_SetupSharesPricerAndVaultsWithNoLiquidity() public {
         setupScript.run();
-        OfferConfig memory a = app.getOfferConfig(_offer(address(usdc)));
-        OfferConfig memory b = app.getOfferConfig(_offer(address(usdg)));
+        OfferConfigView memory a = app.getOfferConfig(_offer(address(usdc)));
+        OfferConfigView memory b = app.getOfferConfig(_offer(address(usdg)));
         assertEq(a.proceedsVaultId, b.proceedsVaultId);
         assertEq(a.feeConfigId, b.feeConfigId);
         assertEq(a.quoterId, b.quoterId);
@@ -370,7 +370,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         setupScript.run();
         bytes32 vault = app.createConfigurableVault(ConfigurableVaultKind.Liquidity, 0, address(this), 1000);
         bytes32 offerId = _offer(address(usdc));
-        OfferConfig memory offer = app.getOfferConfig(offerId);
+        OfferConfigView memory offer = app.getOfferConfig(offerId);
         app.updateOfferConfigReferences(offerId, offer.quoterId, offer.feeConfigId, offer.proceedsVaultId, vault);
         setupScript.run();
         assertEq(app.getOfferConfig(offerId).liquidityVaultId, bytes32(0));
@@ -543,8 +543,8 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         config.offers[1].feeConfig = "usdg-fee";
         setupScript.configure(environment, config);
         setupScript.run();
-        OfferConfig memory a = app.getOfferConfig(_offer(address(usdc)));
-        OfferConfig memory b = app.getOfferConfig(_offer(address(usdg)));
+        OfferConfigView memory a = app.getOfferConfig(_offer(address(usdc)));
+        OfferConfigView memory b = app.getOfferConfig(_offer(address(usdg)));
         assertTrue(a.quoterId != b.quoterId);
         assertTrue(a.feeConfigId != b.feeConfigId);
         assertEq(app.getFeeConfig(a.feeConfigId).basisPoints, 20);

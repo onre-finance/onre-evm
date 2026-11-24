@@ -6,7 +6,7 @@ import {
     ConfigurableVault,
     FeeConfig,
     FulfillmentRequest,
-    OfferConfig,
+    OfferConfigView,
     ManagedTokenConfig,
     Pricer,
     PricingVector,
@@ -40,7 +40,7 @@ contract OnReViewFacet is IAppConfig {
         return LibOnReView._getFeeConfig(feeConfigId);
     }
 
-    function getOfferConfig(bytes32 offerConfigId) external view returns (OfferConfig memory) {
+    function getOfferConfig(bytes32 offerConfigId) external view returns (OfferConfigView memory) {
         return LibOnReView._getOfferConfig(offerConfigId);
     }
 

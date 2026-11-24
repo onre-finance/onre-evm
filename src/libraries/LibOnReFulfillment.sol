@@ -6,26 +6,64 @@ import {
     FulfillmentAmountExceedsRemainingError,
     FulfillmentRequestAlreadyExistsError,
     InvalidAmountError,
+    InvalidApprovalError,
     InvalidFlowQuoterError,
     UnauthorizedError
 } from "../types/OnReAppErrors.sol";
 import {FulfillmentRequestCancelled, FulfillmentRequestFilled, FulfillmentRequested} from "../types/OnReAppEvents.sol";
-import {ExecutionAccounting, FulfillmentRequest, OfferConfig, OfferFlow} from "../types/OnReTypes.sol";
+import {
+    ApprovalMessage,
+    ExecutionAccounting,
+    FulfillmentRequest,
+    OfferAccess,
+    OfferConfig,
+    OfferExecution
+} from "../types/OnReTypes.sol";
 import {LibOnReAccessControl} from "./LibOnReAccessControl.sol";
+import {LibOnReApproval} from "./LibOnReApproval.sol";
 import {LibOnReOffer} from "./LibOnReOffer.sol";
 import {LibOnReRoles} from "./LibOnReRoles.sol";
 import {LibOnReValidation} from "./LibOnReValidation.sol";
 import {LibOnReVault} from "./LibOnReVault.sol";
 import {OnReIds} from "./OnReIds.sol";
 
-/// @notice Escrowed worker requests that execute against reverse-pair Worker OfferConfigs.
+/// @notice Escrowed requests that the worker fills against offers with Worker execution.
 library LibOnReFulfillment {
     function _createFulfillmentRequest(bytes32 offerConfigId, uint64 requestId, uint256 inputAmount)
         internal
         returns (bytes32 fulfillmentRequestId)
     {
         OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
-        _requireWorkerFlow(offer);
+        _requireWorkerExecution(offer);
+        // A permissioned offer only takes requests through `_createFulfillmentRequestWithApproval`.
+        if (offer.access != OfferAccess.Permissionless) revert InvalidApprovalError();
+        fulfillmentRequestId = _escrowRequest(offerConfigId, offer, requestId, inputAmount);
+    }
+
+    /// @dev Access is checked once, when the request is created; fills and cancellation need no approval.
+    function _createFulfillmentRequestWithApproval(
+        bytes32 offerConfigId,
+        uint64 requestId,
+        uint256 inputAmount,
+        ApprovalMessage calldata approval,
+        bytes calldata signature
+    ) internal returns (bytes32 fulfillmentRequestId) {
+        OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(offerConfigId);
+        _requireWorkerExecution(offer);
+        // A permissionless offer rejects an approval, as `takeOffer` does.
+        if (
+            offer.access != OfferAccess.Permissioned
+                || !LibOnReApproval._isValidForUser(msg.sender, approval, signature)
+        ) {
+            revert InvalidApprovalError();
+        }
+        fulfillmentRequestId = _escrowRequest(offerConfigId, offer, requestId, inputAmount);
+    }
+
+    function _escrowRequest(bytes32 offerConfigId, OfferConfig storage offer, uint64 requestId, uint256 inputAmount)
+        private
+        returns (bytes32 fulfillmentRequestId)
+    {
         if (inputAmount == 0) revert InvalidAmountError();
 
         fulfillmentRequestId = OnReIds._fulfillmentRequestId(offerConfigId, msg.sender, requestId);
@@ -68,7 +106,7 @@ library LibOnReFulfillment {
         LibOnReAccessControl._checkRole(LibOnReRoles.WORKER_ROLE);
         FulfillmentRequest storage request = LibOnReValidation._requireFulfillmentRequest(fulfillmentRequestId);
         OfferConfig storage offer = LibOnReValidation._requireExecutableOfferConfig(request.offerConfigId);
-        _requireWorkerFlow(offer);
+        _requireWorkerExecution(offer);
         if (inputAmount == 0) revert InvalidAmountError();
 
         uint256 remainingAmount = request.inputAmount - request.fulfilledInputAmount;
@@ -102,7 +140,7 @@ library LibOnReFulfillment {
         amountOut = accounting.amountOut;
     }
 
-    function _requireWorkerFlow(OfferConfig storage offer) private view {
-        if (offer.flow != OfferFlow.Worker) revert InvalidFlowQuoterError();
+    function _requireWorkerExecution(OfferConfig storage offer) private view {
+        if (offer.execution != OfferExecution.Worker) revert InvalidFlowQuoterError();
     }
 }

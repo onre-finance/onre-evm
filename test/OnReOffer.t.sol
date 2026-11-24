@@ -11,16 +11,20 @@ import "./helpers/OnReAppTestBase.sol";
 contract OnReOfferTest is OnReAppTestBase {
     function test_OfferIdentityIncludesDirectedPairAndFlow() public view {
         assertEq(
-            permissionedOfferId, OnReIds._offerConfigId(address(usd), address(managedToken), OfferFlow.Permissioned)
+            permissionedOfferId,
+            OnReIds._offerConfigId(address(usd), address(managedToken), uint64(uint8(OfferFlow.Permissioned)))
         );
         assertEq(
-            permissionlessOfferId, OnReIds._offerConfigId(address(usd), address(managedToken), OfferFlow.Permissionless)
+            permissionlessOfferId,
+            OnReIds._offerConfigId(address(usd), address(managedToken), uint64(uint8(OfferFlow.Permissionless)))
         );
-        assertEq(workerOfferId, OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Worker));
+        assertEq(
+            workerOfferId, OnReIds._offerConfigId(address(managedToken), address(usd), uint64(uint8(OfferFlow.Worker)))
+        );
         assertTrue(permissionedOfferId != permissionlessOfferId);
 
-        OfferConfig memory permissioned = app.getOfferConfig(permissionedOfferId);
-        OfferConfig memory workerConfig = app.getOfferConfig(workerOfferId);
+        OfferConfigView memory permissioned = app.getOfferConfig(permissionedOfferId);
+        OfferConfigView memory workerConfig = app.getOfferConfig(workerOfferId);
         assertEq(uint8(permissioned.direction), uint8(OfferDirection.AssetToManaged));
         assertEq(uint8(workerConfig.direction), uint8(OfferDirection.ManagedToAsset));
         assertEq(permissioned.tokenInDecimals, 6);
@@ -29,18 +33,16 @@ contract OnReOfferTest is OnReAppTestBase {
         assertEq(workerConfig.tokenOutDecimals, 6);
     }
 
-    function test_OfferReferenceUpdateRejectsWrongFlowQuoter() public {
-        vm.expectRevert(InvalidFlowQuoterError.selector);
+    function test_OfferReferencesAcceptEitherNavQuoterForAnyAccess() public {
         app.updateOfferConfigReferences(
             permissionedOfferId, navPermissionlessQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
-        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, navQuoterId);
+        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, navPermissionlessQuoterId);
 
-        vm.expectRevert(InvalidFlowQuoterError.selector);
         app.updateOfferConfigReferences(
             permissionlessOfferId, navQuoterId, feeConfigId, proceedsVaultId, liquidityVaultId
         );
-        assertEq(app.getOfferConfig(permissionlessOfferId).quoterId, navPermissionlessQuoterId);
+        assertEq(app.getOfferConfig(permissionlessOfferId).quoterId, navQuoterId);
     }
 
     function test_TakeOfferPermissionedRequiresApprovalAndRoutesInputFee() public {
@@ -248,7 +250,7 @@ contract OnReOfferTest is OnReAppTestBase {
         vm.expectRevert(
             abi.encodeWithSelector(
                 LiquidityVaultRequiredError.selector,
-                OnReIds._offerConfigId(address(managedToken), address(usd), OfferFlow.Permissionless)
+                OnReIds._offerConfigId(address(managedToken), address(usd), uint64(uint8(OfferFlow.Permissionless)))
             )
         );
         _makeOffer(

@@ -24,7 +24,7 @@ generates against, so the layout has to match what its templates import. See
   pair-bound stateful `PropAmm` dispatch. Every quoter kind uses the same
   creation entrypoint; kind-specific state is applied through typed
   configuration functions.
-- `OnReOfferFacet` implements FeeConfigs, OfferConfigs, and flow-dispatched
+- `OnReOfferFacet` implements FeeConfigs, OfferConfigs, and access- and execution-dispatched
   `takeOffer` execution.
 - `OnReFulfillmentFacet` implements escrowed worker requests and partial fills.
 - `OnReConfigurableVaultFacet` implements reusable Fee, Proceeds, Liquidity,
@@ -50,7 +50,7 @@ The internal libraries follow the same responsibility boundaries:
   `LibOnReAppConfig` owns approvers and emergency control.
 - `LibOnReFeeConfig` owns reusable basis-point and minimum input-token fee
   policy and fee calculation.
-- `LibOnReOfferConfig` owns pair-and-flow configuration and reference
+- `LibOnReOfferConfig` owns pair-and-instance configuration and reference
   validation.
 - `LibOnRePropAmm` owns proprietary automated market maker (Prop AMM) configuration
   validation, rolling buy/sell pressure, and dynamic-wall orchestration.

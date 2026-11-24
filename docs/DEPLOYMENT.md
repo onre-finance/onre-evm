@@ -9,7 +9,7 @@ with the facet set.
 
 `script/config/<ONRE_ENV>.json` defines named `pricers`, `quoters`, `vaults`,
 `feeConfigs`, and `offers`. Each offer explicitly specifies its `managedToken`,
-`assetToken`, `direction`, `flow`, `enabled`, and references to its components. Names are
+`assetToken`, `direction`, `instanceId`, `access`, `execution`, `enabled`, and references to its components. Names are
 configuration references; contract IDs are still derived by `OnReIds`.
 
 - Pricers specify a managed token, `denomination: "usd"`, vector, and activation delay.
@@ -19,18 +19,23 @@ configuration references; contract IDs are still derived by `OnReIds`.
   `instanceId`, `withdrawalDestination`, and `refillTargetBps`.
 - Fee configs specify `instanceId`, `basisPoints`, `minimumFeeAmount`, and their
   named `feeVault`. Different offers can reference different fee configs and quoters.
-- Offers specify `direction` (`assetToManaged` or `managedToAsset`) and `flow`
-  (`permissionless`, `permissioned`, or `worker`). `liquidityVault: "none"` encodes
+- Offers specify `direction` (`assetToManaged` or `managedToAsset`), an `instanceId`
+  that identifies the offer within its directed pair, `access` (`permissioned` or
+  `permissionless`), and `execution` (`instant` or `worker`). The older `flow` key
+  (`permissionless`, `permissioned`, or `worker`) is still accepted on its own and
+  means the offer created before instance IDs: instance 0, 1, or 2 respectively,
+  with `worker` being permissionless. `liquidityVault: "none"` encodes
   a zero liquidity-vault reference. Sells require a named liquidity-kind vault.
   Each offer requires an explicit `enabled` boolean; setup reconciles that state on-chain.
 
 A named pricer reference must match the offer's managed token and its on-chain USD
 pricer identity: the contracts derive this binding rather than storing a separate
-pricer ID in each offer. Permissioned and worker offers require a `nav` quoter;
-worker offers must use `managedToAsset`. Permissionless offers use
-`navPermissionless` or a pair-matching `propAmm` quoter. Repeated component IDs and
-repeated directed token-pair/flow identities are rejected, even under different
-configuration names. Separate quoter/fee instances need separate instance IDs.
+pricer ID in each offer. Any quoter suits any access and execution; a `propAmm`
+quoter must match the offer's pair, and `navPermissionless` is a deprecated alias
+of `nav`. Repeated component IDs and repeated directed token-pair/instance
+identities are rejected, even under different configuration names. Setup also
+refuses an `instanceId` whose live offer has a different access or execution.
+Separate quoter/fee instances need separate instance IDs.
 
 Production (`ethereum-mainnet-live`) contains two permissionless NAV buy offers using
 native Ethereum [USDC](https://developers.circle.com/stablecoins/usdc-contract-addresses)
@@ -79,9 +84,30 @@ Setup creates missing components in dependency order, reuses matching components
 and updates existing offer references and enabled states to match the configuration.
 It does not rewrite shared pricing/fee policies. A matching completed setup emits
 no new calls. The legacy buy, permissioned-buy, and Prop AMM sell script names
-select matching flow/direction/quoter definitions from this same configuration.
+select matching access/execution/direction/quoter definitions from this same configuration.
 The allowance script approves the Diamond for both tokens of each configured
-permissionless offer, skipping maximum allowances and permissioned/worker offers.
+instant permissionless offer, skipping maximum allowances and permissioned or worker offers.
+
+### Upgrading a deployment created before instance IDs
+
+Offers created by the pair-and-flow model keep their IDs and need one migration
+call after the facet cut:
+
+1. Apply the cut. It replaces the application facets, adds `getOfferConfigV2`,
+   `migrateOfferConfigs`, and `createFulfillmentRequestWithApproval`, and removes
+   the old `makeOfferConfig` selector, whose parameter struct changed.
+2. Run `script/MigrateOfferConfigs.s.sol` with the environment's config and execute
+   the emitted `migrateOfferConfigs` call from the Safe. It stores each offer's
+   instance ID and turns a legacy Worker offer into permissionless + worker.
+
+Permissioned and permissionless offers keep working between the two steps. A
+legacy Worker offer cannot be read until migrated, so if one exists, put the cut
+and the migration in the same Safe batch. The migration skips offers that are
+already current and can be repeated.
+
+`test/fork/OnReOfferUpgradeFork.t.sol` rehearses both steps against the live
+mainnet Diamond when `ETH_MAINNET_RPC_URL` is set, and checks that the live offers
+return the same views, previews, and trade outputs afterwards.
 Execute setup calls from the admin Safe and allowance calls from the settlement
 Safe. Neither script broadcasts. There are no top-level token defaults: the
 token pair comes from each offer, and the pricer/quoter pair bindings are explicit.

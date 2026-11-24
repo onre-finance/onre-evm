@@ -46,6 +46,11 @@ contract OnReOfferFacet {
         LibOnReOfferConfig._setOfferConfigEnabled(offerConfigId, enabled);
     }
 
+    /// @notice One-off migration of offers created before instance IDs; see `LibOnReOfferConfig`.
+    function migrateOfferConfigs(bytes32[] calldata offerConfigIds) external returns (uint256 migratedCount) {
+        migratedCount = LibOnReOfferConfig._migrateOfferConfigs(offerConfigIds);
+    }
+
     function takeOffer(TakeOfferParams calldata params) external returns (uint256 amountOut) {
         amountOut = LibOnReOffer._takeOffer(params);
     }

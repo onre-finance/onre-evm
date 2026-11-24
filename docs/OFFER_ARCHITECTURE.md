@@ -13,8 +13,9 @@ sources, and derives deployment and upgrade cuts from the same ABIs.
 The implemented scope intentionally contains:
 
 - one pricing denomination: `Usd`;
-- three offer flows: `Permissioned`, `Permissionless`, and `Worker`;
-- two stateless quoter kinds, `Nav` and `NavPermissionless`, plus the stateful
+- two access modes, `Permissioned` and `Permissionless`, and two execution modes,
+  `Instant` and `Worker`, chosen independently per offer;
+- the stateless quoter kind `Nav` (with its deprecated alias `NavPermissionless`), plus the stateful
   proprietary automated market maker kind, `PropAmm` (Prop AMM);
 - per-token Buffer state, accrual, settlement, and managed-token supply-change
   callbacks;
@@ -45,14 +46,14 @@ flowchart TB
     subgraph Pricing["Deterministic USD pricing and quoting"]
         Pricer["<b>USD Pricer</b><br/>ID = hash(managedToken, Usd)<br/>exactly one per managed token<br/>enabled"]
         PricingVector["<b>PricingVector</b><br/>startTime<br/>baseTime<br/>basePrice<br/>APR<br/>priceFixDuration"]
-        Nav["<b>Nav Quoter</b><br/>instance ID<br/>permissioned and worker<br/>enabled"]
-        NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>permissionless<br/>enabled"]
-        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>permissionless<br/>enabled"]
+        Nav["<b>Nav Quoter</b><br/>instance ID<br/>any access and execution<br/>enabled"]
+        NavPermissionless["<b>NavPermissionless Quoter</b><br/>instance ID<br/>deprecated alias of Nav<br/>enabled"]
+        PropAmm["<b>Prop AMM</b><br/>instance ID and bound pair<br/>curve and cadence configuration<br/>rolling buy/sell pressure<br/>any access and execution<br/>enabled"]
     end
 
     subgraph Configuration["Reusable offer configuration"]
         FeeConfig["<b>FeeConfig</b><br/>instance ID<br/>basis points<br/>minimum input-token fee<br/>feeVaultId<br/>enabled"]
-        OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, flow)<br/>tokenIn and tokenOut<br/>flow and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>enabled"]
+        OfferConfig["<b>OfferConfig</b><br/>ID = hash(tokenIn, tokenOut, instanceId)<br/>tokenIn and tokenOut<br/>access, execution and derived direction<br/>quoterId and feeConfigId<br/>proceedsVaultId<br/>optional liquidityVaultId<br/>enabled"]
     end
 
     subgraph Custody["Diamond custody and logical vault accounting"]
@@ -63,7 +64,7 @@ flowchart TB
     end
 
     subgraph Runtime["Runtime execution"]
-        TakeOffer["<b>takeOffer</b><br/>loads flow from OfferConfig<br/>Permissioned: approval required<br/>Permissionless: approval empty<br/>Worker: direct execution rejected<br/>minimum output and deadline enforced"]
+        TakeOffer["<b>takeOffer</b><br/>loads access and execution from OfferConfig<br/>Permissioned: approval required<br/>Permissionless: approval empty<br/>Worker execution: direct execution rejected<br/>minimum output and deadline enforced"]
         SettlementAccount["<b>Permissionless settlement account</b><br/>boss configured<br/>max token allowances to Diamond<br/>transient hop with zero retained inventory"]
         Request["<b>FulfillmentRequest</b><br/>ID = offer + user + request ID<br/>escrowed gross input<br/>partially filled by worker"]
         Fulfill["<b>fulfillWorkerRequest</b><br/>WORKER_ROLE required<br/>current USD price and fee<br/>partial or complete fill"]
@@ -83,13 +84,13 @@ flowchart TB
     OfferConfig -->|"liquidityVaultId"| LiquidityVault
     FeeConfig -->|"feeVaultId"| FeeVault
 
-    TakeOffer -->|"loads direct-flow configuration"| OfferConfig
+    TakeOffer -->|"loads instant-execution configuration"| OfferConfig
     AppConfig -.->|"kill switch and approval"| TakeOffer
     AppConfig -.->|"configures"| SettlementAccount
     SettlementAccount <-->|"permissionless input and output hop"| TakeOffer
     TokenConfig -->|"registered token"| ManagedToken
     ManagedToken -.->|"mint output or burn input"| TakeOffer
-    Request -->|"flow = Worker; direction = ManagedToAsset"| OfferConfig
+    Request -->|"execution = Worker; either direction"| OfferConfig
     Fulfill -->|"settles escrowed input"| Request
 
     Roles -.->|"DEFAULT_ADMIN_ROLE"| Pricer
@@ -117,13 +118,15 @@ USD Pricer         = hash("onre.pricer", managedToken, Usd)
 Quoter             = hash("onre.quoter", kind, instanceId)
 FeeConfig          = hash("onre.fee_config", instanceId)
 ConfigurableVault  = hash("onre.configurable_vault", kind, instanceId)
-OfferConfig        = hash("onre.offer_config", tokenIn, tokenOut, flow)
+OfferConfig        = hash("onre.offer_config", tokenIn, tokenOut, instanceId)
 FulfillmentRequest = hash("onre.fulfillment_request", offerConfigId, user, requestId)
 ```
 
 For Quoters, `kind` selects the behavior family and `instanceId` selects one
-independently configurable instance within that family. Multiple `Nav`,
-`NavPermissionless`, or `PropAmm` instances can therefore coexist.
+independently configurable instance within that family. Multiple `Nav` or
+`PropAmm` instances can therefore coexist. `NavPermissionless` prices exactly like
+`Nav` and is deprecated; it stays in the enum because its ordinal is stored in
+existing quoters and hashed into their IDs.
 Kind-specific settings are stored under the resulting `quoterId`; mutable
 settings are not included in the identity hash.
 
@@ -137,12 +140,20 @@ A `PropAmm` proprietary automated market maker instance is immutably bound to on
 asset and one managed token.
 Multiple instances may use the same pair while keeping independent curve
 configuration and rolling pressure. The asset-to-managed and managed-to-asset
-permissionless `OfferConfig`s may reference the same instance, which makes buys
+`OfferConfig`s may reference the same instance, which makes buys
 relieve the sell pressure accumulated by that instance.
 
-There is exactly one `OfferConfig` for a directed pair and flow. Permissioned
-and permissionless routes for the same pair therefore cannot silently share an
-authorization mode. A reverse route is a different directed pair.
+An `OfferConfig` is identified by its directed pair and a boss-chosen
+`instanceId`, so a pair can hold any number of offers, for example two
+permissionless offers with different fees. Access and execution are stored
+properties of the offer, not part of its identity. A reverse route is a
+different directed pair.
+
+Offers created before instance IDs hashed their flow in the position that now
+holds the instance ID. Both encode as one word, so those offers keep their ID as
+the instance equal to their old flow ordinal: `Permissioned` is instance 0,
+`Permissionless` instance 1, and `Worker` instance 2. New offers on such a pair
+must use another instance ID.
 
 Direction is derived from which token is a registered managed token:
 
@@ -152,32 +163,53 @@ tokenIn  is a registered managed token -> ManagedToAsset
 both or neither                         -> reject
 ```
 
-`tokenIn`, `tokenOut`, `flow`, and `direction` are immutable. The referenced
+`tokenIn`, `tokenOut`, `instanceId`, `access`, `execution`, and `direction` are
+immutable. The referenced
 Quoter, FeeConfig, and vaults can be replaced by governance while preserving
 the route identity. The USD Pricer is derived from the route's managed token and
 cannot be redirected independently.
 
-## Compatibility matrix
+## Access and execution
 
-| Flow | Direction | Required quoter | Execution |
+Access decides who may trade; execution decides how the trade settles. Every
+combination is supported, in either direction, with any quoter.
+
+| Access | Execution | Entry point | Approval |
 | --- | --- | --- | --- |
-| `Permissioned` | either | `Nav` | `takeOffer`; valid approver signature required |
-| `Permissionless` | either | `NavPermissionless` | `takeOffer`; approval fields must be empty |
-| `Permissionless` | either | pair-matching `PropAmm` | `takeOffer`; approval fields must be empty |
-| `Worker` | `ManagedToAsset` | `Nav` | create, partially fulfill, or cancel a `FulfillmentRequest` |
+| `Permissioned` | `Instant` | `takeOffer` | valid approver signature for the caller |
+| `Permissionless` | `Instant` | `takeOffer` | approval fields must be empty |
+| `Permissioned` | `Worker` | `createFulfillmentRequestWithApproval` | valid approver signature for the caller, checked at creation |
+| `Permissionless` | `Worker` | `createFulfillmentRequest` | none |
 
-The two NAV quoter kinds use the same arithmetic but remain separate
-dispatch families so permissionless quoting can evolve without changing
-permissioned or worker behavior. `PropAmm` uses the same NAV result for buys.
-For sells it applies the configured liquidity, pressure, curve, and cadence
-dampening after the NAV result.
+A `PropAmm` quoter must be bound to the offer's pair. It returns the NAV result
+for buys. For sells it applies the configured liquidity, pressure, curve, and
+cadence dampening after the NAV result.
 
-`takeOffer` loads the flow, direction, and Quoter from the selected
+`takeOffer` loads the access, execution, direction, and Quoter from the selected
 `OfferConfig`, then derives the single USD Pricer from the route's managed token.
 The caller does not choose an execution path or Pricer independently of that
 configuration. Permissioned offers require the embedded approval message and
-signature. Permissionless offers require both to be empty. Worker offers reject
-direct execution and use the escrowed fulfillment-request path.
+signature. Permissionless offers require both to be empty. Offers with Worker
+execution reject `takeOffer` and use the escrowed fulfillment-request path, where
+the worker fills the request, possibly in parts, at the price and fee current at
+each fill. An approval gates request creation only; fills and cancellation need
+none.
+
+### Legacy flow in views and events
+
+`getOfferConfig`, `OfferConfigCreated`, and `OfferExecuted` keep their original
+shape and still report a three-way `flow`, derived from the stored modes:
+
+| Stored modes | Reported `flow` |
+| --- | --- |
+| `Permissioned` + `Instant` | `Permissioned` |
+| `Permissionless` + `Instant` | `Permissionless` |
+| any access + `Worker` | `Worker` |
+
+A permissioned worker offer therefore reads as `Worker`. `getOfferConfigV2`
+returns the stored offer with `instanceId`, `access`, and `execution`, and
+`OfferConfigModeSet` carries the same three values when an offer is created or
+migrated.
 
 Permissioned execution transfers input from the user to the Diamond and output
 from the Diamond or mint directly to the user. Permissionless execution instead
@@ -190,9 +222,10 @@ output: Diamond or mint -> settlement account -> user
 
 The settlement account must pre-approve the Diamond for every supported token.
 Both legs are atomic, exact-transfer checked, and leave no trade inventory in
-the settlement account. Worker fulfillment remains direct and does not use it.
+the settlement account. Worker fulfillment settles directly from escrow and does
+not use it, whatever the offer's access.
 
-Every direct execution also carries `minimumAmountOut` and `deadline`. Settlement
+Every `takeOffer` execution also carries `minimumAmountOut` and `deadline`. Settlement
 reverts before collecting input when the current quote is below the caller's
 minimum or the deadline has expired.
 

@@ -5,9 +5,23 @@ enum PricingDenomination {
     Usd
 }
 
+/// @dev Legacy combined mode. Offers store `OfferAccess` and `OfferExecution`; this enum only
+/// remains in `OfferConfigView` and in the `OfferConfigCreated` and `OfferExecuted` events.
 enum OfferFlow {
     Permissioned,
     Permissionless,
+    Worker
+}
+
+/// @notice Who may trade: users holding an approver signature, or anyone.
+enum OfferAccess {
+    Permissioned,
+    Permissionless
+}
+
+/// @notice How a trade settles: atomically in `takeOffer`, or as an escrowed request the worker fills.
+enum OfferExecution {
+    Instant,
     Worker
 }
 
@@ -18,6 +32,8 @@ enum OfferDirection {
 
 enum QuoterKind {
     Nav,
+    /// @dev Deprecated alias of `Nav`. It cannot be removed: its ordinal is stored in existing
+    /// quoters and hashed into quoter IDs. Access is a property of the offer, not of the quoter.
     NavPermissionless,
     PropAmm
 }
@@ -122,7 +138,31 @@ struct BufferState {
     bool exists;
 }
 
+/// @dev Stored per offer ID. Existing offers must keep their slot layout: only pack new
+/// fields into free bytes of a slot or append them after `exists`.
 struct OfferConfig {
+    address tokenIn;
+    /// @dev Occupies the byte that held the legacy `OfferFlow`: Permissioned and Permissionless
+    /// keep their values; a legacy Worker value (2) must be migrated before the offer is read.
+    OfferAccess access;
+    OfferDirection direction;
+    /// @dev Identity within the directed pair: the offer ID is derived from `(tokenIn, tokenOut, instanceId)`.
+    uint64 instanceId;
+    OfferExecution execution;
+    bytes32 quoterId;
+    bytes32 feeConfigId;
+    bytes32 proceedsVaultId;
+    bytes32 liquidityVaultId;
+    address tokenOut;
+    uint8 tokenOutDecimals;
+    uint8 tokenInDecimals;
+    bool enabled;
+    bool exists;
+}
+
+/// @notice Stable return shape of `getOfferConfig`.
+/// @dev Integrators decode this layout, so it stays fixed while the stored `OfferConfig` evolves.
+struct OfferConfigView {
     address tokenIn;
     OfferFlow flow;
     OfferDirection direction;
@@ -140,7 +180,9 @@ struct OfferConfig {
 struct MakeOfferConfigParams {
     address tokenIn;
     address tokenOut;
-    OfferFlow flow;
+    uint64 instanceId;
+    OfferAccess access;
+    OfferExecution execution;
     bytes32 quoterId;
     bytes32 feeConfigId;
     bytes32 proceedsVaultId;

@@ -2,12 +2,17 @@
 pragma solidity 0.8.35;
 
 import {OfferSetup} from "./base/OfferSetup.sol";
-import {OfferFlow, OfferDirection, QuoterKind} from "../src/types/OnReTypes.sol";
+import {OfferAccess, OfferDirection, OfferExecution, QuoterKind} from "../src/types/OnReTypes.sol";
 
-/// Uses named environment definitions matching this script's flow, direction, and quoter kind.
+/// Uses named environment definitions matching this script's access, execution, direction, and quoter kind.
 /// Use SetupOffers.s.sol to configure all offers and components.
 contract AssetToManagedOffer is OfferSetup {
     function run() external {
-        _setupMatchingOffers(OfferFlow.Permissionless, OfferDirection.AssetToManaged, QuoterKind.NavPermissionless);
+        _setupMatchingOffers(
+            OfferAccess.Permissionless,
+            OfferExecution.Instant,
+            OfferDirection.AssetToManaged,
+            QuoterKind.NavPermissionless
+        );
     }
 }

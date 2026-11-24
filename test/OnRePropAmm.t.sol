@@ -198,15 +198,16 @@ contract OnRePropAmmTest is OnReAppTestBase {
         assertEq(harness.utilizationPower(utilization, exponentSteps * 10_000), expected);
     }
 
-    function test_PropAmmIsPermissionlessAndBoundToItsPair() public {
+    function test_PropAmmSuitsAnyAccessAndIsBoundToItsPair() public {
         bytes32 propAmmId = _createConfiguredPropAmm(0, _basePropAmmTestConfig());
 
-        vm.expectRevert(InvalidFlowQuoterError.selector);
         app.updateOfferConfigReferences(permissionedOfferId, propAmmId, feeConfigId, proceedsVaultId, liquidityVaultId);
+        assertEq(app.getOfferConfig(permissionedOfferId).quoterId, propAmmId);
 
         MockUsd alternativeUsd = new MockUsd();
-        bytes32 expectedOfferId =
-            OnReIds._offerConfigId(address(alternativeUsd), address(managedToken), OfferFlow.Permissionless);
+        bytes32 expectedOfferId = OnReIds._offerConfigId(
+            address(alternativeUsd), address(managedToken), uint64(uint8(OfferFlow.Permissionless))
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
                 InvalidPropAmmPairError.selector, propAmmId, address(alternativeUsd), address(managedToken)
@@ -216,7 +217,9 @@ contract OnRePropAmmTest is OnReAppTestBase {
             MakeOfferConfigParams({
                 tokenIn: address(alternativeUsd),
                 tokenOut: address(managedToken),
-                flow: OfferFlow.Permissionless,
+                instanceId: uint64(uint8(OfferFlow.Permissionless)),
+                access: OfferAccess.Permissionless,
+                execution: OfferExecution.Instant,
                 quoterId: propAmmId,
                 feeConfigId: feeConfigId,
                 proceedsVaultId: proceedsVaultId,

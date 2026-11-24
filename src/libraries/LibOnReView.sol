@@ -9,6 +9,7 @@ import {
     FeeConfig,
     FulfillmentRequest,
     OfferConfig,
+    OfferConfigView,
     ManagedTokenConfig,
     Pricer,
     PricingVector,
@@ -53,7 +54,25 @@ library LibOnReView {
         return LibOnReValidation._requireFeeConfig(feeConfigId);
     }
 
-    function _getOfferConfig(bytes32 offerConfigId) internal view returns (OfferConfig memory) {
+    function _getOfferConfig(bytes32 offerConfigId) internal view returns (OfferConfigView memory) {
+        OfferConfig storage offer = LibOnReValidation._requireOfferConfig(offerConfigId);
+        return OfferConfigView({
+            tokenIn: offer.tokenIn,
+            flow: LibOnReValidation._legacyFlow(offer),
+            direction: offer.direction,
+            quoterId: offer.quoterId,
+            feeConfigId: offer.feeConfigId,
+            proceedsVaultId: offer.proceedsVaultId,
+            liquidityVaultId: offer.liquidityVaultId,
+            tokenOut: offer.tokenOut,
+            tokenOutDecimals: offer.tokenOutDecimals,
+            tokenInDecimals: offer.tokenInDecimals,
+            enabled: offer.enabled,
+            exists: offer.exists
+        });
+    }
+
+    function _getOfferConfigV2(bytes32 offerConfigId) internal view returns (OfferConfig memory) {
         return LibOnReValidation._requireOfferConfig(offerConfigId);
     }
 

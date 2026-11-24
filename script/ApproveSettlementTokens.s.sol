@@ -2,10 +2,9 @@
 pragma solidity 0.8.35;
 
 import {OfferConfiguration} from "./base/OfferConfiguration.sol";
-import {OfferFlow} from "../src/types/OnReTypes.sol";
 
 /// Run with ONRE_ENV and --rpc-url. Execute these calls from the settlement Safe.
-/// Approves the Diamond for both tokens of each configured permissionless offer.
+/// Approves the Diamond for both tokens of each configured instant permissionless offer.
 contract ApproveSettlementTokens is OfferConfiguration {
     function run() external {
         Environment memory env = _loadEnvironment();
@@ -13,7 +12,7 @@ contract ApproveSettlementTokens is OfferConfiguration {
         _init(env.diamond, env.settlementAccount);
         for (uint256 i; i < config.offers.length; ++i) {
             OfferDefinition memory offer = config.offers[i];
-            if (offer.flow != OfferFlow.Permissionless) continue;
+            if (!_usesSettlementAccount(offer)) continue;
             _ensureApproval(offer.assetToken, type(uint256).max);
             _ensureApproval(offer.managedToken, type(uint256).max);
         }

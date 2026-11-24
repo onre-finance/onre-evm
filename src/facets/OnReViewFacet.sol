@@ -7,6 +7,7 @@ import {
     FeeConfig,
     FulfillmentRequest,
     OfferConfig,
+    OfferConfigView,
     ManagedTokenConfig,
     Pricer,
     PricingVector,
@@ -40,8 +41,13 @@ contract OnReViewFacet is IAppConfig {
         return LibOnReView._getFeeConfig(feeConfigId);
     }
 
-    function getOfferConfig(bytes32 offerConfigId) external view returns (OfferConfig memory) {
+    function getOfferConfig(bytes32 offerConfigId) external view returns (OfferConfigView memory) {
         return LibOnReView._getOfferConfig(offerConfigId);
+    }
+
+    /// @notice Full stored offer, including fields added after `getOfferConfig` was frozen.
+    function getOfferConfigV2(bytes32 offerConfigId) external view returns (OfferConfig memory) {
+        return LibOnReView._getOfferConfigV2(offerConfigId);
     }
 
     function getFulfillmentRequest(bytes32 fulfillmentRequestId) external view returns (FulfillmentRequest memory) {

@@ -24,8 +24,11 @@ import {
     ConfigurableVaultKind,
     FeeConfig,
     FulfillmentRequest,
+    OfferAccess,
     OfferConfig,
     OfferDirection,
+    OfferExecution,
+    OfferFlow,
     ManagedTokenConfig,
     Pricer,
     Quoter
@@ -126,6 +129,13 @@ library LibOnReValidation {
         if (offerConfig.direction == OfferDirection.AssetToManaged) return offerConfig.tokenOut;
         if (offerConfig.direction == OfferDirection.ManagedToAsset) return offerConfig.tokenIn;
         revert InvalidOfferDirectionError();
+    }
+
+    /// @dev Legacy three-way flow still reported by `getOfferConfig` and the offer events.
+    /// A permissioned worker offer has no legacy equivalent and reports `Worker`.
+    function _legacyFlow(OfferConfig storage offerConfig) internal view returns (OfferFlow) {
+        if (offerConfig.execution == OfferExecution.Worker) return OfferFlow.Worker;
+        return offerConfig.access == OfferAccess.Permissioned ? OfferFlow.Permissioned : OfferFlow.Permissionless;
     }
 
     function _requireFulfillmentRequest(bytes32 fulfillmentRequestId)

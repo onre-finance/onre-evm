@@ -8,10 +8,9 @@ import {OnReIds} from "../src/libraries/OnReIds.sol";
 import "./helpers/OnReAppTestBase.sol";
 
 contract OnReFulfillmentTest is OnReAppTestBase {
-    function test_OfferCreationRejectsWrongFlowQuoterAndWorkerDirection() public {
+    function test_OfferCreationAcceptsAnyQuoterAndWorkerBuys() public {
         MockUsd alternativeUsd = new MockUsd();
-        vm.expectRevert(InvalidFlowQuoterError.selector);
-        _makeOffer(
+        bytes32 permissionlessNav = _makeOffer(
             address(alternativeUsd),
             address(managedToken),
             OfferFlow.Permissionless,
@@ -19,12 +18,13 @@ contract OnReFulfillmentTest is OnReAppTestBase {
             feeConfigId,
             liquidityVaultId
         );
+        assertEq(app.getOfferConfig(permissionlessNav).quoterId, navQuoterId);
 
-        bytes32 secondFee = app.createFeeConfig(1, 0, 0, feeVaultId);
-        vm.expectRevert(InvalidOfferDirectionError.selector);
-        _makeOffer(
-            address(alternativeUsd), address(managedToken), OfferFlow.Worker, navQuoterId, secondFee, liquidityVaultId
+        bytes32 workerBuy = _makeOffer(
+            address(alternativeUsd), address(managedToken), OfferFlow.Worker, navQuoterId, feeConfigId, liquidityVaultId
         );
+        assertEq(uint8(app.getOfferConfig(workerBuy).direction), uint8(OfferDirection.AssetToManaged));
+        assertEq(uint8(app.getOfferConfigV2(workerBuy).execution), uint8(OfferExecution.Worker));
     }
 
     function test_TakeOfferDispatchRejectsWorkerAndEnforcesUserProtections() public {

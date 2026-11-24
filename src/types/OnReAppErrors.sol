@@ -54,6 +54,7 @@ error MissingConfigurableVaultDestinationError(bytes32 vaultId);
 error OfferConfigAlreadyExistsError(bytes32 offerConfigId);
 error OfferConfigNotFoundError(bytes32 offerConfigId);
 error OfferConfigDisabledError(bytes32 offerConfigId);
+error OfferConfigNotMigratableError(bytes32 offerConfigId);
 error FulfillmentRequestAlreadyExistsError(bytes32 fulfillmentRequestId);
 error FulfillmentRequestNotFoundError(bytes32 fulfillmentRequestId);
 error FulfillmentAmountExceedsRemainingError(bytes32 fulfillmentRequestId, uint256 amount, uint256 remaining);

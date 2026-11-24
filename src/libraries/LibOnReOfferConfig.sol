@@ -11,6 +11,8 @@ import {
     LiquidityVaultRequiredError,
     NoChangeError,
     OfferConfigAlreadyExistsError,
+    OfferConfigNotFoundError,
+    OfferConfigNotMigratableError,
     UnsupportedOfferFlowError,
     ZeroAddressError
 } from "../types/OnReAppErrors.sol";
@@ -116,6 +118,53 @@ library LibOnReOfferConfig {
         if (offer.enabled == enabled) revert NoChangeError();
         offer.enabled = enabled;
         emit OfferConfigEnabledSet(offerConfigId, enabled);
+    }
+
+    /// @notice Brings offers created before instance IDs and the access/execution split to the current layout.
+    /// @dev Those offers hashed their flow where the instance ID is hashed now, so each keeps its ID
+    /// as the instance equal to its flow ordinal. Permissioned and Permissionless offers only gain
+    /// that stored instance ID. A Worker offer also has an out-of-range access byte: it becomes
+    /// Permissionless + Worker and cannot be read until migrated, so migrate it with the upgrade.
+    /// Offers that already match their ID are skipped, which makes the call safe to repeat.
+    function _migrateOfferConfigs(bytes32[] calldata offerConfigIds) internal returns (uint256 migratedCount) {
+        LibOnReAccessControl._checkRole(LibOnReRoles.DEFAULT_ADMIN_ROLE);
+        uint256 length = offerConfigIds.length;
+        for (uint256 i; i < length; ++i) {
+            if (_migrateOfferConfig(offerConfigIds[i])) ++migratedCount;
+        }
+    }
+
+    function _migrateOfferConfig(bytes32 offerConfigId) private returns (bool migrated) {
+        OfferConfig storage offer = LibOnReStorage._appStorage().offerConfigs[offerConfigId];
+        if (!offer.exists) revert OfferConfigNotFoundError(offerConfigId);
+        // Read the first slot raw: a legacy Worker flow is not a valid `OfferAccess`.
+        uint256 firstSlot;
+        // solhint-disable-next-line no-inline-assembly
+        assembly ("memory-safe") {
+            firstSlot := sload(offer.slot)
+        }
+        // forge-lint: disable-start(unsafe-typecast)
+        address tokenIn = address(uint160(firstSlot));
+        uint8 legacyFlow = uint8(firstSlot >> 160);
+        uint64 storedInstanceId = uint64(firstSlot >> 176);
+        // forge-lint: disable-end(unsafe-typecast)
+        address tokenOut = offer.tokenOut;
+        if (OnReIds._offerConfigId(tokenIn, tokenOut, storedInstanceId) == offerConfigId) return false;
+        if (
+            legacyFlow > uint8(OfferFlow.Worker)
+                || OnReIds._offerConfigId(tokenIn, tokenOut, legacyFlow) != offerConfigId
+        ) {
+            revert OfferConfigNotMigratableError(offerConfigId);
+        }
+        OfferAccess access =
+            legacyFlow == uint8(OfferFlow.Permissioned) ? OfferAccess.Permissioned : OfferAccess.Permissionless;
+        OfferExecution execution =
+            legacyFlow == uint8(OfferFlow.Worker) ? OfferExecution.Worker : OfferExecution.Instant;
+        offer.access = access;
+        offer.execution = execution;
+        offer.instanceId = legacyFlow;
+        emit OfferConfigModeSet(offerConfigId, legacyFlow, access, execution);
+        return true;
     }
 
     function _setOfferReferences(

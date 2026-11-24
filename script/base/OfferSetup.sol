@@ -18,7 +18,9 @@ import {
     MakeOfferConfigParams,
     OfferConfigView,
     OfferDirection,
-    OfferFlow,
+    OfferAccess,
+    OfferConfig,
+    OfferExecution,
     Pricer,
     PricingVector,
     PropAmmState,
@@ -40,18 +42,23 @@ abstract contract OfferSetup is OfferConfiguration {
         NamedIds fees;
     }
 
-    /// Compatibility scripts select offers by their explicit flow, direction, and quoter kind.
-    function _setupMatchingOffers(OfferFlow flow, OfferDirection direction, QuoterKind kind) internal {
+    /// Compatibility scripts select offers by their explicit access, execution, direction, and quoter kind.
+    function _setupMatchingOffers(
+        OfferAccess access,
+        OfferExecution execution,
+        OfferDirection direction,
+        QuoterKind kind
+    ) internal {
         Configuration memory config = _loadOfferConfiguration();
         uint256 count;
         for (uint256 i; i < config.offers.length; ++i) {
-            if (_matchesSelection(config, config.offers[i], flow, direction, kind)) ++count;
+            if (_matchesSelection(config, config.offers[i], access, execution, direction, kind)) ++count;
         }
         require(count != 0, "No matching offers configured; use SetupOffers for all definitions");
         OfferDefinition[] memory selected = new OfferDefinition[](count);
         count = 0;
         for (uint256 i; i < config.offers.length; ++i) {
-            if (_matchesSelection(config, config.offers[i], flow, direction, kind)) {
+            if (_matchesSelection(config, config.offers[i], access, execution, direction, kind)) {
                 selected[count++] = config.offers[i];
             }
         }
@@ -63,11 +70,14 @@ abstract contract OfferSetup is OfferConfiguration {
     function _matchesSelection(
         Configuration memory config,
         OfferDefinition memory offer,
-        OfferFlow flow,
+        OfferAccess access,
+        OfferExecution execution,
         OfferDirection direction,
         QuoterKind kind
     ) private pure returns (bool) {
-        if (offer.flow != flow || offer.direction != direction) return false;
+        if (offer.access != access || offer.execution != execution || offer.direction != direction) {
+            return false;
+        }
         for (uint256 i; i < config.quoters.length; ++i) {
             if (_is(config.quoters[i].name, offer.quoter)) return config.quoters[i].kind == kind;
         }
@@ -77,7 +87,7 @@ abstract contract OfferSetup is OfferConfiguration {
     function _setupOffers(Environment memory env, Configuration memory config) internal {
         _init(env.diamond, env.safe);
         References memory refs = _resolve(config);
-        // The contract validates fee limits, vault kinds, quoter/flow compatibility,
+        // The contract validates fee limits, vault kinds, quoter and pair compatibility,
         // and Prop AMM pairs during simulation. Only the named pricer binding is off-chain.
         for (uint256 i; i < config.offers.length; ++i) {
             OfferDefinition memory offer = config.offers[i];
@@ -88,7 +98,7 @@ abstract contract OfferSetup is OfferConfiguration {
         }
         bool permissionless;
         for (uint256 i; i < config.offers.length; ++i) {
-            if (config.offers[i].flow == OfferFlow.Permissionless) permissionless = true;
+            if (_usesSettlementAccount(config.offers[i])) permissionless = true;
         }
         if (permissionless) {
             require(env.settlementAccount != address(0), "SETTLEMENT_ACCOUNT not set");
@@ -120,8 +130,8 @@ abstract contract OfferSetup is OfferConfiguration {
                 tokenIn: tokenIn,
                 tokenOut: tokenOut,
                 instanceId: definition.instanceId,
-                access: _access(definition.flow),
-                execution: _execution(definition.flow),
+                access: definition.access,
+                execution: definition.execution,
                 quoterId: _ref(refs.quoters, definition.quoter),
                 feeConfigId: _ref(refs.fees, definition.feeConfig),
                 proceedsVaultId: _ref(refs.vaults, definition.proceedsVault),
@@ -166,8 +176,7 @@ abstract contract OfferSetup is OfferConfiguration {
                     && offer.managedToken != offer.assetToken,
                 "Invalid offer tokens"
             );
-            (address tokenIn, address tokenOut) = _tokens(offer);
-            _define(offers, i, offer.name, OnReIds._offerConfigId(tokenIn, tokenOut, offer.instanceId));
+            _define(offers, i, offer.name, _offerId(offer));
         }
     }
 
@@ -271,6 +280,12 @@ abstract contract OfferSetup is OfferConfiguration {
         if (!_exists(abi.encodeCall(IDiamondProxy.getOfferConfig, (offerId)), OfferConfigNotFoundError.selector)) {
             _makeOfferConfig(params);
         }
+        // An instance ID already taken by an offer with other modes is a config mistake, not an update.
+        OfferConfig memory stored = app.getOfferConfigV2(offerId);
+        require(
+            stored.access == params.access && stored.execution == params.execution,
+            "Existing offer mode differs; choose another instanceId"
+        );
         OfferConfigView memory existing = app.getOfferConfig(offerId);
         // Creation defaults to enabled. Execute creation + disabling in one atomic Safe batch.
         // Disable existing offers before changing references; enable only after references match.

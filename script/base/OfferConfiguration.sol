@@ -57,8 +57,9 @@ abstract contract OfferConfiguration is OnReOps {
         address managedToken;
         address assetToken;
         OfferDirection direction;
-        OfferFlow flow;
         uint64 instanceId;
+        OfferAccess access;
+        OfferExecution execution;
         string pricer;
         string quoter;
         string feeConfig;
@@ -152,11 +153,7 @@ abstract contract OfferConfiguration is OnReOps {
             offer.managedToken = vm.parseJsonAddress(json, string.concat(p, ".managedToken"));
             offer.assetToken = vm.parseJsonAddress(json, string.concat(p, ".assetToken"));
             offer.direction = _direction(vm.parseJsonString(json, string.concat(p, ".direction")));
-            offer.flow = _flow(vm.parseJsonString(json, string.concat(p, ".flow")));
-            // Offers created before instance IDs keep their ID as the instance equal to their flow ordinal.
-            offer.instanceId = vm.keyExistsJson(json, string.concat(p, ".instanceId"))
-                ? _u64(json, string.concat(p, ".instanceId"))
-                : uint64(uint8(offer.flow));
+            (offer.instanceId, offer.access, offer.execution) = _offerIdentity(json, p);
             offer.pricer = vm.parseJsonString(json, string.concat(p, ".pricer"));
             offer.quoter = vm.parseJsonString(json, string.concat(p, ".quoter"));
             offer.feeConfig = vm.parseJsonString(json, string.concat(p, ".feeConfig"));
@@ -262,12 +259,52 @@ abstract contract OfferConfiguration is OnReOps {
         return keccak256(bytes(a)) == keccak256(bytes(b));
     }
 
-    function _access(OfferFlow flow) internal pure returns (OfferAccess) {
-        return flow == OfferFlow.Permissioned ? OfferAccess.Permissioned : OfferAccess.Permissionless;
+    /// Offers are identified by `instanceId` and state `access` and `execution` explicitly.
+    /// The legacy `flow` key is still accepted on its own: such an offer was created before
+    /// instance IDs and is the instance equal to its flow ordinal.
+    function _offerIdentity(string memory json, string memory p)
+        private
+        view
+        returns (uint64 instanceId, OfferAccess access, OfferExecution execution)
+    {
+        bool hasAccess = vm.keyExistsJson(json, string.concat(p, ".access"));
+        bool hasExecution = vm.keyExistsJson(json, string.concat(p, ".execution"));
+        if (vm.keyExistsJson(json, string.concat(p, ".flow"))) {
+            require(!hasAccess && !hasExecution, "Use either flow or access and execution");
+            OfferFlow flow = _flow(vm.parseJsonString(json, string.concat(p, ".flow")));
+            instanceId = vm.keyExistsJson(json, string.concat(p, ".instanceId"))
+                ? _u64(json, string.concat(p, ".instanceId"))
+                : uint64(uint8(flow));
+            access = flow == OfferFlow.Permissioned ? OfferAccess.Permissioned : OfferAccess.Permissionless;
+            execution = flow == OfferFlow.Worker ? OfferExecution.Worker : OfferExecution.Instant;
+            return (instanceId, access, execution);
+        }
+        require(hasAccess && hasExecution, "Offer access and execution not set");
+        instanceId = _u64(json, string.concat(p, ".instanceId"));
+        access = _access(vm.parseJsonString(json, string.concat(p, ".access")));
+        execution = _execution(vm.parseJsonString(json, string.concat(p, ".execution")));
     }
 
-    function _execution(OfferFlow flow) internal pure returns (OfferExecution) {
-        return flow == OfferFlow.Worker ? OfferExecution.Worker : OfferExecution.Instant;
+    /// Only instant permissionless trades route through the settlement account.
+    function _usesSettlementAccount(OfferDefinition memory offer) internal pure returns (bool) {
+        return offer.access == OfferAccess.Permissionless && offer.execution == OfferExecution.Instant;
+    }
+
+    function _offerId(OfferDefinition memory offer) internal pure returns (bytes32) {
+        (address tokenIn, address tokenOut) = _tokens(offer);
+        return OnReIds._offerConfigId(tokenIn, tokenOut, offer.instanceId);
+    }
+
+    function _access(string memory name) private pure returns (OfferAccess) {
+        if (_is(name, "permissionless")) return OfferAccess.Permissionless;
+        if (_is(name, "permissioned")) return OfferAccess.Permissioned;
+        revert("Unknown offer access");
+    }
+
+    function _execution(string memory name) private pure returns (OfferExecution) {
+        if (_is(name, "instant")) return OfferExecution.Instant;
+        if (_is(name, "worker")) return OfferExecution.Worker;
+        revert("Unknown offer execution");
     }
 
     function _flow(string memory name) private pure returns (OfferFlow) {

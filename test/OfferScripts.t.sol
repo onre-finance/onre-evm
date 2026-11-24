@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
 import {SetupOffers} from "../script/SetupOffers.s.sol";
+import {MigrateOfferConfigs} from "../script/MigrateOfferConfigs.s.sol";
 import {ApproveSettlementTokens} from "../script/ApproveSettlementTokens.s.sol";
 import {DepositLiquidityVault} from "../script/DepositLiquidityVault.s.sol";
 import {OfferConfiguration} from "../script/base/OfferConfiguration.sol";
@@ -24,6 +25,8 @@ import {
     ExecutionAccounting,
     InitializeParams,
     OfferConfigView,
+    OfferAccess,
+    OfferExecution,
     OfferFlow,
     OfferDirection,
     Pricer,
@@ -61,8 +64,10 @@ contract OfferScriptHarness is SetupOffers {
         return _txs[index].data;
     }
 
-    function runMatching(OfferFlow flow, OfferDirection direction, QuoterKind kind) external {
-        _setupMatchingOffers(flow, direction, kind);
+    function runMatching(OfferAccess access, OfferExecution execution, OfferDirection direction, QuoterKind kind)
+        external
+    {
+        _setupMatchingOffers(access, execution, direction, kind);
     }
 }
 
@@ -106,7 +111,33 @@ contract SettlementApprovalHarness is ApproveSettlementTokens {
     }
 }
 
+contract MigrationScriptHarness is MigrateOfferConfigs {
+    Environment internal environment;
+    Configuration internal offerConfig;
+
+    function configure(Environment memory env, Configuration memory config) external {
+        environment = env;
+        offerConfig = config;
+    }
+
+    function _loadEnvironment() internal view override returns (Environment memory) {
+        return environment;
+    }
+
+    function _loadOfferConfiguration() internal view override returns (Configuration memory) {
+        return offerConfig;
+    }
+
+    function transactionCount() external view returns (uint256) {
+        return _txs.length;
+    }
+}
+
 contract OfferConfigurationHarness is OfferConfiguration {
+    function offerId(OfferDefinition memory offer) external pure returns (bytes32) {
+        return _offerId(offer);
+    }
+
     function parse(string memory json) external view returns (Configuration memory) {
         return _parseOfferConfiguration(json);
     }
@@ -182,8 +213,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(managed),
                     address(usdc),
                     OfferDirection.AssetToManaged,
-                    OfferFlow.Permissionless,
                     uint64(uint8(OfferFlow.Permissionless)),
+                    OfferAccess.Permissionless,
+                    OfferExecution.Instant,
                     "onyc-usd",
                     "nav-permissionless",
                     "buy-fee",
@@ -199,8 +231,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(managed),
                     address(usdg),
                     OfferDirection.AssetToManaged,
-                    OfferFlow.Permissionless,
                     uint64(uint8(OfferFlow.Permissionless)),
+                    OfferAccess.Permissionless,
+                    OfferExecution.Instant,
                     "onyc-usd",
                     "nav-permissionless",
                     "buy-fee",
@@ -487,8 +520,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(managed),
                     address(usdc),
                     OfferDirection.AssetToManaged,
-                    OfferFlow.Permissioned,
                     uint64(uint8(OfferFlow.Permissioned)),
+                    OfferAccess.Permissioned,
+                    OfferExecution.Instant,
                     "onyc-usd",
                     "nav",
                     "buy-fee",
@@ -504,8 +538,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(managed),
                     address(usdg),
                     OfferDirection.ManagedToAsset,
-                    OfferFlow.Worker,
                     uint64(uint8(OfferFlow.Worker)),
+                    OfferAccess.Permissionless,
+                    OfferExecution.Worker,
                     "onyc-usd",
                     "nav",
                     "buy-fee",
@@ -585,7 +620,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
     }
 
     function test_PermissionedOfferAcceptsTheConfiguredNavQuoter() public {
-        config.offers[0].flow = OfferFlow.Permissioned;
+        config.offers[0].access = OfferAccess.Permissioned;
         setupScript.configure(environment, config);
         setupScript.run();
         assertEq(uint8(app.getOfferConfig(_offer(address(usdc))).flow), uint8(OfferFlow.Permissioned));
@@ -593,7 +628,7 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
 
     function test_CreateWorkerBuyOffer() public {
         _addNavQuoter();
-        config.offers[0].flow = OfferFlow.Worker;
+        config.offers[0].execution = OfferExecution.Worker;
         config.offers[0].quoter = "nav";
         setupScript.configure(environment, config);
         setupScript.run();
@@ -650,7 +685,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
             assertFalse(parsed.offers[i].enabled);
             assertEq(parsed.offers[i].pricer, "onyc-usd");
             assertEq(parsed.offers[i].managedToken, parsed.pricers[0].managedToken);
-            assertEq(uint8(parsed.offers[i].flow), uint8(OfferFlow.Permissionless));
+            assertEq(uint8(parsed.offers[i].access), uint8(OfferAccess.Permissionless));
+            assertEq(uint8(parsed.offers[i].execution), uint8(OfferExecution.Instant));
+            assertEq(parsed.offers[i].instanceId, 1);
             if (parsed.offers[i].direction == OfferDirection.AssetToManaged) {
                 assertEq(parsed.offers[i].liquidityVault, "none");
                 buys++;
@@ -702,8 +739,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                     address(managed),
                     address(usdc),
                     OfferDirection.AssetToManaged,
-                    OfferFlow.Permissioned,
                     uint64(uint8(OfferFlow.Permissioned)),
+                    OfferAccess.Permissioned,
+                    OfferExecution.Instant,
                     "onyc-usd",
                     "nav",
                     "buy-fee",
@@ -713,7 +751,9 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
                 )
             );
         setupScript.configure(environment, config);
-        setupScript.runMatching(OfferFlow.Permissioned, OfferDirection.AssetToManaged, QuoterKind.Nav);
+        setupScript.runMatching(
+            OfferAccess.Permissioned, OfferExecution.Instant, OfferDirection.AssetToManaged, QuoterKind.Nav
+        );
         bytes32 permissionedId =
             OnReIds._offerConfigId(address(usdc), address(managed), uint64(uint8(OfferFlow.Permissioned)));
         assertEq(uint8(app.getOfferConfig(permissionedId).flow), uint8(OfferFlow.Permissioned));
@@ -737,6 +777,104 @@ contract OfferScriptsTest is Test, OnReDiamondTestHelper {
         reader.parse(
             '{"pricers":{},"quoters":{},"vaults":{},"feeConfigs":{},"offers":{"bad":{"managedToken":"0x0000000000000000000000000000000000000001","assetToken":"0x0000000000000000000000000000000000000002","direction":"assetToManaged","flow":"typo"}}}'
         );
+    }
+
+    function test_ProductionOffersResolveToTheirLiveIds() public {
+        OfferConfigurationHarness reader = new OfferConfigurationHarness();
+        OfferConfiguration.Configuration memory parsed =
+            reader.parse(vm.readFile("script/config/ethereum-mainnet-live.json"));
+
+        // Pinned in OnReOfferCompatibility.t.sol: the IDs these offers were created with.
+        assertEq(
+            reader.offerId(parsed.offers[_index(parsed, "usdc-to-onyc")]),
+            0xc157e1b42a0d156ed9cdf581d84aa25bcc7f4791874ea5bedcbeddd05fda1cbd
+        );
+        assertEq(
+            reader.offerId(parsed.offers[_index(parsed, "usdg-to-onyc")]),
+            0x97e2af726c8996c5cf593102de2f73798fe2edb30b4cb1c120e29446fc1b35cc
+        );
+        assertEq(
+            reader.offerId(parsed.offers[_index(parsed, "onyc-to-usdg-prop")]),
+            0x86092dbbf68dd31d80637436a5709cacee0b8dfc80749269d769089ca48b1535
+        );
+    }
+
+    function test_ParserReadsInstanceIdAccessAndExecution() public {
+        OfferConfigurationHarness reader = new OfferConfigurationHarness();
+        OfferConfiguration.OfferDefinition memory offer =
+            reader.parse(_offerJson('"instanceId":7,"access":"permissioned","execution":"worker"')).offers[0];
+
+        assertEq(offer.instanceId, 7);
+        assertEq(uint8(offer.access), uint8(OfferAccess.Permissioned));
+        assertEq(uint8(offer.execution), uint8(OfferExecution.Worker));
+    }
+
+    function test_ParserMapsALegacyFlowToItsInstance() public {
+        OfferConfigurationHarness reader = new OfferConfigurationHarness();
+        OfferConfiguration.OfferDefinition memory offer = reader.parse(_offerJson('"flow":"permissioned"')).offers[0];
+        assertEq(offer.instanceId, 0);
+        assertEq(uint8(offer.access), uint8(OfferAccess.Permissioned));
+        assertEq(uint8(offer.execution), uint8(OfferExecution.Instant));
+
+        offer = reader.parse(_offerJson('"flow":"permissionless"')).offers[0];
+        assertEq(offer.instanceId, 1);
+        assertEq(uint8(offer.access), uint8(OfferAccess.Permissionless));
+        assertEq(uint8(offer.execution), uint8(OfferExecution.Instant));
+
+        offer = reader.parse(_offerJson('"flow":"worker"')).offers[0];
+        assertEq(offer.instanceId, 2);
+        assertEq(uint8(offer.access), uint8(OfferAccess.Permissionless));
+        assertEq(uint8(offer.execution), uint8(OfferExecution.Worker));
+    }
+
+    function test_ParserRejectsAmbiguousOrIncompleteOfferModes() public {
+        OfferConfigurationHarness reader = new OfferConfigurationHarness();
+
+        vm.expectRevert("Use either flow or access and execution");
+        reader.parse(_offerJson('"flow":"worker","instanceId":2,"access":"permissionless","execution":"worker"'));
+        vm.expectRevert("Offer access and execution not set");
+        reader.parse(_offerJson('"instanceId":2,"access":"permissionless"'));
+        vm.expectRevert("Unknown offer access");
+        reader.parse(_offerJson('"instanceId":2,"access":"typo","execution":"instant"'));
+        vm.expectRevert("Unknown offer execution");
+        reader.parse(_offerJson('"instanceId":2,"access":"permissionless","execution":"typo"'));
+    }
+
+    function test_RejectExistingOfferWithDifferentMode() public {
+        setupScript.run();
+        // Same pair and instance ID as the live permissionless offer.
+        config.offers[0].access = OfferAccess.Permissioned;
+        setupScript.configure(environment, config);
+
+        vm.expectRevert("Existing offer mode differs; choose another instanceId");
+        setupScript.run();
+    }
+
+    function test_MigrationScriptCoversEveryConfiguredOffer() public {
+        setupScript.run();
+        MigrationScriptHarness migration = new MigrationScriptHarness();
+        migration.configure(environment, config);
+
+        migration.run();
+
+        assertEq(migration.transactionCount(), 1);
+        assertEq(app.getOfferConfigV2(_offer(address(usdc))).instanceId, 1);
+        assertEq(uint8(app.getOfferConfig(_offer(address(usdc))).flow), uint8(OfferFlow.Permissionless));
+    }
+
+    function _offerJson(string memory mode) private pure returns (string memory) {
+        return string.concat(
+            '{"pricers":{},"quoters":{},"vaults":{},"feeConfigs":{},"offers":{"offer":{"managedToken":"0x0000000000000000000000000000000000000001","assetToken":"0x0000000000000000000000000000000000000002","direction":"assetToManaged",',
+            mode,
+            ',"pricer":"p","quoter":"q","feeConfig":"f","proceedsVault":"v","liquidityVault":"none","enabled":true}}}'
+        );
+    }
+
+    function _index(OfferConfiguration.Configuration memory parsed, string memory name) private pure returns (uint256) {
+        for (uint256 i; i < parsed.offers.length; ++i) {
+            if (keccak256(bytes(parsed.offers[i].name)) == keccak256(bytes(name))) return i;
+        }
+        revert("offer not found");
     }
 
     function _addNavQuoter() private {

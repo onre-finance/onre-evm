@@ -18,9 +18,8 @@ contract DepositLiquidityVault is OfferConfiguration {
         OfferDefinition memory offer = _offer(config, offerName);
         bytes32 vaultId = _liquidityVaultId(config, offer.liquidityVault);
         IDiamondProxy app = IDiamondProxy(diamond);
-        (address tokenIn, address tokenOut) = _tokens(offer);
         require(
-            app.getOfferConfig(OnReIds._offerConfigId(tokenIn, tokenOut, offer.instanceId)).liquidityVaultId == vaultId,
+            app.getOfferConfig(_offerId(offer)).liquidityVaultId == vaultId,
             "Live offer liquidity vault differs from config"
         );
         require(
